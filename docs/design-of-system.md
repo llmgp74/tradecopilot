@@ -35,7 +35,7 @@ flowchart TB
   EXT["External sources<br/>Alpaca | SEC EDGAR | Finnhub / FMP | FRED"]
   TOOLS --> EXT
 
-  subgraph EVAL["Evaluation harness - offline"]
+  subgraph EVAL["Evaluation harness"]
     SCEN["Scenario runner<br/>YAML + frozen evidence<br/>4 memory conditions"]
     JUDGE["Judge<br/>different model family"]
     SCEN --> JUDGE
@@ -55,7 +55,7 @@ flowchart TB
 | UI kit | shadcn/ui, AI Elements | ready-made chat, tool, reasoning, and message parts |
 | Storage | SQLite | one local user; profile, journal, traces, checkpoints |
 | Data | Alpaca, SEC EDGAR, Finnhub/FMP, FRED | free tiers |
-| Evaluation | Python harness with a separate LLM judge | offline, frozen fixtures, deterministic runs |
+| Evaluation | Python harness with a separate LLM judge | frozen fixtures, deterministic runs |
 | Tooling | uv, npm | reproducible setup and builds |
 
 ## 2. Agent

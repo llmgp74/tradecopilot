@@ -1,0 +1,48 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+
+class Settings(BaseSettings):
+    """Configuration read from environment variables.
+
+    Attributes:
+        agent_model: ``provider:model`` string for the agent graph. Required
+            before a graph can be built.
+        judge_model: ``provider:model`` string used by the evaluation judge.
+            Must reference a different model family from ``agent_model``.
+        db_path: SQLite file for the profile, journal, and checkpoints. Its
+            parent directory is created on server startup.
+        ui_dist: Directory containing the built frontend.
+        host: Interface the server binds to. Loopback only by default.
+        port: Port the server listens on.
+    """
+
+    model_config = SettingsConfigDict(frozen=True)
+
+    agent_model: str | None = None
+    judge_model: str | None = None
+    db_path: Path = Path.home() / ".tradecopilot" / "data.db"
+    ui_dist: Path = _REPOSITORY_ROOT / "ui" / "dist"
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+    @field_validator("db_path", "ui_dist")
+    @classmethod
+    def _expand_home(cls, value: Path) -> Path:
+        """Expand a leading ``~`` supplied through the environment."""
+        return value.expanduser()
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the process-wide settings instance.
+
+    Returns:
+        Settings loaded from the current environment.
+    """
+    return Settings()
