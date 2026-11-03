@@ -1,0 +1,217 @@
+\documentclass{article}
+
+% Do not modify neurips_2026.sty.
+\PassOptionsToPackage{numbers, compress}{natbib}
+\usepackage[preprint]{neurips_2026}
+
+% Counteracts the style's flushbottom, which stretches short pages into visible gaps.
+\raggedbottom
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+
+\title{TradeCopilot: A Personalized AI Trading Assistant with Structured User Memory}
+
+\begin{document}
+
+\maketitle
+
+\section{Project objective}
+
+We propose TradeCopilot, a personalized AI trading assistant for self-directed investors in US
+equities. It researches a stock or a portfolio on demand, checks the main claims of its own
+analysis against primary sources where possible, uses structured user memory to personalize its
+recommendations, and supports user-controlled execution modes, including approval-gated and
+bounded autonomous operation.
+
+Our objective is to evaluate whether structured user memory improves profile fit, constraint
+adherence, and decision consistency relative to a memoryless agent and to weaker profile-memory
+baselines on scenarios where memory should matter.
+
+\section{Motivation and challenges}
+
+Self-directed investors often lose money not from a lack of information but from breaking their
+own rules: they oversize positions, chase news, and drift past the risk limits they set for
+themselves. At the same time, thorough research across filings, news, and market data
+takes hours that most people do not spend. General chat assistants can answer a question about a
+stock, but they do not know the user, they cannot be held to the user's own rules, and they cannot
+be trusted anywhere near an actual trade. As more people turn to AI for financial questions, the
+stakes rise: models state wrong numbers with full confidence, and no one checks them.
+
+Consider Daniel, who uses an AI chat assistant to research stocks after work. He recently
+lowered his single-stock limit from 10\% to 5\% of his portfolio and rejected a short-term
+trade because he could not monitor the market during work. During his lunch break, a company
+he owns reports strong earnings, and he asks: ``Should I buy more?'' He wants an answer that
+reflects what he has already explained, but still finds himself repeating his preferences
+and checking for outdated assumptions. TradeCopilot is designed to carry this context across
+conversations. It retains his latest confirmed limits, records why he accepted or rejected
+earlier proposals, and uses that history alongside current holdings and fresh evidence.
+When Daniel asks about buying more, it would check how the purchase fits his updated limit
+and explain whether the opportunity suits his investment approach. He could spend less time
+repeating himself and correcting unsuitable advice, and more time considering his options
+with an assistant that builds on its understanding of him.
+
+The first challenge is memory that remains available at decision time. Existing agent harnesses and LLM trading agents already have memory
+\citep{memgpt,finmem,tradinggpt}, so building another assistant that remembers the user is not
+the main issue. The harder problem is representing a user's profile in a form the system can
+reuse consistently across decisions. Risk limits and execution permissions should remain available at
+action time instead of being left only in prompt text, while softer preferences should still shape the
+assistant's judgment. Our evaluation addresses this by comparing memory levels under the same
+execution safeguards and measuring profile fit and rule adherence.
+
+The second challenge is verification and evaluation in a domain without ground truth. Claims about
+a company are volatile and contradictory across sources, and language models invent plausible
+figures, so every claim that shapes a decision has to be checked against primary sources before it
+is used.
+Measuring whether that verification works requires ground truth that we have to author ourselves,
+which is why our evaluation includes deliberately planted false claims. The problem extends to the
+overall evaluation: because an LLM's training data contaminates any replay of historical periods,
+backtesting is not a valid measurement for our system, so success has to be assessed through frozen
+snapshots and rubric-based judgment, with agreement between human and automated scoring reported.
+
+The third challenge is safety and trust. Unrestricted autonomous trading by a language model is
+not acceptable~\citep{amodei}, so execution must remain bounded by user-selected permissions and
+code-level constraint checks rather than by the prompt alone.
+
+\section{Potential solutions}
+
+\subsection{System overview and architecture}
+
+We are building a co-pilot for self-directed investors in US equities. It researches on demand
+and helps the user stick to their own trading rules. The user asks about a stock or a portfolio,
+the agent gathers evidence across market data, filings, news, social sentiment, and macro
+indicators, and the system then either requests approval or acts within a bounded autonomous mode
+defined by previously authorized settings. The intended contribution is to keep user-specific constraints and preferences
+available in structured form, so that decisions depend less on ad hoc prompt context and more on
+persistent state. Relative to existing tools, the proposed system combines on-demand analysis,
+source checking, user memory, and trading access in a single workflow. Bounded autonomous
+execution is supported as an execution mode, but the evaluation in this proposal focuses on memory
+rather than on execution-mode comparison.
+
+The system has three tiers: a user interface for interaction and portfolio views, a backend that
+manages sessions and memory, and an agent layer that accesses external data and execution tools.
+The agent draws on market data, filings, news, social signals, and macroeconomic information.
+Each observation is stored with source and time metadata so that stale or weakly supported
+evidence can be flagged before it is used.
+
+\subsection{Structured user memory}
+
+A main contribution of the project is the memory subsystem. Unlike typical agent memory, which
+only informs what the model says, our memory is organized around how user state is stored and
+reused. It has three layers. Structured profile memory stores durable user state as typed fields
+rather than free text: risk band, position caps, sector exclusions, horizon, watchlist, source
+preferences, and execution permissions. Episodic decision memory records each proposal, the
+evidence behind it, the user's action and reason, and what actually happened afterwards.
+Working memory holds temporary run-specific state such as intermediate findings and claim-check
+results. Conversational preferences can be promoted into the profile, but high-impact changes are
+confirmed by the user before they become hard constraints. This structure differs from purely
+conversational memory in three ways. First, important user state is represented in typed fields
+that can be queried directly. Second, the journal is grounded in outcomes such as fills,
+rejections, and profit or loss rather than in conversation alone~\citep{reflexion}. Third, the
+profile and journal can be included or withheld separately during evaluation, which makes it
+possible to test how each memory component affects system behavior.
+
+\subsection{Decision and execution flow}
+
+The agent plans, acts, and observes in a loop, and two checks are mandatory before a proposal
+reaches the user. The first is verification: the main claims in the draft recommendation are
+extracted and sorted into verifiable, opinion, or unverifiable. Verifiable claims are checked
+against filings first, including the reported numbers, and then against news sources~\citep{factscore}. Each verifiable claim
+is marked supported or contradicted, and contradicted claims are either removed or clearly
+flagged. The second is a constraint check against the user's profile. After both pass, the system
+either requests approval or executes under a bounded autonomous mode with previously authorized settings.
+
+The agent decides the position size itself, using the user's profile as context. Proposing an
+order is unrestricted, but execution remains subject to user authorization and hard typed
+constraints such as position size, sector exclusions, and execution permissions. Softer
+preferences continue to guide the recommendation without acting as blocking rules. Durable memory
+remains user-correctable, and high-impact inferred changes require confirmation.
+
+\section{Experimental dataset description and evaluation plan}
+
+\subsection{Experimental Dataset}
+
+We will build a dataset of 10 scenarios using frozen evidence from market, filing, news, social,
+and macro sources. Each scenario will specify the instrument,
+date, user request, initial portfolio, user profile, relevant history, and acceptance criteria.
+Evidence will be collected once and reused across conditions, with its sources and timestamps
+preserved. Historical context will contain only information available before the task.
+
+Six scenarios will represent ordinary use, with two cases in each of three categories: earnings,
+news, and portfolio adjustments. Some will involve updated preferences
+or previous decisions, allowing us to test whether memory is used correctly. The remaining four
+will be adversarial: two with deliberately false claims, one encouraging a violation of the
+user's constraints, and one involving a tool failure.
+
+We will check the reference facts and scoring criteria before evaluation, using separate
+development examples to refine them. Each scenario will define acceptable outcomes rather than
+one exact answer. Asking for clarification or reporting insufficient evidence may be appropriate,
+but will be recorded separately from completing a recommendation.
+
+\subsection{Evaluation Plan}
+
+The evaluation will examine whether memory improves system behavior under fixed execution
+safeguards, and what these benefits cost. Verification is assessed within the controlled scenario
+set and is intended to measure claim-checking performance in that setting rather than to
+establish a general guarantee of factual correctness.
+
+For evaluation, we will vary the memory condition available to the same agent:
+
+\begin{itemize}
+  \item \textbf{No memory:} no persistent user memory.
+  \item \textbf{Prose profile memory:} the user profile provided as ordinary text, representing a
+        weak-memory baseline.
+  \item \textbf{Structured profile memory:} the same profile information provided as typed
+        constraints and preferences, without the decision journal.
+  \item \textbf{Full memory:} structured profile memory together with the relevant decision journal.
+\end{itemize}
+
+All conditions will receive the same current request, market evidence, and portfolio state.
+We will keep the model, tools, other instructions, and resource limits fixed, and reset the
+scenario before each run. Execution safeguards will remain identical across memory levels.
+Initial proposals will be scored before constraint-check feedback, separating the agent's use
+of memory from the system's enforcement of rules.
+
+The full system will run on all 10 scenarios. The memory comparison is a focused ablation on a
+subset selected in advance to cover constraint use, preference changes, and previous decisions.
+We will repeat those subset comparisons to assess consistency while keeping the pilot manageable.
+
+We will report four groups of measures:
+
+\begin{itemize}
+  \item \textbf{Task success and constraint adherence:} whether the scenario's acceptance
+      criteria are met, how often initial proposals violate hard user constraints, and whether
+        the execution check blocks invalid orders without rejecting valid ones.
+  \item \textbf{Verification quality:} how many planted false claims are detected and how
+        often true claims are incorrectly flagged.
+  \begin{samepage}
+  \item \textbf{Recommendation quality:} a predefined rubric covering evidence coverage,
+        reasoning, risk disclosure, profile fit, and actionability. A judge from a different
+        model family~\citep{zheng} will receive the reference evidence and user context,
+        without seeing the memory condition. Human reviewers will check 20\% of outputs
+        across conditions, plus disputed cases, and agreement will be reported.
+  \par
+  \end{samepage}
+      \item \textbf{Operational performance:} tokens, cost, and latency.
+\end{itemize}
+
+Programmatic checks will assess measurable requirements wherever possible. Trace logs will
+support failure analysis and help distinguish missing evidence, incorrect memory use, and reasoning
+errors. Confirmed failures will become regression cases for later versions.
+
+Results will include per-scenario differences and variation across repeated runs. This small
+study evaluates assistant behavior rather than investment returns; frozen evidence improves
+comparability but does not eliminate possible knowledge from model training.
+
+\nocite{liagents}
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}
