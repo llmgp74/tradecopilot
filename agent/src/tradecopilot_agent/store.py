@@ -6,6 +6,7 @@ avoid sharing one connection across FastAPI's worker threads.
 """
 
 import json
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -14,6 +15,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from tradecopilot_agent.models import AppSettings
+from tradecopilot_agent.secrets import SecretBox
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS threads (
@@ -28,6 +32,16 @@ CREATE TABLE IF NOT EXISTS profile (
   id         INTEGER PRIMARY KEY CHECK (id = 1),
   data       TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  id                INTEGER PRIMARY KEY CHECK (id = 1),
+  agent_model       TEXT NOT NULL DEFAULT '',
+  model_api_key     TEXT NOT NULL DEFAULT '',
+  alpaca_api_key    TEXT NOT NULL DEFAULT '',
+  alpaca_api_secret TEXT NOT NULL DEFAULT '',
+  alpaca_base_url   TEXT NOT NULL DEFAULT '',
+  updated_at        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS journal (
@@ -48,6 +62,15 @@ CREATE TABLE IF NOT EXISTS journal (
 );
 CREATE INDEX IF NOT EXISTS journal_created ON journal (created_at DESC);
 """
+
+_SECRET_FIELDS = frozenset({"model_api_key", "alpaca_api_key", "alpaca_api_secret"})
+_SETTINGS_COLUMNS = (
+    "agent_model",
+    "model_api_key",
+    "alpaca_api_key",
+    "alpaca_api_secret",
+    "alpaca_base_url",
+)
 
 DEFAULT_PROFILE: dict[str, Any] = {
     "risk_band": "moderate",
@@ -91,7 +114,17 @@ class Store:
         self.path = path
         with self._connection() as connection:
             connection.executescript(_SCHEMA)
+        os.chmod(path, 0o600)
+        self._secrets = SecretBox(path.parent / "settings.key")
         self._seed_profile()
+        self._seed_settings()
+
+    def _seed_settings(self) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO settings (id, updated_at) VALUES (1, ?)",
+                (now_iso(),),
+            )
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -126,6 +159,58 @@ class Store:
                 """,
                 (thread_id, title, timestamp, timestamp),
             )
+
+    def get_settings(self) -> AppSettings:
+        """Return the stored settings with secrets decrypted.
+
+        Returns:
+            The stored settings. Fields without a stored value are empty.
+        """
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT agent_model, model_api_key, alpaca_api_key,
+                       alpaca_api_secret, alpaca_base_url, updated_at
+                FROM settings WHERE id = 1
+                """
+            ).fetchone()
+        if row is None:
+            return AppSettings(updated_at=now_iso())
+        return AppSettings(
+            agent_model=str(row[0]),
+            model_api_key=self._secrets.decrypt(str(row[1])),
+            alpaca_api_key=self._secrets.decrypt(str(row[2])),
+            alpaca_api_secret=self._secrets.decrypt(str(row[3])),
+            alpaca_base_url=str(row[4]),
+            updated_at=str(row[5]),
+        )
+
+    def patch_settings(self, changes: dict[str, Any]) -> AppSettings:
+        """Apply validated changes to the stored settings.
+
+        Args:
+            changes: Field values to store. An empty string clears a field.
+                Secret fields are encrypted before writing.
+
+        Returns:
+            The stored settings after the update.
+        """
+        updates = [
+            (name, value)
+            for name, value in changes.items()
+            if name in _SETTINGS_COLUMNS
+        ]
+        assignments = ", ".join(f"{name} = ?" for name, _ in updates)
+        params = [
+            self._secrets.encrypt(str(value)) if name in _SECRET_FIELDS else str(value)
+            for name, value in updates
+        ]
+        with self._connection() as connection:
+            connection.execute(
+                f"UPDATE settings SET {assignments}, updated_at = ? WHERE id = 1",
+                (*params, now_iso()),
+            )
+        return self.get_settings()
 
     def list_threads(
         self, page_no: int, page_size: int

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "TradeCopilot agent library and API server."
 requires-python = ">=3.12,<3.14"
 dependencies = [
+  "cryptography>=43,<47",
   "deepagents>=0.7.32,<0.8",
   "fastapi>=0.162.0,<1",
   "httpx>=0.28.1,<1",

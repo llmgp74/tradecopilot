@@ -56,6 +56,27 @@ class ProfilePatch(BaseModel):
     execution: ExecutionSettings | None = None
 
 
+class AppSettings(BaseModel):
+    """User-editable application settings."""
+
+    agent_model: str = ""
+    model_api_key: str = ""
+    alpaca_api_key: str = ""
+    alpaca_api_secret: str = ""
+    alpaca_base_url: str = ""
+    updated_at: str
+
+
+class AppSettingsPatch(BaseModel):
+    """Partial settings update."""
+
+    agent_model: str | None = None
+    model_api_key: str | None = None
+    alpaca_api_key: str | None = None
+    alpaca_api_secret: str | None = None
+    alpaca_base_url: str | None = None
+
+
 class ThreadSummary(BaseModel):
     """Thread metadata."""
 

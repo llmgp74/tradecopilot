@@ -27,12 +27,18 @@ uv run --package tradecopilot-agent tradecopilot serve
 
 ## Configuration
 
-Settings come from environment variables:
+Settings come from environment variables and the repository `.env` file. The
+process environment wins over `.env`. Values saved from the frontend settings
+screen are stored in SQLite and win over both.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `AGENT_MODEL` | none | `provider:model` string; required to build a graph |
+| `MODEL_API_KEY` | none | Provider key fallback |
 | `JUDGE_MODEL` | none | `provider:model` string for the eval judge |
+| `ALPACA_API_KEY` | none | Broker key |
+| `ALPACA_API_SECRET` | none | Broker secret |
+| `ALPACA_BASE_URL` | paper host | Trading API base URL |
 | `DB_PATH` | `~/.tradecopilot/data.db` | SQLite file |
 | `UI_DIST` | `ui/dist` | built frontend directory |
 | `HOST` | `127.0.0.1` | |

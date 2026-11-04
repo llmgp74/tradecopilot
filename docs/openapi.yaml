@@ -146,6 +146,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/settings:
+    get:
+      summary: Get App Settings
+      description: "Return the effective application settings.\n\nArgs:\n    response:\
+        \ Response used to disable caching.\n\nReturns:\n    The effective settings,\
+        \ with secrets in plaintext."
+      operationId: get_app_settings_api_settings_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+    patch:
+      summary: Update App Settings
+      description: "Apply a partial settings update.\n\nArgs:\n    body: Fields to\
+        \ change. Omitted fields are untouched.\n    response: Response used to disable\
+        \ caching.\n\nReturns:\n    The effective settings after the update."
+      operationId: update_app_settings_api_settings_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSettingsPatch'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/profile:
     get:
       summary: Get Profile
@@ -306,6 +345,66 @@ components:
       - long_market_value
       title: Account
       description: Broker account snapshot.
+    AppSettings:
+      properties:
+        agent_model:
+          type: string
+          title: Agent Model
+          default: ''
+        model_api_key:
+          type: string
+          title: Model Api Key
+          default: ''
+        alpaca_api_key:
+          type: string
+          title: Alpaca Api Key
+          default: ''
+        alpaca_api_secret:
+          type: string
+          title: Alpaca Api Secret
+          default: ''
+        alpaca_base_url:
+          type: string
+          title: Alpaca Base Url
+          default: ''
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - updated_at
+      title: AppSettings
+      description: User-editable application settings.
+    AppSettingsPatch:
+      properties:
+        agent_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Model
+        model_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Api Key
+        alpaca_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alpaca Api Key
+        alpaca_api_secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alpaca Api Secret
+        alpaca_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alpaca Base Url
+      type: object
+      title: AppSettingsPatch
+      description: Partial settings update.
     ChatRequest:
       properties:
         thread_id:

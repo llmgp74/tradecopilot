@@ -14,7 +14,8 @@ class Settings(BaseSettings):
 
     Attributes:
         agent_model: ``provider:model`` string for the agent graph. Required
-            before a graph can be built.
+            before a graph can be built. A stored setting overrides it.
+        model_api_key: Provider key used when no stored setting holds one.
         judge_model: ``provider:model`` string used by the evaluation judge.
             Must reference a different model family from ``agent_model``.
         db_path: SQLite file for the profile, journal, and checkpoints. Its
@@ -29,9 +30,15 @@ class Settings(BaseSettings):
             trading in API responses.
     """
 
-    model_config = SettingsConfigDict(frozen=True)
+    model_config = SettingsConfigDict(
+        frozen=True,
+        # Process environment wins over this file; pydantic-settings orders
+        # env_settings above dotenv_settings.
+        env_file=_REPOSITORY_ROOT / ".env",
+    )
 
     agent_model: str | None = None
+    model_api_key: str | None = None
     judge_model: str | None = None
     db_path: Path = Path.home() / ".tradecopilot" / "data.db"
     ui_dist: Path = _REPOSITORY_ROOT / "ui" / "dist"

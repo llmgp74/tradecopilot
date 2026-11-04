@@ -1,5 +1,6 @@
 """FastAPI application exposing the HTTP API."""
 
+import os
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import date
@@ -7,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
@@ -19,6 +20,8 @@ from tradecopilot_agent.agent import build_agent
 from tradecopilot_agent.config import Settings, get_settings
 from tradecopilot_agent.memory import MemoryConfig
 from tradecopilot_agent.models import (
+    AppSettings,
+    AppSettingsPatch,
     Health,
     JournalEntry,
     JournalList,
@@ -41,7 +44,13 @@ from tradecopilot_agent.server.streaming import (
 from tradecopilot_agent.store import Store, ThreadRecord
 
 GraphFactory = Callable[[FastAPI], Any]
-PortfolioFetcher = Callable[[Settings, str], Awaitable[Portfolio]]
+PortfolioFetcher = Callable[[AppSettings, str], Awaitable[Portfolio]]
+
+_PROVIDER_ENV = {
+    "deepseek": "DEEPSEEK_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+}
 
 
 class ChatRequest(BaseModel):
@@ -119,7 +128,7 @@ def create_app(
         """
         return Health(
             status="ok",
-            agent_model=app.state.settings.agent_model or "",
+            agent_model=_effective_settings(app).agent_model,
         )
 
     @app.post(
@@ -247,9 +256,46 @@ def create_app(
         """
         fetcher: PortfolioFetcher = app.state.portfolio_fetcher
         try:
-            return await fetcher(app.state.settings, range_)
+            return await fetcher(_effective_settings(app), range_)
         except PortfolioUnavailable as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/api/settings", response_model=AppSettings)
+    async def get_app_settings(response: Response) -> AppSettings:
+        """Return the effective application settings.
+
+        Args:
+            response: Response used to disable caching.
+
+        Returns:
+            The effective settings, with secrets in plaintext.
+        """
+        response.headers["Cache-Control"] = "no-store"
+        return _effective_settings(app)
+
+    @app.patch("/api/settings", response_model=AppSettings)
+    async def update_app_settings(
+        body: AppSettingsPatch, response: Response
+    ) -> AppSettings:
+        """Apply a partial settings update.
+
+        Args:
+            body: Fields to change. Omitted fields are untouched.
+            response: Response used to disable caching.
+
+        Returns:
+            The effective settings after the update.
+        """
+        changes = {
+            key: value
+            for key, value in body.model_dump(exclude_unset=True).items()
+            if value is not None
+        }
+        app.state.store.patch_settings(changes)
+        if {"agent_model", "model_api_key"} & changes.keys():
+            app.state.graph = None
+        response.headers["Cache-Control"] = "no-store"
+        return _effective_settings(app)
 
     @app.get("/api/profile", response_model=Profile)
     async def get_profile() -> Profile:
@@ -385,12 +431,50 @@ def _default_graph(app: FastAPI) -> Any:
     Raises:
         RuntimeError: If `AGENT_MODEL` is not configured.
     """
+    effective = _effective_settings(app)
+    _apply_model_key(effective)
     config = MemoryConfig(condition="full", store=_UnusedStore())
     return build_agent(
         config,
         _UnusedSource(),
         checkpointer=app.state.checkpointer,
+        model=effective.agent_model or None,
     )
+
+
+def _effective_settings(app: FastAPI) -> AppSettings:
+    """Merge stored settings over the process configuration.
+
+    Args:
+        app: Application holding the store and settings.
+
+    Returns:
+        The effective settings. Stored values win when non-empty.
+    """
+    base: Settings = app.state.settings
+    stored: AppSettings = app.state.store.get_settings()
+    return AppSettings(
+        agent_model=stored.agent_model or base.agent_model or "",
+        model_api_key=stored.model_api_key or base.model_api_key or "",
+        alpaca_api_key=stored.alpaca_api_key or base.alpaca_api_key or "",
+        alpaca_api_secret=stored.alpaca_api_secret or base.alpaca_api_secret or "",
+        alpaca_base_url=stored.alpaca_base_url or base.alpaca_base_url,
+        updated_at=stored.updated_at,
+    )
+
+
+def _apply_model_key(settings: AppSettings) -> None:
+    """Expose the stored model key to the provider SDK.
+
+    Provider SDKs read their key from the environment, so the settings value is
+    copied there before the graph is built.
+    """
+    if not settings.model_api_key:
+        return
+    provider = settings.agent_model.split(":", 1)[0]
+    variable = _PROVIDER_ENV.get(provider)
+    if variable is not None:
+        os.environ[variable] = settings.model_api_key
 
 
 def _approval_descriptor(

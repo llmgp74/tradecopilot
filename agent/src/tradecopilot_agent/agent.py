@@ -18,6 +18,7 @@ def build_agent(
     as_of: date | None = None,
     *,
     checkpointer: BaseCheckpointSaver[Any] | None = None,
+    model: str | None = None,
 ) -> CompiledStateGraph[Any, Any, Any, Any]:
     """Build one agent graph for a memory condition and a data source.
 
@@ -32,22 +33,23 @@ def build_agent(
         checkpointer: Persists threads and interrupts. The server passes the
             shared SQLite saver. The evaluation harness passes a saver bound
             to its scenario database, or ``None`` for single-shot runs.
+        model: ``provider:model`` override. Falls back to ``AGENT_MODEL``.
 
     Returns:
         The compiled agent graph.
 
     Raises:
-        RuntimeError: If ``AGENT_MODEL`` is not configured.
+        RuntimeError: If no model is provided or configured.
     """
-    model = get_settings().agent_model
-    if model is None:
+    model_name = model or get_settings().agent_model
+    if model_name is None:
         raise RuntimeError(
             "AGENT_MODEL is not set. Provide a provider:model string, "
             "for example anthropic:claude-sonnet-5."
         )
 
     return create_deep_agent(
-        model=model,
+        model=model_name,
         tools=[],
         system_prompt=SYSTEM_PROMPT,
         checkpointer=checkpointer,

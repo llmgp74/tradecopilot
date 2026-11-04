@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import stat
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,6 +14,7 @@ from langgraph.types import Interrupt
 from tradecopilot_agent import Settings
 from tradecopilot_agent.models import (
     Account,
+    AppSettings,
     DayPnl,
     Portfolio,
 )
@@ -215,10 +217,78 @@ def test_journal_invalid_status_is_422(tmp_path: Path) -> None:
     assert response.status_code == 422
 
 
+def test_settings_store_secrets_encrypted(tmp_path: Path) -> None:
+    """Settings return plaintext but store ciphertext in a protected key file."""
+    with _client(tmp_path) as client:
+        response = client.patch(
+            "/api/settings",
+            json={
+                "agent_model": "deepseek:deepseek-chat",
+                "model_api_key": "secret-model",
+                "alpaca_api_key": "secret-alpaca",
+                "alpaca_api_secret": "secret-broker",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["model_api_key"] == "secret-model"
+        assert body["alpaca_base_url"] == "https://paper-api.alpaca.markets"
+        assert response.headers["Cache-Control"] == "no-store"
+        assert client.get("/api/health").json()["agent_model"] == (
+            "deepseek:deepseek-chat"
+        )
+
+        with sqlite3.connect(tmp_path / "data.db") as connection:
+            row = connection.execute(
+                """
+                SELECT model_api_key, alpaca_api_key, alpaca_api_secret
+                FROM settings WHERE id = 1
+                """
+            ).fetchone()
+
+    assert row is not None
+    for token in row:
+        assert "secret" not in token
+        assert token.startswith("gAAAA")
+    key_path = tmp_path / "settings.key"
+    assert stat.S_IMODE(key_path.stat().st_mode) == 0o600
+
+
+def test_settings_clear_falls_back_to_environment(tmp_path: Path) -> None:
+    """Clearing a stored value restores the environment value."""
+    settings = Settings(
+        db_path=tmp_path / "data.db",
+        agent_model="env:model",
+        model_api_key=None,
+    )
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/api/settings").json()["agent_model"] == "env:model"
+
+        stored = client.patch(
+            "/api/settings", json={"agent_model": "stored:model"}
+        ).json()
+        assert stored["agent_model"] == "stored:model"
+
+        cleared = client.patch("/api/settings", json={"agent_model": ""}).json()
+        assert cleared["agent_model"] == "env:model"
+
+
+def test_settings_change_discards_the_graph(tmp_path: Path) -> None:
+    """Changing the model invalidates the cached graph."""
+    graph = StubGraph()
+    app = create_app(Settings(db_path=tmp_path / "data.db"), lambda _app: graph)
+    with TestClient(app) as client:
+        app.state.graph = graph
+        client.patch("/api/settings", json={"agent_model": "deepseek:other"})
+
+    assert app.state.graph is None
+
+
 def test_portfolio_returns_the_injected_snapshot(tmp_path: Path) -> None:
     """The endpoint maps a portfolio snapshot to JSON."""
 
-    async def fetcher(settings: Settings, range_: str) -> Portfolio:
+    async def fetcher(settings: AppSettings, range_: str) -> Portfolio:
         assert range_ == "1W"
         return Portfolio(
             as_of="2026-11-05T03:00:12Z",

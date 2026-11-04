@@ -5,9 +5,9 @@ from typing import Literal
 
 import httpx
 
-from tradecopilot_agent.config import Settings
 from tradecopilot_agent.models import (
     Account,
+    AppSettings,
     DayPnl,
     EquityPoint,
     Portfolio,
@@ -29,11 +29,11 @@ class PortfolioUnavailable(Exception):
     """The broker is unconfigured, unreachable, or returned unusable data."""
 
 
-async def fetch_portfolio(settings: Settings, range_: str) -> Portfolio:
+async def fetch_portfolio(settings: AppSettings, range_: str) -> Portfolio:
     """Fetch and normalize the current portfolio.
 
     Args:
-        settings: Broker credentials and base URL.
+        settings: Effective settings with broker credentials and base URL.
         range_: Equity curve window, one of ``1D``, ``1W``, ``1M``, ``3M``,
             ``1Y``, ``ALL``. Unknown values fall back to ``1M``.
 
@@ -83,7 +83,7 @@ async def fetch_portfolio(settings: Settings, range_: str) -> Portfolio:
 
 
 def _portfolio(
-    settings: Settings,
+    settings: AppSettings,
     account: dict[str, object],
     raw_positions: list[dict[str, object]],
     history: dict[str, object],
