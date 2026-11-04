@@ -1,6 +1,7 @@
-"""Convert AI SDK UI messages to LangChain messages."""
+"""Convert between AI SDK UI messages and LangChain messages."""
 
 import json
+from collections.abc import Sequence
 from typing import Any
 
 from langchain_core.messages import (
@@ -11,7 +12,16 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
-from tradecopilot_agent.server.ai_sdk.types import UIMessage, UIPart
+from tradecopilot_agent.server.ai_sdk.types import ApprovalDescriptor, UIMessage, UIPart
+from tradecopilot_agent.server.ai_sdk.utils import (
+    message_reasoning,
+    message_text,
+    tool_args_key,
+    tool_call_args,
+    tool_call_id,
+    tool_call_name,
+    tool_error_text,
+)
 
 _TOOL_PREFIX = "tool-"
 
@@ -139,3 +149,186 @@ def _tool_output(value: Any) -> str:
     if isinstance(value, str):
         return value
     return json.dumps(value, default=str)
+
+
+def to_ui_messages(
+    values: dict[str, Any],
+    interrupts: Sequence[Any] = (),
+    approval_descriptor: ApprovalDescriptor | None = None,
+) -> list[UIMessage]:
+    """Convert checkpointed graph state to AI SDK UI messages.
+
+    Tool results are attached to their call, pending interrupts become
+    ``approval-requested`` parts, and the verification and todo channels become
+    data parts on the last assistant message.
+
+    Args:
+        values: Graph state, holding the ``messages`` channel.
+        interrupts: Pending interrupts from the state snapshot.
+        approval_descriptor: Builds the approval payload from state and an
+            action request.
+
+    Returns:
+        UI messages in conversation order.
+    """
+    raw_messages = values.get("messages")
+    messages: list[BaseMessage] = (
+        [message for message in raw_messages if isinstance(message, BaseMessage)]
+        if isinstance(raw_messages, list)
+        else []
+    )
+    outputs = {
+        message.tool_call_id: message
+        for message in messages
+        if isinstance(message, ToolMessage) and message.tool_call_id
+    }
+
+    ui_messages: list[UIMessage] = []
+    parts_by_key: dict[str, dict[str, Any]] = {}
+    for index, message in enumerate(messages):
+        if isinstance(message, ToolMessage):
+            continue
+        message_id = message.id or f"msg-{index}"
+        if isinstance(message, HumanMessage):
+            ui_messages.append(_user_message(message_id, message))
+        elif isinstance(message, SystemMessage):
+            ui_messages.append(_system_message(message_id, message))
+        elif isinstance(message, AIMessage):
+            parts = _assistant_parts(message, outputs, parts_by_key)
+            ui_messages.append({"id": message_id, "role": "assistant", "parts": parts})
+
+    for interrupt in interrupts:
+        value = getattr(interrupt, "value", None)
+        if not isinstance(value, dict):
+            continue
+        requests = value.get("action_requests")
+        if not isinstance(requests, list):
+            continue
+        interrupt_id = getattr(interrupt, "id", "interrupt")
+        for request_index, request in enumerate(requests):
+            if not isinstance(request, dict):
+                continue
+            _apply_approval(
+                request,
+                f"approval-{interrupt_id}-{request_index}",
+                values,
+                ui_messages,
+                parts_by_key,
+                approval_descriptor,
+            )
+
+    _append_data_part(ui_messages, "verification", values.get("verification"), "claims")
+    _append_data_part(ui_messages, "todos", values.get("todos"), "todos")
+    return ui_messages
+
+
+def _user_message(message_id: str, message: BaseMessage) -> UIMessage:
+    return {
+        "id": message_id,
+        "role": "user",
+        "parts": [{"type": "text", "text": message_text(message)}],
+    }
+
+
+def _system_message(message_id: str, message: BaseMessage) -> UIMessage:
+    return {
+        "id": message_id,
+        "role": "system",
+        "parts": [{"type": "text", "text": message_text(message)}],
+    }
+
+
+def _assistant_parts(
+    message: AIMessage,
+    outputs: dict[str, ToolMessage],
+    parts_by_key: dict[str, dict[str, Any]],
+) -> list[UIPart]:
+    parts: list[UIPart] = []
+    reasoning = message_reasoning(message)
+    if reasoning:
+        parts.append({"type": "reasoning", "text": reasoning})
+    text = message_text(message)
+    if text:
+        parts.append({"type": "text", "text": text})
+    for call in message.tool_calls:
+        call_id = tool_call_id(call)
+        if call_id is None:
+            continue
+        name = tool_call_name(call)
+        args = tool_call_args(call)
+        part: dict[str, Any] = {
+            "type": f"{_TOOL_PREFIX}{name}",
+            "toolCallId": call_id,
+            "state": "input-available",
+            "input": args,
+        }
+        output = outputs.get(call_id)
+        if output is not None:
+            if getattr(output, "status", None) == "error":
+                part["state"] = "output-error"
+                part["errorText"] = tool_error_text(output.content)
+            else:
+                part["state"] = "output-available"
+                part["output"] = output.content
+        parts.append(part)
+        parts_by_key[tool_args_key(name, args)] = part
+    return parts
+
+
+def _apply_approval(
+    request: dict[str, Any],
+    fallback_id: str,
+    values: dict[str, Any],
+    ui_messages: list[UIMessage],
+    parts_by_key: dict[str, dict[str, Any]],
+    approval_descriptor: ApprovalDescriptor | None,
+) -> None:
+    raw_name = request.get("name")
+    name = raw_name if isinstance(raw_name, str) and raw_name else "unknown"
+    raw_args = request.get("args") or request.get("arguments")
+    args = raw_args if isinstance(raw_args, dict) else {}
+    key = tool_args_key(name, args)
+    part = parts_by_key.get(key)
+    if part is None:
+        call_id = fallback_id
+        part = {
+            "type": f"{_TOOL_PREFIX}{name}",
+            "toolCallId": call_id,
+            "input": args,
+        }
+        _last_assistant_parts(ui_messages).append(part)
+    call_id = str(part["toolCallId"])
+    descriptor = (
+        approval_descriptor(values, request) if approval_descriptor is not None else {}
+    )
+    part["state"] = "approval-requested"
+    part["approval"] = {"id": call_id, **descriptor}
+    parts_by_key[key] = part
+
+
+def _append_data_part(
+    ui_messages: list[UIMessage],
+    name: str,
+    payload: Any,
+    key: str,
+) -> None:
+    if not isinstance(payload, list) or not payload:
+        return
+    for message in reversed(ui_messages):
+        if message.get("role") != "assistant":
+            continue
+        parts = message.get("parts")
+        if isinstance(parts, list):
+            parts.append({"type": f"data-{name}", "data": {"type": name, key: payload}})
+        return
+
+
+def _last_assistant_parts(ui_messages: list[UIMessage]) -> list[UIPart]:
+    for message in reversed(ui_messages):
+        if message.get("role") == "assistant":
+            parts = message.get("parts")
+            if isinstance(parts, list):
+                return parts
+    parts = []
+    ui_messages.append({"id": "msg-approval", "role": "assistant", "parts": parts})
+    return parts

@@ -11,13 +11,13 @@ from tradecopilot_agent.server import create_app
 
 
 def test_health(tmp_path: Path) -> None:
-    """The server exposes a health endpoint."""
-    settings = Settings(db_path=tmp_path / "data.db")
+    """The server exposes a health endpoint with the configured model."""
+    settings = Settings(db_path=tmp_path / "data.db", agent_model=None)
     with TestClient(create_app(settings)) as client:
         response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "agent_model": ""}
 
 
 def test_checkpointer_reuses_data_database(tmp_path: Path) -> None:

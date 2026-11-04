@@ -1,3 +1,5 @@
+"""Process configuration read from the environment."""
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,6 +22,11 @@ class Settings(BaseSettings):
         ui_dist: Directory containing the built frontend.
         host: Interface the server binds to. Loopback only by default.
         port: Port the server listens on.
+        alpaca_api_key: Alpaca key id. Portfolio reads are unavailable when
+            either credential is missing.
+        alpaca_api_secret: Alpaca secret key.
+        alpaca_base_url: Trading API base URL. The paper host selects paper
+            trading in API responses.
     """
 
     model_config = SettingsConfigDict(frozen=True)
@@ -30,6 +37,9 @@ class Settings(BaseSettings):
     ui_dist: Path = _REPOSITORY_ROOT / "ui" / "dist"
     host: str = "127.0.0.1"
     port: int = 8000
+    alpaca_api_key: str | None = None
+    alpaca_api_secret: str | None = None
+    alpaca_base_url: str = "https://paper-api.alpaca.markets"
 
     @field_validator("db_path", "ui_dist")
     @classmethod
