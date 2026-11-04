@@ -89,9 +89,9 @@ Plan/todo and summarization are built-in middleware.
 Loop: plan -> gather evidence -> draft -> verify -> constrain -> interrupt or execute.
 
 Approval uses DeepAgents `interrupt_on` for `execute_order` in manual mode. The
-interrupt becomes an AI SDK `tool-approval-request` part; the ticket, rationale,
-cited evidence, verification verdicts, and portfolio impact travel in the part's
-approval descriptor. The client answers with `addToolApprovalResponse`, and the next
+interrupt becomes an AI SDK `tool-approval-request` part; the ticket, rationale, and
+portfolio impact travel in the part's approval descriptor. Verification verdicts are
+already streamed as a data part. The client answers with `addToolApprovalResponse`, and the next
 chat request resumes the graph. Resume accepts approve or reject with a reason.
 Autonomous mode skips the interrupt only when preset permissions allow the order.
 
