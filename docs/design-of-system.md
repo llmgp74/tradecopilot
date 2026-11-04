@@ -248,8 +248,9 @@ GET  /api/health
 thread when no thread id is given; the thread id is returned in the stream as a
 `data-thread` part. On a normal turn only the last user message is passed to the
 graph, because the checkpointer already holds the conversation. On an approval turn
-the request carries the `tool-approval-response` part and the server resumes the
-interrupted graph with `Command(resume=...)`. There is no separate approval endpoint.
+the last assistant message carries a tool part in `approval-responded` state and the
+server resumes the interrupted graph with `Command(resume=...)`. There is no separate
+approval endpoint.
 
 The pending ticket lives in checkpointed graph state, not a table. The approval id is
 the tool call id, and the ticket id is the idempotency key.

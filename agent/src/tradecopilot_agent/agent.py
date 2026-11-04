@@ -2,6 +2,7 @@ from datetime import date
 from typing import Any
 
 from deepagents import create_deep_agent
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
 from tradecopilot_agent.config import get_settings
@@ -15,6 +16,8 @@ def build_agent(
     config: MemoryConfig,
     source: DataSource,
     as_of: date | None = None,
+    *,
+    checkpointer: BaseCheckpointSaver[Any] | None = None,
 ) -> CompiledStateGraph[Any, Any, Any, Any]:
     """Build one agent graph for a memory condition and a data source.
 
@@ -26,6 +29,9 @@ def build_agent(
         source: Data source the tools are bound to.
         as_of: Evaluation cutoff. Tools must not use data dated after it.
             ``None`` means live use.
+        checkpointer: Persists threads and interrupts. The server passes the
+            shared SQLite saver. The evaluation harness passes a saver bound
+            to its scenario database, or ``None`` for single-shot runs.
 
     Returns:
         The compiled agent graph.
@@ -44,4 +50,5 @@ def build_agent(
         model=model,
         tools=[],
         system_prompt=SYSTEM_PROMPT,
+        checkpointer=checkpointer,
     )
