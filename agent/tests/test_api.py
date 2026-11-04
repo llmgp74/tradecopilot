@@ -223,7 +223,7 @@ def test_settings_store_secrets_encrypted(tmp_path: Path) -> None:
         response = client.patch(
             "/api/settings",
             json={
-                "agent_model": "deepseek:deepseek-chat",
+                "agent_model": "deepseek:deepseek-flash",
                 "model_api_key": "secret-model",
                 "alpaca_api_key": "secret-alpaca",
                 "alpaca_api_secret": "secret-broker",
@@ -236,7 +236,7 @@ def test_settings_store_secrets_encrypted(tmp_path: Path) -> None:
         assert body["alpaca_base_url"] == "https://paper-api.alpaca.markets"
         assert response.headers["Cache-Control"] == "no-store"
         assert client.get("/api/health").json()["agent_model"] == (
-            "deepseek:deepseek-chat"
+            "deepseek:deepseek-flash"
         )
 
         with sqlite3.connect(tmp_path / "data.db") as connection:

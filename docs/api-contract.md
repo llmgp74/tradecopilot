@@ -137,7 +137,7 @@ server is loopback-only and has no authentication.
 
 ```json
 {
-  "agent_model": "deepseek:deepseek-chat",
+  "agent_model": "deepseek:deepseek-flash",
   "model_api_key": "sk-...",
   "alpaca_api_key": "PK...",
   "alpaca_api_secret": "...",
@@ -623,7 +623,7 @@ stored value, which makes the environment fallback apply again.
 
 ```json
 {
-  "agent_model": "deepseek:deepseek-chat",
+  "agent_model": "deepseek:deepseek-flash",
   "model_api_key": "sk-..."
 }
 ```
