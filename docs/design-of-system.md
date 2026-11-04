@@ -89,9 +89,11 @@ Plan/todo and summarization are built-in middleware.
 Loop: plan -> gather evidence -> draft -> verify -> constrain -> interrupt or execute.
 
 Approval uses DeepAgents `interrupt_on` for `execute_order` in manual mode. The
-payload is the ticket, rationale, cited evidence, verification verdicts, and portfolio
-impact. Resume accepts approve, resize, or reject. Autonomous mode skips the interrupt
-only when preset permissions allow the order.
+interrupt becomes an AI SDK `tool-approval-request` part; the ticket, rationale,
+cited evidence, verification verdicts, and portfolio impact travel in the part's
+approval descriptor. The client answers with `addToolApprovalResponse`, and the next
+chat request resumes the graph. Resume accepts approve or reject with a reason.
+Autonomous mode skips the interrupt only when preset permissions allow the order.
 
 ### Models
 
@@ -235,7 +237,6 @@ runner is the only caller that passes the other three.
 
 ```text
 POST /api/chat                 SSE, AI SDK UI message stream
-POST /api/approve              approve, resize, or reject a pending ticket
 GET  /api/portfolio
 GET  /api/profile
 PATCH /api/profile
@@ -243,26 +244,32 @@ GET  /api/journal
 GET  /api/health
 ```
 
-`POST /api/chat` takes `{thread_id?, message}` and creates a thread when none is
-given; the thread id is returned in the stream. `POST /api/approve` takes
-`{thread_id, ticket_id, action, qty?, reason?}` and returns SSE so the conversation
-continues. A resize re-runs the constraint check and portfolio impact before
-execution. The pending ticket lives in checkpointed graph state, not a table, and the
-ticket id is the idempotency key.
+`POST /api/chat` takes the AI SDK request body `{thread_id?, messages}` and creates a
+thread when no thread id is given; the thread id is returned in the stream as a
+`data-thread` part. On a normal turn only the last user message is passed to the
+graph, because the checkpointer already holds the conversation. On an approval turn
+the request carries the `tool-approval-response` part and the server resumes the
+interrupted graph with `Command(resume=...)`. There is no separate approval endpoint.
 
-The stream adapter is the only code that knows the wire format. It maps LangGraph
-events to AI SDK parts and is tested against the pinned AI SDK major version. Domain
-events are sent as data parts:
+The pending ticket lives in checkpointed graph state, not a table. The approval id is
+the tool call id, and the ticket id is the idempotency key.
+
+The stream adapter is the only code that knows the wire format. It is a faithful port
+of the LangGraph path of the official `@ai-sdk/langchain` adapter: message, values,
+custom, tool, reasoning, step, and interrupt translation, plus `UIMessage` to
+LangChain message conversion. It is tested against the pinned AI SDK major version.
+Domain events are sent as data parts:
 
 - `data-verification`
-- `data-approval`
 - `data-todos`
+
+Approval uses the AI SDK tool approval parts, not a data part.
 
 ### Frontend
 
 The conversation is the main surface. A left panel has tabs for Portfolio, Profile,
-and Journal. The approval card renders as a message part with the ticket,
-rationale, evidence, verdicts, and portfolio impact.
+and Journal. The approval card renders from the tool approval part; its descriptor
+carries the ticket, rationale, evidence, verdicts, and portfolio impact.
 
 ## 6. Evaluation
 
@@ -309,8 +316,8 @@ SQLite tables:
 - `journal`
 - `runs` (trace: thread, phase, model, tokens, cost, latency)
 
-LangGraph checkpointer in SQLite, one thread per conversation. An interrupted thread
-resumes after restart.
+LangGraph checkpointer in the same `data.db` file, one thread per conversation.
+`AsyncSqliteSaver` owns its own tables. An interrupted thread resumes after restart.
 
 ## 8. Safety
 
