@@ -130,6 +130,35 @@ not produced for the turn. Verification verdicts are not repeated here; they arr
 
 `updated_at` is read-only and ignored on write.
 
+### 2.4 Settings
+
+Application settings owned by the user. API keys are returned in plaintext: the
+server is loopback-only and has no authentication.
+
+```json
+{
+  "agent_model": "deepseek:deepseek-chat",
+  "model_api_key": "sk-...",
+  "alpaca_api_key": "PK...",
+  "alpaca_api_secret": "...",
+  "alpaca_base_url": "https://paper-api.alpaca.markets",
+  "updated_at": "2026-11-05T03:00:12Z"
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `agent_model` | string | `provider:model`; empty means unset |
+| `model_api_key` | string | Key for the selected provider; empty means unset |
+| `alpaca_api_key` | string | Empty means unset |
+| `alpaca_api_secret` | string | Empty means unset |
+| `alpaca_base_url` | string | Trading host; defaults to the paper host |
+| `updated_at` | timestamp | Server-managed |
+
+Resolution order for every field: stored setting, then process environment, then
+the repository `.env` file, then the default. Cleared fields fall back to the
+environment.
+
 ## 3. Endpoints
 
 ### 3.1 GET /api/health
@@ -145,7 +174,7 @@ Response 200:
 | Field | Type | Notes |
 | --- | --- | --- |
 | `status` | string | Always `ok` while the process is serving |
-| `agent_model` | string | The configured `provider:model` string; empty when `AGENT_MODEL` is unset |
+| `agent_model` | string | The effective `provider:model` string; empty when neither settings nor environment provide one |
 
 The endpoint never calls an upstream provider. A server with an empty `agent_model`
 still answers 200; chat and thread detail then return 503.
@@ -576,6 +605,43 @@ Outcome rules:
 #### Errors
 
 422 for invalid query values.
+
+### 3.9 GET /api/settings
+
+Returns the effective settings defined in section 2.4.
+
+Response 200: Settings. Always 200. The response carries `Cache-Control: no-store`.
+
+### 3.10 PATCH /api/settings
+
+Partially updates the stored settings.
+
+#### Request
+
+Any subset of the fields. Omitted fields are untouched. An empty string clears a
+stored value, which makes the environment fallback apply again.
+
+```json
+{
+  "agent_model": "deepseek:deepseek-chat",
+  "model_api_key": "sk-..."
+}
+```
+
+`updated_at` is ignored if sent.
+
+#### Response 200
+
+The full effective Settings, with secrets in plaintext and `Cache-Control: no-store`.
+
+#### Behaviour
+
+Changing `agent_model` or `model_api_key` discards the cached agent graph. The next
+chat turn builds a new graph with the new model.
+
+#### Errors
+
+422 for wrong field types.
 
 ## 4. Error format
 

@@ -243,6 +243,8 @@ GET  /api/portfolio
 GET  /api/profile
 PATCH /api/profile
 GET  /api/journal
+GET  /api/settings
+PATCH /api/settings
 GET  /api/health
 ```
 
@@ -326,8 +328,9 @@ LangGraph checkpointer in the same `data.db` file, one thread per conversation.
 
 - Paper trading is the default. Live trading requires an explicit opt-in flag and a
   per-order confirmation.
-- The server binds to 127.0.0.1 only. Keys live in a local .env and never reach the
-  browser.
+- The server binds to 127.0.0.1 only. API keys are entered in the settings screen,
+  stored encrypted in SQLite with a separate local key file, and read back only over
+  loopback.
 - Hard constraints are enforced in code at the execution boundary, not by the prompt.
 - Filesystem, shell, and arbitrary code tools are off by default.
 
@@ -335,7 +338,7 @@ LangGraph checkpointer in the same `data.db` file, one thread per conversation.
 
 ### Open
 
-- Model providers and keys are chosen at setup.
+- Model providers and keys are chosen in the settings screen.
 
 ### Optional
 
