@@ -209,9 +209,6 @@ def _mount_ui(app: FastAPI) -> None:
         """Explain how to produce the missing frontend build.
 
         Returns:
-            A short HTML hint.
+            A short hint.
         """
-        return (
-            "<p>UI build not found. Build the frontend under "
-            "<code>ui/</code> first.</p>"
-        )
+        return "Error: UI build not found."
