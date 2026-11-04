@@ -237,6 +237,8 @@ runner is the only caller that passes the other three.
 
 ```text
 POST /api/chat                 SSE, AI SDK UI message stream
+GET  /api/threads              thread list
+GET  /api/threads/{id}         thread detail, AI SDK UI messages
 GET  /api/portfolio
 GET  /api/profile
 PATCH /api/profile
