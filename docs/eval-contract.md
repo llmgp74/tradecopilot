@@ -22,10 +22,14 @@ graph = build_agent(
 - `condition`: `none`, `prose`, `structured`, or `full`.
 - `store`: the harness `MemoryStore` implementation.
 - `source`: the harness `DataSource` implementation, replaying frozen fixtures.
+  It reports every capability except `order_execution`, so `execute_ticket` is
+  unavailable and no run pauses on an approval it cannot resume. A fixture that
+  needs to fail returns an error `ToolOutput`; it must not raise.
 - `as_of`: the scenario date. Tools and outcome computation must not use data dated
-  after it.
+  after it. The fixture source is constructed with this date; the middleware also
+  drops any evidence record published after it.
 - `checkpointer`: `None` for a single-shot run, or a saver bound to the run's own
-  database.
+  database. Without a saver, `execute_ticket` is unavailable.
 - `model`: `provider:model` override. Falls back to `AGENT_MODEL`.
 
 The provider key comes from the environment (`DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`,
@@ -60,7 +64,14 @@ messages = result["messages"]
 - Pass only the new user message on the first turn. The checkpointer holds history on
   later turns.
 - State keys: `messages`, `verification`, `todos`, `draft_recommendation`,
-  `portfolio_impact`.
+  `portfolio_impact`, plus the loop internals `evidence`, `pending_ticket`, and
+  `gather_calls`.
+- `verification` is a list of verdicts, each carrying `scope` (`draft` or `answer`)
+  and `verdict` (`supported`, `contradicted`, `unchecked`, or `unverifiable`).
+- `draft_recommendation` holds the ticket id, legs, thesis, and horizon.
+  `portfolio_impact` holds before and after weights, net notional, and equity.
+- All five contract keys exist after every run. They are cleared at the start of a
+  new user turn, not on an approval resume.
 - The proposal shown to a user is the last assistant message plus those state fields.
 
 ## 3. Memory conditions
@@ -76,3 +87,30 @@ messages = result["messages"]
 
 `DataSource` is supplied by the caller. `as_of` is the cutoff: tools and outcome
 computation must not use data dated after it.
+
+The source implements `capabilities`, `quote`, `bars`, `portfolio`, `positions`,
+`fundamentals`, `filings`, `xbrl_fact`, `news`, `macro`, and `place_leg`. Each returns
+`ToolOutput` with `summary`, `evidence`, and `error`. Evidence payloads carry a `kind`
+and the fields the matcher expects:
+
+- `quote`: `ticker`, `price`
+- `account`: `equity`, `cash`, `buying_power`, `positions`
+- `fundamentals`: `ticker`, `sector`
+- `filing`: `ticker`, `accession`, `filing_type`, `date`
+- `xbrl`: `ticker`, `tag`, `period`, `unit`, `value`, optional `fiscal_period`
+- `news`: `ticker`, `date`, `headline`
+- `macro`: `series`, `date`, `value`
+- `order`: `status`, `fill_price`, `fill_at`
+
+## 5. Memory store
+
+The `MemoryStore` passed in `MemoryConfig` must implement:
+
+```python
+def get_profile() -> dict
+def recent_journal(tickers: list[str], since: str, limit: int) -> list[dict]
+def append_journal(event: dict) -> None
+```
+
+The runtime store is `tradecopilot_agent.store.Store`. The harness can reuse it
+against its own database path.

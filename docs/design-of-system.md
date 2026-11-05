@@ -19,7 +19,7 @@ flowchart TB
     subgraph AGENT["DeepAgents graph - one agent"]
       LOOP["Plan -> gather evidence -> draft"]
       VER["Verification middleware<br/>claims vs XBRL, EDGAR, news"]
-      CON["Constraint middleware<br/>user profile, deterministic<br/>interrupt_on execute_order"]
+      CON["Constraint middleware<br/>user profile, deterministic<br/>approval in execute_ticket"]
       LOOP --> VER --> CON
     end
     TOOLS["Tools<br/>quote, bars, portfolio, filings,<br/>XBRL facts, news, macro, orders"]
@@ -48,7 +48,7 @@ flowchart TB
 
 | Layer | Choice | Rationale |
 | --- | --- | --- |
-| Agent | DeepAgents (LangGraph) | planning, todo tracking, middleware checks, interrupt_on approval, provider:model strings |
+| Agent | DeepAgents (LangGraph) | planning, todo tracking, middleware checks, approval interrupts, provider:model strings |
 | Backend | FastAPI + uvicorn | one process serves the API and the built SPA; native SSE |
 | Frontend | React, Vite, TypeScript | static SPA build |
 | AI SDK | Vercel AI SDK | useChat and the UI message stream over SSE |
@@ -88,7 +88,7 @@ Plan/todo and summarization are built-in middleware.
 
 Loop: plan -> gather evidence -> draft -> verify -> constrain -> interrupt or execute.
 
-Approval uses DeepAgents `interrupt_on` for `execute_order` in manual mode. The
+Approval comes from `interrupt()` inside `execute_ticket` in manual mode. The
 interrupt becomes an AI SDK `tool-approval-request` part; the ticket, rationale, and
 portfolio impact travel in the part's approval descriptor. Verification verdicts are
 already streamed as a data part. The client answers with `addToolApprovalResponse`, and the next
@@ -123,8 +123,8 @@ different model family from the agent.
 | `get_news` | Finnhub, FMP fallback | - |
 | `get_social_sentiment` | social sentiment | fixture-backed only |
 | `get_macro` | FRED | - |
-| `propose_order` | - | builds a ticket, no side effect |
-| `execute_order` | Alpaca | token or autonomous permission; every rejection logged |
+| `propose_ticket` | - | one or more legs; builds a ticket, no side effect |
+| `execute_ticket` | Alpaca | approval or autonomous permission; every rejection logged |
 | `update_preference` | memory | writes the profile; hard-constraint changes need confirmation |
 
 Every tool returns a provenance record: source, published_at, fetched_at, payload,

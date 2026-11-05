@@ -142,6 +142,10 @@ server is loopback-only and has no authentication.
   "alpaca_api_key": "PK...",
   "alpaca_api_secret": "...",
   "alpaca_base_url": "https://paper-api.alpaca.markets",
+  "fmp_api_key": "",
+  "finnhub_api_key": "",
+  "fred_api_key": "",
+  "edgar_user_agent": "TradeCopilot you@example.com",
   "updated_at": "2026-11-05T03:00:12Z"
 }
 ```
@@ -153,6 +157,10 @@ server is loopback-only and has no authentication.
 | `alpaca_api_key` | string | Empty means unset |
 | `alpaca_api_secret` | string | Empty means unset |
 | `alpaca_base_url` | string | Trading host; defaults to the paper host |
+| `fmp_api_key` | string | Fundamentals; its tools are hidden when empty |
+| `finnhub_api_key` | string | Company news; its tools are hidden when empty |
+| `fred_api_key` | string | Macro series; its tools are hidden when empty |
+| `edgar_user_agent` | string | Name and contact email required by SEC EDGAR |
 | `updated_at` | timestamp | Server-managed |
 
 Resolution order for every field: stored setting, then process environment, then
@@ -540,8 +548,8 @@ Lists decision journal entries, newest first.
 | --- | --- | --- | --- |
 | `page_no` | integer | 1 | 1 or greater |
 | `page_size` | integer | 50 | 1 to 200 |
-| `status` | enum | none | `proposed`, `approved`, `edited`, `rejected`, `deferred`, `filled`, `failed` |
-| `ticker` | string | none | Matches any element of `tickers`, case-insensitive |
+| `status` | enum | none | `proposed`, `approved`, `edited`, `rejected`, `deferred`, `submitted`, `filled`, `failed`, `skipped_unfunded` |
+| `ticker` | string | none | Matches any leg, case-insensitive |
 | `from` | date | none | Inclusive lower bound on `created_at` |
 | `to` | date | none | Inclusive upper bound on `created_at` |
 
@@ -551,19 +559,34 @@ Lists decision journal entries, newest first.
 {
   "items": [
     {
-      "id": "e17c...",
+      "id": "t_7f3a...",
       "created_at": "2026-11-04T14:02:11Z",
-      "tickers": ["NVDA"],
-      "side": "buy",
-      "qty": 10.0,
-      "size_pct": 2.0,
+      "legs": [
+        {
+          "ticker": "NVDA",
+          "side": "sell",
+          "qty": 10.0,
+          "notional": 1950.0,
+          "fill_price": 195.0,
+          "fill_at": "2026-11-04T14:02:40Z",
+          "status": "filled"
+        },
+        {
+          "ticker": "AAPL",
+          "side": "buy",
+          "qty": 5.0,
+          "notional": 1200.0,
+          "fill_price": 240.0,
+          "fill_at": "2026-11-04T14:02:41Z",
+          "status": "filled"
+        }
+      ],
       "thesis": "Earnings beat and guidance raised.",
+      "horizon": "weeks",
       "evidence_ids": ["ev1"],
       "status": "filled",
       "user_action": "approve",
       "rejection_reason": null,
-      "fill_price": 195.0,
-      "fill_at": "2026-11-04T14:02:40Z",
       "outcome": {
         "counterfactual": false,
         "entry_price": 195.0,
@@ -585,13 +608,13 @@ Lists decision journal entries, newest first.
 
 | Field | Notes |
 | --- | --- |
-| `status` | Current row status; append-only rows mean one row per lifecycle event |
-| `side` | `buy` or `sell` |
+| `id` | Decision id shared by every event of one ticket |
+| `legs` | One entry per order, with its own fill data and status |
+| `status` | Decision status derived from the legs |
 | `user_action` | `approve`, `edit`, `reject`, `defer`, or null while pending |
-| `size_pct` | Percent of account equity |
 | `outcome` | Null until computable; see below |
 
-`total` is the number of journal rows that match the filters, across all pages.
+The newest event per decision is returned. `total` counts decisions, not event rows.
 
 Outcome rules:
 

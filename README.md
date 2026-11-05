@@ -37,6 +37,10 @@ cp .env.example .env
 | `ALPACA_API_KEY` | Portfolio panel |
 | `ALPACA_API_SECRET` | Portfolio panel |
 | `ALPACA_BASE_URL` | Defaults to the paper host |
+| `FMP_API_KEY` | Fundamentals; free plan is 250 calls a day |
+| `FINNHUB_API_KEY` | Company news; free plan covers North America |
+| `FRED_API_KEY` | Macro series; free |
+| `EDGAR_USER_AGENT` | SEC requires a name and contact email |
 | `DB_PATH` | Defaults to `~/.tradecopilot/data.db` |
 | `HOST`, `PORT` | Default to `127.0.0.1:8000` |
 
