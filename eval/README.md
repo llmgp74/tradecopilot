@@ -1,10 +1,20 @@
 # Evaluation framework
 
-This is an initial documentation scaffold for the evaluation work in
-[the proposal](../proposal/main.tex) and
-[the system design](../docs/design-of-system.md). The contracts and rubric
-are drafts for discussion with the agent implementation. There is no runner,
-judge integration, or experimental result in this contribution.
+Evaluation plan, judge rubric, and development cases for
+[the proposal](../proposal/main.tex). The agent's calling interface is defined in
+[docs/eval-contract.md](../docs/eval-contract.md). These files describe the work
+on the evaluation side; the runner and judge are not implemented yet.
+
+## Agent integration
+
+Use the shared `tradecopilot_agent` package from the uv workspace. Each run builds
+its own graph with `MemoryConfig`, a fixture data source, and an isolated memory
+store, then calls `graph.ainvoke`. Evaluation does not need the FastAPI server.
+
+The fixture source keeps `order_execution` disabled. This lets the agent propose
+tickets and use fixed account data without placing orders or needing Alpaca keys.
+Real agent and judge calls still need model-provider credentials.
+The [result mapping](contracts.md) explains what to save from the graph.
 
 ## Scope
 
@@ -27,7 +37,10 @@ block, but still an invalid original proposal. An allowed ticket is not a fill.
 
 Use the same agent with `none`, `prose`, `structured`, and `full` memory conditions.
 The last condition adds relevant decision history to the structured profile.
-The prose and structured versions must contain the same profile facts.
+The prose and structured versions must contain the same profile facts. The current
+renderer omits execution permissions from prose; this needs to be aligned before
+the formal comparison. Other integration questions are listed in
+[contracts.md](contracts.md#before-the-first-comparison).
 
 Keep the request, evidence, portfolio, model, other instructions, resource limits,
 and execution safeguards fixed. All conditions use the same ground-truth profile
@@ -42,25 +55,27 @@ still need agreement. Development examples are separate from this formal set.
 
 ## Working documents
 
-- [Draft contracts](contracts.md): scenario, tool evidence, and run results.
+- [Run records and agent mapping](contracts.md): scenario inputs, fixtures, and
+  the fields collected for scoring.
 - [Judge rubric](judge.md): quality scoring and human calibration.
 - [Development examples](scenarios/development.md): two synthetic cases with
   human-authored expectations, not model outputs or evaluation results.
 
-The evaluation side will own fixtures, independent reference labels, scoring,
-the runner, and reporting. The agent side will expose the agreed proposal and
-checking outputs through the shared graph. The judge runs offline and does not
-approve orders or replace runtime verification.
+Evaluation owns fixtures, reference labels, scoring, the runner, and reporting.
+The agent package owns the graph and runtime checks. We use its existing messages
+and state, and record any gaps that need an interface change. The judge scores
+completed runs offline.
 
 ## Implementation sequence
 
-- [ ] Agree on the draft contracts and original-proposal capture point.
+- [x] Map the evaluation records to the shared agent interface.
+- [ ] Confirm first-proposal capture, memory inputs, and scenario-time handling.
 - [ ] Turn the two development examples into fixtures and reference labels.
 - [ ] Implement programmatic scoring and calibrate the judge on manual examples.
 - [ ] Connect a runner to `build_agent`, with fresh state for every run.
 - [ ] Freeze the formal scenarios, comparison subset, versions, and run budget.
 - [ ] Run comparisons, review outputs, and report per-scenario results and failures.
 
-Until agent integration is ready, scoring can be developed against manually
-authored run results. Next implementation should demonstrate one complete
-scenario-to-score path before expanding the dataset.
+Start implementation with DEV-01: seed the store, replay its fixed account and
+quote, capture the first proposal and final response, then save the rule scores.
+Manual candidate responses can be used to develop judge scoring in parallel.

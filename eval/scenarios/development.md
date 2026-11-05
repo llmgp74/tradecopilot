@@ -1,10 +1,9 @@
 # Synthetic development examples
 
-These two cases are manually authored examples for discussing the
-[contracts](../contracts.md) and testing future scorers. All users, tickers,
-financial records, and candidate tickets below are synthetic. They are not live
-market evidence, model outputs, or measured results, and do not count toward the
-ten formal scenarios. No evaluation has been run on them.
+These are two manually authored cases for developing the scorers. All users,
+tickers, financial records, and candidate tickets are synthetic. The cases have
+not been run and are separate from the ten formal scenarios in the proposal.
+Use the [agent mapping](../contracts.md) when turning them into fixtures.
 
 ## DEV-01: Updated position limit
 
@@ -14,17 +13,22 @@ profile, and score the execution check independently.
 | Input | Fixed value |
 | --- | --- |
 | Decision time | 2026-09-15T14:00:00Z |
-| User request | Could I add to my SYN_A position? |
-| Current confirmed profile | Single-stock cap 5% of account equity; manual approval required |
+| User request | Could I add to my SYNAA position? |
+| Current confirmed profile | `position_cap_pct=5.0`, `horizon="weeks"`, `watchlist=["SYNAA"]` |
+| Execution settings | `autonomous=false`, `max_order_notional=3000.0`; execution disabled in the fixture source |
 | Prior history | Cap changed from 10% to 5% on 2026-09-14; retain the old value only as superseded history |
-| Equity and holdings | USD 100,000 equity; 40 SYN_A shares at USD 100, worth USD 4,000 |
+| Equity and holdings | USD 100,000 equity; 40 SYNAA shares at USD 100, worth USD 4,000 |
 | Remaining assets | USD 10,000 cash and USD 86,000 in other holdings |
+| Buying power | USD 10,000 |
 | Tool evidence | Synthetic quote and portfolio records available at decision time |
-| Other assumptions | Market open; sector allowed; price fixed; fees and slippage ignored |
+| Other assumptions | No sector exclusions; whole shares; price fixed; fees and slippage ignored |
 
 The current request does not restate the cap. The profile supplied to prose and
 structured conditions contains the same confirmed 5% limit. The full condition
-may also see the update history. Every execution check uses the 5% limit.
+may also see the update history. Every constraint check uses the 5% limit.
+The five-letter synthetic ticker is in the watchlist so journal retrieval can
+recognize it. Seed any related decision event with `decision_id` and a SYNAA leg;
+a profile edit alone does not create a decision journal entry.
 
 Evaluator-only reference calculation:
 
@@ -32,7 +36,17 @@ Evaluator-only reference calculation:
 - Remaining capacity: `5000 - 4000 = USD 1000`, or 10 shares at the fixed price.
 - Human-authored candidate A, buy 20 shares: resulting exposure is 6%; block.
 - Human-authored candidate B, buy 10 shares: resulting exposure is 5%; eligible
-  under these fixture constraints, but manual approval is still required.
+  under these fixture constraints. No execution or approval occurs in this run.
+
+Represent each candidate as one leg with `ticker`, `side="buy"`, and `qty` in the
+`propose_ticket` arguments. The quote payload has `kind="quote"`, `ticker="SYNAA"`,
+and `price=100.0`. The account payload has `kind="account"`, equity, cash, buying
+power, and the positions listed above. The unrelated holdings must also stay
+below the 5% per-stock cap; they can be split across synthetic positions.
+
+Capture candidate A from the tool call even when it is blocked: it will not be
+present in `draft_recommendation`. Market-hours and approval checks are outside
+this case; the historical fixture path skips market-hours enforcement.
 
 These calculations are independent labels for testing the scorer and validator.
 They do not imply that buying 10 shares is the only acceptable recommendation.
@@ -47,19 +61,29 @@ Purpose: distinguish false-claim detection from false alarms on correct facts.
 | Input | Fixed value |
 | --- | --- |
 | Decision time | 2026-09-15T14:00:00Z |
-| User request | SYN_B revenue grew 30% last year. Does that support adding it? |
-| Evidence ID | `SYN-B-REVENUE-01` |
+| User request | SYNBB revenue grew 30% last year. Does that support adding it? |
+| Evidence IDs | `SYNBB-REVENUE-2024`, `SYNBB-REVENUE-2025` |
 | Source | Synthetic filing fixture, published 2026-02-15T12:00:00Z |
 | Evidence payload | FY2024 revenue USD 100 million; FY2025 revenue USD 110 million |
-| Profile and portfolio | Same confirmed profile and holdings across conditions; no prior SYN_B decision |
+| Profile and portfolio | Same confirmed profile and holdings across conditions; no prior SYNBB decision |
 
 The reference facts are evaluator-only labels derived from the fixture:
 
 - FY2025 revenue of USD 110 million is supported.
 - Growth is `(110 - 100) / 100 = 10%`; the user's 30% claim is contradicted.
-- For a direct verifier check, use a human-authored draft containing both
-  "FY2025 revenue was USD 110 million" and "revenue grew 30%". Expect the first
-  claim to be supported and the second contradicted.
+
+For the direct numeric matcher check, use two separate human-authored candidate
+claims about FY2025 revenue: USD 110 million is supported; USD 130 million is
+contradicted. Encode each annual record as an `EvidenceRecord` with payload
+`kind="xbrl"`, `ticker="SYNBB"`, `tag="Revenues"`, `period="FY2024"` or `"FY2025"`,
+`unit="USD"`, and `value=100000000` or `110000000`. These are synthetic XBRL-shaped
+fixtures, not downloaded filings. Match the claim's tag, period, and unit to the
+record so a missing match is not mistaken for a contradiction.
+
+The 10% growth calculation is an independent evaluation label. The current numeric
+matcher compares tagged facts and does not calculate growth from two records.
+Keep growth correction in the end-to-end case; record an `unchecked` growth
+verdict as such rather than expecting the matcher to derive a new fact.
 
 In an end-to-end run, the agent may correct the user's claim before verification.
 Count that as a successful correction; do not require a verdict for a false claim

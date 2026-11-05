@@ -1,21 +1,18 @@
-# Judge rubric (draft)
+# Judge rubric
 
-Status: offline evaluation design only. The judge, prompt, and scoring pipeline
-are not implemented. These anchors need calibration before experimental use.
+The offline judge is not implemented.
 
-See the [evaluation plan](README.md) and [draft contracts](contracts.md).
+See the [evaluation plan](README.md) and [run contracts](contracts.md).
 
 ## Scope
 
-The judge evaluates the quality of `final_response` as shown to the user.
-It is separate from the agent's live verification and execution checks.
-Programmatic scoring uses independent reference facts and expected rule labels
-for measurable requirements, including raw proposal violations and false blocks.
-The judge must not replace these checks or certify an order as safe to execute.
+The judge scores the quality of `final_response` as shown to the user.
+Programmatic checks separately score raw proposal violations, false blocks, and
+fact-checking accuracy against independent reference facts and rule labels.
 
 ## Inputs
 
-Each scoring request should contain:
+Each scoring request contains:
 
 - An opaque sample identifier and the scenario request and decision time.
 - The same ground-truth profile, portfolio, and relevant pre-decision history
@@ -24,9 +21,19 @@ Each scoring request should contain:
 - Acceptance criteria, including when clarification or abstention is appropriate.
 - The candidate `final_response` and this rubric's version.
 
-Do not include the memory condition, agent model label, raw proposal, internal
-validation verdicts, or filenames that reveal the experimental condition.
-Keep experiment labels in the runner's records for later analysis.
+Build `final_response` from the last assistant message and the user-visible state
+in the [agent contract](../docs/eval-contract.md): the recommendation, portfolio
+impact, verification annotations, and todos. Use the same rendering across
+conditions and record its version.
+
+Treat visible verification annotations as claims made by the agent. Check them
+against the reference evidence; a `supported` label does not establish correctness.
+Keep these annotations within the candidate response, separate from reference
+labels and acceptance criteria.
+
+Exclude the memory condition, agent model label, raw pre-check proposal, private
+traces, and internal verdicts that were not displayed to the user. Keep experiment
+labels in the runner's records for analysis, including filenames that reveal them.
 
 ## Prompt constraints
 
@@ -53,24 +60,24 @@ Use the scenario's acceptable outcomes rather than a single preferred answer.
 | Profile fit | Advice ignores or conflicts with the user's confirmed context. | Advice fits core limits but misses a relevant preference or prior decision. | Advice consistently reflects relevant limits, preferences, and available history. |
 | Actionability | Advice is unusable, unsupported, or demands an unjustified action. | A feasible next step is given, with some ambiguity. | A clear, justified next step is given, including clarification or abstention when warranted. |
 
-## Proposed output and failure handling
+## Output and failure handling
 
-The future structured output should include the sample ID, rubric version,
-status, and one entry per dimension containing an integer score, short reason,
-and relevant reference evidence IDs. Reasons may cite a candidate passage;
+Return the sample ID, rubric version, status, and one entry per dimension
+containing an integer score, a short reason, and reference evidence IDs.
+Reasons may cite a candidate passage;
 an empty evidence list is acceptable for a purely communication-related point.
 Validate required dimensions, score ranges, and references against the catalog.
-Keep dimension scores separate; an aggregate is not required for this draft.
+Report the five dimension scores separately.
 
 Use a judge from a different model family than the agent, with temperature 0.
 Record the exact judge model, prompt version, settings, and returned output.
 Retry invalid structured output once. If it remains invalid, record `judge_error`
-with the failure detail and no valid scores. Record call failures explicitly too.
+with the failure detail and no valid scores. Record call failures with their cause.
 Do not turn errors into zero scores or silently omit them from reported counts.
 
-## Calibration and next implementation steps
+## Calibration and implementation
 
-- [ ] Agree on the input and output fields with the agent owner.
+- [ ] Confirm how the runner renders the user-visible response and annotations.
 - [ ] Prepare manually reviewed strong, mixed, and weak development responses,
   including a justified refusal and a confident but unsupported recommendation.
 - [ ] Calibrate anchors on development cases before freezing the evaluation set.
