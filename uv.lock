@@ -1340,11 +1340,29 @@ name = "tradecopilot-eval"
 version = "0.1.0"
 source = { editable = "eval" }
 dependencies = [
+    { name = "pydantic" },
     { name = "tradecopilot-agent" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
 [package.metadata]
-requires-dist = [{ name = "tradecopilot-agent", editable = "agent" }]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2,<3" },
+    { name = "tradecopilot-agent", editable = "agent" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=2.4.1,<3" },
+    { name = "pytest", specifier = ">=9.2.0,<10" },
+    { name = "ruff", specifier = ">=0.17.3,<1" },
+]
 
 [[package]]
 name = "truststore"
