@@ -471,8 +471,8 @@ def _effective_settings(app: FastAPI) -> AppSettings:
 def _apply_model_key(settings: AppSettings) -> None:
     """Expose the stored model key to the provider SDK.
 
-    Provider SDKs read their key from the environment, so the settings value is
-    copied there before the graph is built.
+    Args:
+        settings: Effective settings holding the model and key.
     """
     if not settings.model_api_key:
         return

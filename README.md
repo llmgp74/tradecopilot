@@ -34,6 +34,7 @@ cp .env.example .env
 | --- | --- |
 | `AGENT_MODEL` | `provider:model`; required to run the agent |
 | `MODEL_API_KEY` | Provider key |
+| `MODEL_BASE_URL` | Provider API base URL; empty uses the SDK default |
 | `ALPACA_API_KEY` | Portfolio panel |
 | `ALPACA_API_SECRET` | Portfolio panel |
 | `ALPACA_BASE_URL` | Defaults to the paper host |

@@ -1,5 +1,6 @@
 """Portfolio snapshots from the Alpaca trading API."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -15,6 +16,8 @@ from tradecopilot_agent.models import (
 )
 from tradecopilot_agent.store import now_iso
 
+_log = logging.getLogger(__name__)
+
 _RANGES: dict[str, tuple[str, str]] = {
     "1D": ("1D", "5Min"),
     "1W": ("1W", "30Min"),
@@ -27,6 +30,19 @@ _RANGES: dict[str, tuple[str, str]] = {
 
 class PortfolioUnavailable(Exception):
     """The broker is unconfigured, unreachable, or returned unusable data."""
+
+
+def trading_base_url(url: str) -> str:
+    """Return the broker host without a trailing API version.
+
+    Args:
+        url: Configured base URL, with or without ``/v2``.
+
+    Returns:
+        The base URL without a trailing slash or ``/v2``.
+    """
+    base = url.rstrip("/")
+    return base[:-3] if base.endswith("/v2") else base
 
 
 async def fetch_portfolio(settings: AppSettings, range_: str) -> Portfolio:
@@ -54,7 +70,7 @@ async def fetch_portfolio(settings: AppSettings, range_: str) -> Portfolio:
     }
     try:
         async with httpx.AsyncClient(
-            base_url=settings.alpaca_base_url,
+            base_url=trading_base_url(settings.alpaca_base_url),
             headers=headers,
             timeout=10.0,
         ) as client:
@@ -74,6 +90,7 @@ async def fetch_portfolio(settings: AppSettings, range_: str) -> Portfolio:
             raw_positions = positions_response.json()
             history = history_response.json()
     except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+        _log.warning("Portfolio fetch failed: %s", exc)
         raise PortfolioUnavailable("Portfolio is unavailable.") from exc
 
     try:

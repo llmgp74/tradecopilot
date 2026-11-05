@@ -133,7 +133,6 @@ class TradingState(DeepAgentState):
     verification: NotRequired[Annotated[list[Any], merge_scoped]]
     portfolio_impact: NotRequired[dict[str, Any] | None]
     pending_ticket: NotRequired[dict[str, Any] | None]
-    gather_calls: NotRequired[int]
     todos_snapshot: NotRequired[list[Any]]
 
 
@@ -142,6 +141,5 @@ TURN_FIELDS: dict[str, Any] = {
     "portfolio_impact": None,
     "pending_ticket": None,
     "verification": [],
-    "gather_calls": 0,
 }
 """State values cleared when a new user turn starts."""

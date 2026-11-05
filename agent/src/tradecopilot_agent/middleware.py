@@ -156,11 +156,28 @@ def _in_cutoff(published_at: str | None, as_of: date | None) -> bool:
 
 
 def budget_denied(state: dict[str, Any], tool_name: str) -> bool:
-    """Return whether the gather budget blocks this tool call."""
-    return (
-        tool_name in EVIDENCE_TOOL_NAMES
-        and int(state.get("gather_calls", 0)) >= GATHER_BUDGET
-    )
+    """Return whether the gather budget blocks this tool call.
+
+    Args:
+        state: Graph state holding the message history.
+        tool_name: Tool being called.
+
+    Returns:
+        True when this turn already used its evidence calls.
+    """
+    if tool_name not in EVIDENCE_TOOL_NAMES:
+        return False
+    return _evidence_calls(state.get("messages", [])) >= GATHER_BUDGET
+
+
+def _evidence_calls(messages: list[Any]) -> int:
+    count = 0
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            break
+        if isinstance(message, ToolMessage) and message.name in EVIDENCE_TOOL_NAMES:
+            count += 1
+    return count
 
 
 def annotate(
@@ -379,7 +396,7 @@ class ToolResultMiddleware(AgentMiddleware[TradingState, Any, Any]):
                 tool_call_id=str(call.get("id", "")),
             )
         result = await handler(request)
-        return _with_updates(result, state, name, self.as_of)
+        return _with_updates(result, self.as_of)
 
     def _consume(self, request: Any, handler: Any) -> Any:
         state = dict(getattr(request, "state", {}) or {})
@@ -391,12 +408,10 @@ class ToolResultMiddleware(AgentMiddleware[TradingState, Any, Any]):
                 tool_call_id=str(call.get("id", "")),
             )
         result = handler(request)
-        return _with_updates(result, state, name, self.as_of)
+        return _with_updates(result, self.as_of)
 
 
-def _with_updates(
-    result: Any, state: dict[str, Any], tool_name: str, as_of: date | None
-) -> Any:
+def _with_updates(result: Any, as_of: date | None) -> Any:
     if not isinstance(result, ToolMessage):
         return result
     artifact = result.artifact
@@ -406,8 +421,6 @@ def _with_updates(
             updates = artifact_updates(ToolOutput.model_validate(artifact), as_of)
         except ValueError:
             updates = {}
-    if tool_name in EVIDENCE_TOOL_NAMES:
-        updates["gather_calls"] = int(state.get("gather_calls", 0)) + 1
     if not updates:
         return result
     return Command(update={**updates, "messages": [result]})

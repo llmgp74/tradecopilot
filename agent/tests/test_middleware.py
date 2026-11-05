@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
 from tradecopilot_agent.middleware import (
     _with_updates,
@@ -125,11 +125,15 @@ def test_artifact_updates_clear_the_ticket_after_execution() -> None:
 
 def test_budget_denies_after_twelve_evidence_calls() -> None:
     """The gather budget refuses evidence tools past its limit."""
-    state = {"gather_calls": 12}
+    calls = [
+        ToolMessage(content="x", tool_call_id=f"c{i}", name="get_quote")
+        for i in range(12)
+    ]
+    state = {"messages": [HumanMessage(content="hi"), *calls]}
 
     assert budget_denied(state, "get_quote") is True
     assert budget_denied(state, "verify_claims") is False
-    assert budget_denied({"gather_calls": 2}, "get_quote") is False
+    assert budget_denied({"messages": calls[:2]}, "get_quote") is False
 
 
 def test_annotation_marks_claims_and_survives_extractor_failure() -> None:
@@ -179,10 +183,9 @@ def test_tool_result_becomes_a_state_command() -> None:
         content="ok", tool_call_id="call_1", artifact=output.model_dump(mode="json")
     )
 
-    command = _with_updates(message, {"gather_calls": 2}, "get_quote", AS_OF)
+    command = _with_updates(message, AS_OF)
 
     assert isinstance(command, Command)
-    assert command.update["gather_calls"] == 3
     assert set(command.update["evidence"]) == {"ev_1"}
     assert command.update["messages"] == [message]
 
@@ -191,4 +194,4 @@ def test_plain_tool_results_are_untouched() -> None:
     """A result without an artifact does not produce a Command."""
     message = ToolMessage(content="done", tool_call_id="call_2")
 
-    assert _with_updates(message, {}, "write_todos", AS_OF) is message
+    assert _with_updates(message, AS_OF) is message

@@ -7,7 +7,11 @@ from typing import Any
 import httpx
 
 from tradecopilot_agent.models import AppSettings
-from tradecopilot_agent.portfolio import PortfolioUnavailable, fetch_portfolio
+from tradecopilot_agent.portfolio import (
+    PortfolioUnavailable,
+    fetch_portfolio,
+    trading_base_url,
+)
 from tradecopilot_agent.sources.common import record
 from tradecopilot_agent.sources.http import fetch_json, post_json
 from tradecopilot_agent.state import ToolOutput
@@ -160,7 +164,7 @@ class AlpacaSource:
         }
         try:
             data = await post_json(
-                f"{current.alpaca_base_url}/v2/orders",
+                f"{trading_base_url(current.alpaca_base_url)}/v2/orders",
                 headers={**self._headers(), "Content-Type": "application/json"},
                 body=body,
                 client=self.client,

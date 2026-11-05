@@ -15,6 +15,7 @@ from langgraph.graph.state import CompiledStateGraph
 from tradecopilot_agent.claims import build_extractor
 from tradecopilot_agent.config import get_settings
 from tradecopilot_agent.data import DataSource
+from tradecopilot_agent.llm import build_chat_model
 from tradecopilot_agent.memory import MemoryConfig
 from tradecopilot_agent.middleware import (
     AnnotationMiddleware,
@@ -64,7 +65,8 @@ def build_agent(
             "for example anthropic:claude-sonnet-5."
         )
 
-    extract_claims = build_extractor(model_name)
+    chat_model = build_chat_model(model_name)
+    extract_claims = build_extractor(chat_model)
     middleware: list[AgentMiddleware[Any, Any, Any]] = [
         TurnMiddleware(),
         TradingMemoryMiddleware(config),
@@ -76,7 +78,7 @@ def build_agent(
         ModelCallLimitMiddleware(run_limit=MODEL_CALL_LIMIT, exit_behavior="end"),
     ]
     return create_deep_agent(
-        model=model_name,
+        model=chat_model,
         tools=build_tools(source, config.store, as_of, extract_claims),
         system_prompt=SYSTEM_PROMPT,
         middleware=middleware,

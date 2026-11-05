@@ -35,6 +35,7 @@ screen are stored in SQLite and win over both.
 | --- | --- | --- |
 | `AGENT_MODEL` | none | `provider:model` string; required to build a graph |
 | `MODEL_API_KEY` | none | Provider key fallback |
+| `MODEL_BASE_URL` | none | Provider API base URL |
 | `JUDGE_MODEL` | none | `provider:model` string for the eval judge |
 | `ALPACA_API_KEY` | none | Broker key |
 | `ALPACA_API_SECRET` | none | Broker secret |

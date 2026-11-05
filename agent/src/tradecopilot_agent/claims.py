@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Any, Literal
 
 from langchain.chat_models import init_chat_model
+from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
 
 from tradecopilot_agent.state import Claim
@@ -229,21 +230,26 @@ def match_claims(
     return verdicts
 
 
-def build_extractor(model: str) -> Any:
+def build_extractor(model: BaseChatModel | str) -> Any:
     """Return a callable that extracts claims from prose.
 
     Args:
-        model: ``provider:model`` string used for extraction.
+        model: A chat model, or a ``provider:model`` string.
 
     Returns:
         A synchronous callable taking text and returning claims.
     """
-    chat = init_chat_model(model, temperature=0).with_structured_output(ExtractedClaims)
+    base = (
+        model
+        if isinstance(model, BaseChatModel)
+        else init_chat_model(model, temperature=0)
+    )
+    structured = base.with_structured_output(ExtractedClaims)
 
     def extract(text: str) -> list[Claim]:
         if not text.strip():
             return []
-        result: Any = chat.invoke(
+        result: Any = structured.invoke(
             "Extract every factual claim from the text. Use kind numeric for "
             "numbers, filing for SEC filing references, news for dated news, and "
             "opinion otherwise. Give numeric claims their XBRL tag when known. "
