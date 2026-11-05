@@ -121,17 +121,26 @@ def test_chat_creates_a_listed_thread(tmp_path: Path) -> None:
 def test_thread_detail_restores_a_pending_approval(tmp_path: Path) -> None:
     """A pending interrupt becomes an approval-requested tool part."""
     tool_call = {
-        "name": "execute_order",
-        "args": {"qty": 10},
+        "name": "execute_ticket",
+        "args": {"ticket_id": "t_1"},
         "id": "call_1",
         "type": "tool_call",
+    }
+    pending = {
+        "id": "t_1",
+        "legs": [{"ticker": "NVDA", "side": "buy", "qty": 10}],
+        "thesis": "add NVDA",
+        "horizon": "weeks",
+        "created_at": "2026-11-05T14:00:00Z",
     }
     snapshot = SimpleNamespace(
         values={
             "messages": [
                 HumanMessage(content="buy", id="u1"),
                 AIMessage(content="", id="a1", tool_calls=[tool_call]),
-            ]
+            ],
+            "pending_ticket": pending,
+            "verification": [{"scope": "draft", "verdict": "supported", "text": "x"}],
         },
         interrupts=(
             Interrupt(
@@ -139,8 +148,8 @@ def test_thread_detail_restores_a_pending_approval(tmp_path: Path) -> None:
                 value={
                     "action_requests": [
                         {
-                            "name": "execute_order",
-                            "args": {"qty": 10},
+                            "name": "execute_ticket",
+                            "args": {"ticket_id": "t_1"},
                             "description": "Review",
                         }
                     ]
@@ -153,10 +162,11 @@ def test_thread_detail_restores_a_pending_approval(tmp_path: Path) -> None:
         detail = client.get("/api/threads/t1").json()
 
     part = detail["messages"][1]["parts"][0]
-    assert part["type"] == "tool-execute_order"
+    assert part["type"] == "tool-execute_ticket"
     assert part["state"] == "approval-requested"
     assert part["approval"]["id"] == "call_1"
-    assert part["approval"]["ticket"] == {"qty": 10}
+    assert part["approval"]["ticket"] == pending
+    assert part["approval"]["verification"][0]["scope"] == "draft"
 
 
 def test_unknown_thread_is_404(tmp_path: Path) -> None:
@@ -173,30 +183,31 @@ def test_journal_filters(tmp_path: Path) -> None:
         assert empty["total"] == 0
 
         with sqlite3.connect(tmp_path / "data.db") as connection:
+            payload = {
+                "decision_id": "e1",
+                "created_at": "2026-11-04T14:02:11Z",
+                "legs": [
+                    {
+                        "ticker": "NVDA",
+                        "side": "buy",
+                        "qty": 10.0,
+                        "notional": 2000.0,
+                        "fill_price": None,
+                        "fill_at": None,
+                        "status": "rejected",
+                    }
+                ],
+                "thesis": "thesis",
+                "horizon": "weeks",
+                "evidence_ids": ["ev1"],
+                "status": "rejected",
+                "user_action": "reject",
+                "rejection_reason": "too large",
+            }
             connection.execute(
-                """
-                INSERT INTO journal (
-                  id, created_at, tickers, side, qty, size_pct, thesis,
-                  evidence_ids, status, user_action, rejection_reason,
-                  fill_price, fill_at, outcome_note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    "e1",
-                    "2026-11-04T14:02:11Z",
-                    json.dumps(["NVDA"]),
-                    "buy",
-                    10.0,
-                    2.0,
-                    "thesis",
-                    json.dumps(["ev1"]),
-                    "rejected",
-                    "reject",
-                    "too large",
-                    None,
-                    None,
-                    None,
-                ),
+                "INSERT INTO journal (event_id, decision_id, created_at, payload) "
+                "VALUES (?, ?, ?, ?)",
+                ("e1", "e1", "2026-11-04T14:02:11Z", json.dumps(payload)),
             )
 
         assert (

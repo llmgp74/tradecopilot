@@ -6,8 +6,38 @@ import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from tradecopilot_agent import Settings
+from tradecopilot_agent import Settings, build_agent
+from tradecopilot_agent.memory import MemoryConfig
 from tradecopilot_agent.server import create_app
+from tradecopilot_agent.state import ToolOutput
+from tradecopilot_agent.store import Store
+
+
+class EmptySource:
+    """A source with no providers configured."""
+
+    def capabilities(self) -> set[str]:
+        """Return no capabilities."""
+        return set()
+
+    async def quote(self, ticker: str) -> ToolOutput:
+        """Not configured."""
+        raise NotImplementedError
+
+
+def test_build_agent_composes_the_loop(tmp_path: Path, monkeypatch) -> None:
+    """The eval contract signature builds the model and tools."""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
+    store = Store(tmp_path / "data.db")
+
+    graph = build_agent(
+        MemoryConfig(condition="full", store=store),
+        EmptySource(),
+        model="deepseek:deepseek-chat",
+    )
+
+    nodes = set(graph.get_graph().nodes)
+    assert {"model", "tools"} <= nodes
 
 
 def test_health(tmp_path: Path) -> None:
