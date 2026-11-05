@@ -19,7 +19,7 @@ flowchart TB
     subgraph AGENT["DeepAgents graph - one agent"]
       LOOP["Plan -> gather evidence -> draft"]
       VER["Verification middleware<br/>claims vs XBRL, EDGAR, news"]
-      CON["Constraint middleware<br/>user profile, deterministic<br/>interrupt_on execute_order"]
+      CON["Constraint middleware<br/>user profile, deterministic<br/>approval in execute_ticket"]
       LOOP --> VER --> CON
     end
     TOOLS["Tools<br/>quote, bars, portfolio, filings,<br/>XBRL facts, news, macro, orders"]
@@ -48,7 +48,7 @@ flowchart TB
 
 | Layer | Choice | Rationale |
 | --- | --- | --- |
-| Agent | DeepAgents (LangGraph) | planning, todo tracking, middleware checks, interrupt_on approval, provider:model strings |
+| Agent | DeepAgents (LangGraph) | planning, todo tracking, middleware checks, approval interrupts, provider:model strings |
 | Backend | FastAPI + uvicorn | one process serves the API and the built SPA; native SSE |
 | Frontend | React, Vite, TypeScript | static SPA build |
 | AI SDK | Vercel AI SDK | useChat and the UI message stream over SSE |
@@ -88,10 +88,10 @@ Plan/todo and summarization are built-in middleware.
 
 Loop: plan -> gather evidence -> draft -> verify -> constrain -> interrupt or execute.
 
-Approval uses DeepAgents `interrupt_on` for `execute_order` in manual mode. The
-interrupt becomes an AI SDK `tool-approval-request` part; the ticket, rationale,
-cited evidence, verification verdicts, and portfolio impact travel in the part's
-approval descriptor. The client answers with `addToolApprovalResponse`, and the next
+Approval comes from `interrupt()` inside `execute_ticket` in manual mode. The
+interrupt becomes an AI SDK `tool-approval-request` part; the ticket, rationale, and
+portfolio impact travel in the part's approval descriptor. Verification verdicts are
+already streamed as a data part. The client answers with `addToolApprovalResponse`, and the next
 chat request resumes the graph. Resume accepts approve or reject with a reason.
 Autonomous mode skips the interrupt only when preset permissions allow the order.
 
@@ -123,8 +123,8 @@ different model family from the agent.
 | `get_news` | Finnhub, FMP fallback | - |
 | `get_social_sentiment` | social sentiment | fixture-backed only |
 | `get_macro` | FRED | - |
-| `propose_order` | - | builds a ticket, no side effect |
-| `execute_order` | Alpaca | token or autonomous permission; every rejection logged |
+| `propose_ticket` | - | one or more legs; builds a ticket, no side effect |
+| `execute_ticket` | Alpaca | approval or autonomous permission; every rejection logged |
 | `update_preference` | memory | writes the profile; hard-constraint changes need confirmation |
 
 Every tool returns a provenance record: source, published_at, fetched_at, payload,
@@ -237,10 +237,14 @@ runner is the only caller that passes the other three.
 
 ```text
 POST /api/chat                 SSE, AI SDK UI message stream
+GET  /api/threads              thread list
+GET  /api/threads/{id}         thread detail, AI SDK UI messages
 GET  /api/portfolio
 GET  /api/profile
 PATCH /api/profile
 GET  /api/journal
+GET  /api/settings
+PATCH /api/settings
 GET  /api/health
 ```
 
@@ -324,8 +328,9 @@ LangGraph checkpointer in the same `data.db` file, one thread per conversation.
 
 - Paper trading is the default. Live trading requires an explicit opt-in flag and a
   per-order confirmation.
-- The server binds to 127.0.0.1 only. Keys live in a local .env and never reach the
-  browser.
+- The server binds to 127.0.0.1 only. API keys are entered in the settings screen,
+  stored encrypted in SQLite with a separate local key file, and read back only over
+  loopback.
 - Hard constraints are enforced in code at the execution boundary, not by the prompt.
 - Filesystem, shell, and arbitrary code tools are off by default.
 
@@ -333,7 +338,7 @@ LangGraph checkpointer in the same `data.db` file, one thread per conversation.
 
 ### Open
 
-- Model providers and keys are chosen at setup.
+- Model providers and keys are chosen in the settings screen.
 
 ### Optional
 

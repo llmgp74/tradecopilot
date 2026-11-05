@@ -1,0 +1,1028 @@
+openapi: 3.1.0
+info:
+  title: TradeCopilot API
+  description: Single-user local trading co-pilot.
+  version: 0.1.0
+paths:
+  /api/health:
+    get:
+      summary: Health
+      description: "Report that the server is running and which model it uses.\n\nReturns:\n    The readiness payload."
+      operationId: health_api_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/chat:
+    post:
+      summary: Stream one agent turn
+      description: "Stream one graph turn as an AI SDK UI message stream.\n\nArgs:\n    body: AI SDK chat request.\n\nReturns:\n    Server-Sent Events carrying UI message parts.\n\nRaises:\n    HTTPException: When the agent model is not configured."
+      operationId: chat_api_chat_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+        required: true
+      responses:
+        '200':
+          description: 'AI SDK UI message stream. One JSON part per frame, terminated by data: [DONE].'
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads:
+    get:
+      summary: List Threads
+      description: "List conversation threads, newest first.\n\nArgs:\n    page_no: One-based page number.\n    page_size: Rows per page.\n\nReturns:\n    One page of thread metadata."
+      operationId: list_threads_api_threads_get
+      parameters:
+      - name: page_no
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page No
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}:
+    get:
+      summary: Get Thread
+      description: "Return one thread with its rehydrated messages.\n\nArgs:\n    thread_id: Conversation thread id.\n\nReturns:\n    Thread metadata and AI SDK UI messages.\n\nRaises:\n    HTTPException: 404 when the thread does not exist, or 503 when\n        the agent model is not configured."
+      operationId: get_thread_api_threads__thread_id__get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/portfolio:
+    get:
+      summary: Get Portfolio
+      description: "Return the current account, positions, and equity history.\n\nArgs:\n    range_: Equity curve window.\n\nReturns:\n    The normalized portfolio.\n\nRaises:\n    HTTPException: 503 when the broker is unavailable."
+      operationId: get_portfolio_api_portfolio_get
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          enum:
+          - 1D
+          - 1W
+          - 1M
+          - 3M
+          - 1Y
+          - ALL
+          type: string
+          default: 1M
+          title: Range
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/settings:
+    get:
+      summary: Get App Settings
+      description: "Return the effective application settings.\n\nArgs:\n    response: Response used to disable caching.\n\nReturns:\n    The effective settings, with secrets in plaintext."
+      operationId: get_app_settings_api_settings_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+    patch:
+      summary: Update App Settings
+      description: "Apply a partial settings update.\n\nArgs:\n    body: Fields to change. Omitted fields are untouched.\n    response: Response used to disable caching.\n\nReturns:\n    The effective settings after the update."
+      operationId: update_app_settings_api_settings_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSettingsPatch'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/profile:
+    get:
+      summary: Get Profile
+      description: "Return the user profile.\n\nReturns:\n    The full profile."
+      operationId: get_profile_api_profile_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+    patch:
+      summary: Patch Profile
+      description: "Apply a partial profile update.\n\nArgs:\n    body: Fields to change. Omitted fields are untouched.\n\nReturns:\n    The full profile after the update."
+      operationId: patch_profile_api_profile_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/journal:
+    get:
+      summary: List Journal
+      description: "List decision journal entries, newest first.\n\nArgs:\n    page_no: One-based page number.\n    page_size: Rows per page.\n    status: Exact status filter.\n    ticker: Case-insensitive ticker filter.\n    from_date: Inclusive lower bound on the creation date.\n    to_date: Inclusive upper bound on the creation date.\n\nReturns:\n    One page of journal entries."
+      operationId: list_journal_api_journal_get
+      parameters:
+      - name: page_no
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page No
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Page Size
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - proposed
+            - approved
+            - edited
+            - rejected
+            - deferred
+            - submitted
+            - filled
+            - failed
+            - skipped_unfunded
+            type: string
+          - type: 'null'
+          title: Status
+      - name: ticker
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ticker
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      summary: Missing Ui
+      description: "Explain how to produce the missing frontend build.\n\nReturns:\n    A short hint."
+      operationId: missing_ui__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/html:
+              schema:
+                type: string
+components:
+  schemas:
+    Account:
+      properties:
+        currency:
+          type: string
+          title: Currency
+        equity:
+          type: number
+          title: Equity
+        cash:
+          type: number
+          title: Cash
+        buying_power:
+          type: number
+          title: Buying Power
+        long_market_value:
+          type: number
+          title: Long Market Value
+      type: object
+      required:
+      - currency
+      - equity
+      - cash
+      - buying_power
+      - long_market_value
+      title: Account
+      description: Broker account snapshot.
+    AppSettings:
+      properties:
+        agent_model:
+          type: string
+          title: Agent Model
+          default: ''
+        model_api_key:
+          type: string
+          title: Model Api Key
+          default: ''
+        alpaca_api_key:
+          type: string
+          title: Alpaca Api Key
+          default: ''
+        alpaca_api_secret:
+          type: string
+          title: Alpaca Api Secret
+          default: ''
+        alpaca_base_url:
+          type: string
+          title: Alpaca Base Url
+          default: ''
+        fmp_api_key:
+          type: string
+          title: Fmp Api Key
+          default: ''
+        finnhub_api_key:
+          type: string
+          title: Finnhub Api Key
+          default: ''
+        fred_api_key:
+          type: string
+          title: Fred Api Key
+          default: ''
+        edgar_user_agent:
+          type: string
+          title: Edgar User Agent
+          default: ''
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - updated_at
+      title: AppSettings
+      description: User-editable application settings.
+    AppSettingsPatch:
+      properties:
+        agent_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Model
+        model_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Api Key
+        alpaca_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alpaca Api Key
+        alpaca_api_secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alpaca Api Secret
+        alpaca_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alpaca Base Url
+        fmp_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fmp Api Key
+        finnhub_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Finnhub Api Key
+        fred_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fred Api Key
+        edgar_user_agent:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Edgar User Agent
+      type: object
+      title: AppSettingsPatch
+      description: Partial settings update.
+    ChatRequest:
+      properties:
+        thread_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Thread Id
+        messages:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Messages
+        trigger:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trigger
+        messageId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Messageid
+      type: object
+      required:
+      - messages
+      title: ChatRequest
+      description: "The AI SDK chat request plus the thread id.\n\nAttributes:\n    thread_id: Existing conversation thread. A thread is created when\n        omitted.\n    messages: Full UI message history from `useChat`.\n    trigger: AI SDK request trigger, kept for wire compatibility.\n    messageId: Assistant message id, kept for wire compatibility."
+    DayPnl:
+      properties:
+        pnl:
+          type: number
+          title: Pnl
+        pnl_pct:
+          type: number
+          title: Pnl Pct
+      type: object
+      required:
+      - pnl
+      - pnl_pct
+      title: DayPnl
+      description: Change in equity since the previous close.
+    EquityPoint:
+      properties:
+        t:
+          type: string
+          title: T
+        equity:
+          type: number
+          title: Equity
+      type: object
+      required:
+      - t
+      - equity
+      title: EquityPoint
+      description: One point on the equity curve.
+    ExecutionSettings:
+      properties:
+        autonomous:
+          type: boolean
+          title: Autonomous
+          default: false
+        max_order_notional:
+          type: number
+          minimum: 0.0
+          title: Max Order Notional
+          default: 1000.0
+      type: object
+      title: ExecutionSettings
+      description: Order execution permissions.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    Health:
+      properties:
+        status:
+          type: string
+          title: Status
+        agent_model:
+          type: string
+          title: Agent Model
+      type: object
+      required:
+      - status
+      - agent_model
+      title: Health
+      description: Readiness payload.
+    JournalEntry:
+      properties:
+        id:
+          type: string
+          title: Id
+        created_at:
+          type: string
+          title: Created At
+        legs:
+          items:
+            $ref: '#/components/schemas/JournalLeg'
+          type: array
+          title: Legs
+        thesis:
+          type: string
+          title: Thesis
+        horizon:
+          type: string
+          enum:
+          - intraday
+          - days
+          - weeks
+          - months
+          title: Horizon
+        evidence_ids:
+          items:
+            type: string
+          type: array
+          title: Evidence Ids
+        status:
+          type: string
+          enum:
+          - proposed
+          - approved
+          - edited
+          - rejected
+          - deferred
+          - submitted
+          - filled
+          - failed
+          - skipped_unfunded
+          title: Status
+        user_action:
+          anyOf:
+          - type: string
+            enum:
+            - approve
+            - edit
+            - reject
+            - defer
+          - type: 'null'
+          title: User Action
+        rejection_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rejection Reason
+        outcome:
+          anyOf:
+          - $ref: '#/components/schemas/JournalOutcome'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - created_at
+      - legs
+      - thesis
+      - horizon
+      - evidence_ids
+      - status
+      title: JournalEntry
+      description: One decision journal row.
+    JournalLeg:
+      properties:
+        ticker:
+          type: string
+          title: Ticker
+        side:
+          type: string
+          enum:
+          - buy
+          - sell
+          title: Side
+        qty:
+          type: number
+          title: Qty
+        notional:
+          type: number
+          title: Notional
+        fill_price:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Fill Price
+        fill_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fill At
+        status:
+          type: string
+          enum:
+          - proposed
+          - approved
+          - edited
+          - rejected
+          - deferred
+          - submitted
+          - filled
+          - failed
+          - skipped_unfunded
+          title: Status
+      type: object
+      required:
+      - ticker
+      - side
+      - qty
+      - notional
+      - status
+      title: JournalLeg
+      description: One order inside a journal decision.
+    JournalList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+          type: array
+          title: Items
+        page_no:
+          type: integer
+          title: Page No
+        page_size:
+          type: integer
+          title: Page Size
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - items
+      - page_no
+      - page_size
+      - total
+      title: JournalList
+      description: One page of journal rows.
+    JournalOutcome:
+      properties:
+        counterfactual:
+          type: boolean
+          title: Counterfactual
+        entry_price:
+          type: number
+          title: Entry Price
+        entry_at:
+          type: string
+          title: Entry At
+        horizon:
+          type: string
+          enum:
+          - intraday
+          - days
+          - weeks
+          - months
+          title: Horizon
+        return_pct:
+          type: number
+          title: Return Pct
+        benchmark:
+          type: string
+          title: Benchmark
+        benchmark_return_pct:
+          type: number
+          title: Benchmark Return Pct
+        alpha_pct:
+          type: number
+          title: Alpha Pct
+        computed_at:
+          type: string
+          title: Computed At
+        legs:
+          items:
+            $ref: '#/components/schemas/LegOutcome'
+          type: array
+          title: Legs
+      type: object
+      required:
+      - counterfactual
+      - entry_price
+      - entry_at
+      - horizon
+      - return_pct
+      - benchmark
+      - benchmark_return_pct
+      - alpha_pct
+      - computed_at
+      title: JournalOutcome
+      description: Lazily computed decision outcome.
+    LegOutcome:
+      properties:
+        ticker:
+          type: string
+          title: Ticker
+        entry_price:
+          type: number
+          title: Entry Price
+        return_pct:
+          type: number
+          title: Return Pct
+        alpha_pct:
+          type: number
+          title: Alpha Pct
+        counterfactual:
+          type: boolean
+          title: Counterfactual
+      type: object
+      required:
+      - ticker
+      - entry_price
+      - return_pct
+      - alpha_pct
+      - counterfactual
+      title: LegOutcome
+      description: One leg of a computed decision outcome.
+    Portfolio:
+      properties:
+        as_of:
+          type: string
+          title: As Of
+        paper:
+          type: boolean
+          title: Paper
+        account:
+          $ref: '#/components/schemas/Account'
+        day:
+          $ref: '#/components/schemas/DayPnl'
+        positions:
+          items:
+            $ref: '#/components/schemas/Position'
+          type: array
+          title: Positions
+        equity_curve:
+          items:
+            $ref: '#/components/schemas/EquityPoint'
+          type: array
+          title: Equity Curve
+      type: object
+      required:
+      - as_of
+      - paper
+      - account
+      - day
+      - positions
+      - equity_curve
+      title: Portfolio
+      description: Account, positions, and equity history.
+    Position:
+      properties:
+        ticker:
+          type: string
+          title: Ticker
+        side:
+          type: string
+          enum:
+          - long
+          - short
+          title: Side
+        sector:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sector
+        qty:
+          type: number
+          title: Qty
+        avg_entry_price:
+          type: number
+          title: Avg Entry Price
+        current_price:
+          type: number
+          title: Current Price
+        market_value:
+          type: number
+          title: Market Value
+        unrealized_pl:
+          type: number
+          title: Unrealized Pl
+        unrealized_pl_pct:
+          type: number
+          title: Unrealized Pl Pct
+        weight_pct:
+          type: number
+          title: Weight Pct
+      type: object
+      required:
+      - ticker
+      - side
+      - sector
+      - qty
+      - avg_entry_price
+      - current_price
+      - market_value
+      - unrealized_pl
+      - unrealized_pl_pct
+      - weight_pct
+      title: Position
+      description: One open position.
+    Profile:
+      properties:
+        risk_band:
+          type: string
+          enum:
+          - conservative
+          - moderate
+          - aggressive
+          title: Risk Band
+          default: moderate
+        position_cap_pct:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Position Cap Pct
+          default: 10.0
+        sector_exclusions:
+          items:
+            type: string
+          type: array
+          title: Sector Exclusions
+        horizon:
+          type: string
+          enum:
+          - intraday
+          - days
+          - weeks
+          - months
+          title: Horizon
+          default: weeks
+        watchlist:
+          items:
+            type: string
+          type: array
+          title: Watchlist
+        source_preferences:
+          items:
+            type: string
+          type: array
+          title: Source Preferences
+        execution:
+          $ref: '#/components/schemas/ExecutionSettings'
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - updated_at
+      title: Profile
+      description: Durable user profile.
+    ProfilePatch:
+      properties:
+        risk_band:
+          anyOf:
+          - type: string
+            enum:
+            - conservative
+            - moderate
+            - aggressive
+          - type: 'null'
+          title: Risk Band
+        position_cap_pct:
+          anyOf:
+          - type: number
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Position Cap Pct
+        sector_exclusions:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Sector Exclusions
+        horizon:
+          anyOf:
+          - type: string
+            enum:
+            - intraday
+            - days
+            - weeks
+            - months
+          - type: 'null'
+          title: Horizon
+        watchlist:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Watchlist
+        source_preferences:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Source Preferences
+        execution:
+          anyOf:
+          - $ref: '#/components/schemas/ExecutionSettings'
+          - type: 'null'
+      type: object
+      title: ProfilePatch
+      description: Partial profile update.
+    ThreadDetail:
+      properties:
+        thread_id:
+          type: string
+          title: Thread Id
+        title:
+          type: string
+          title: Title
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        messages:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Messages
+      type: object
+      required:
+      - thread_id
+      - title
+      - created_at
+      - updated_at
+      - messages
+      title: ThreadDetail
+      description: Thread metadata plus its rehydrated messages.
+    ThreadList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ThreadSummary'
+          type: array
+          title: Items
+        page_no:
+          type: integer
+          title: Page No
+        page_size:
+          type: integer
+          title: Page Size
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - items
+      - page_no
+      - page_size
+      - total
+      title: ThreadList
+      description: One page of threads.
+    ThreadSummary:
+      properties:
+        thread_id:
+          type: string
+          title: Thread Id
+        title:
+          type: string
+          title: Title
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - thread_id
+      - title
+      - created_at
+      - updated_at
+      title: ThreadSummary
+      description: Thread metadata.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
