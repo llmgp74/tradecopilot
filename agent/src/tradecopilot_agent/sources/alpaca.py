@@ -1,7 +1,7 @@
 """Alpaca paper account, market data, and order placement."""
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -91,7 +91,15 @@ class AlpacaSource:
         """Return recent bars."""
         timeframe = "1Day" if interval.startswith("1d") else "1Hour"
         url = f"{DATA_URL}/v2/stocks/{ticker}/bars"
-        params = {"timeframe": timeframe, "limit": 60, "feed": "iex"}
+        now = datetime.now(tz=UTC)
+        lookback = 120 if timeframe == "1Day" else 7
+        params = {
+            "timeframe": timeframe,
+            "start": (now - timedelta(days=lookback)).date().isoformat(),
+            "end": now.date().isoformat(),
+            "limit": 60,
+            "feed": "iex",
+        }
         try:
             data = await fetch_json(
                 url, headers=self._headers(), params=params, client=self.client

@@ -142,3 +142,21 @@ def test_evidence_ids_are_stable() -> None:
     second = asyncio.run(source.quote("NVDA"))
 
     assert first.evidence[0].id == second.evidence[0].id
+
+
+def test_alpaca_bars_requests_a_date_range() -> None:
+    """Alpaca needs an explicit window to return bars."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(
+            200,
+            json={"bars": [{"t": "2026-11-04T00:00:00Z", "c": 1.5}]},
+        )
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    output = asyncio.run(source.bars("SPY", "1d", "1d"))
+
+    assert "start" in seen and "end" in seen
+    assert output.summary == "1 bars for SPY"
