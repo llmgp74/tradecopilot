@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     alpaca_api_key: str | None = None
     alpaca_api_secret: str | None = None
     alpaca_base_url: str = "https://paper-api.alpaca.markets"
+    fmp_api_key: str | None = None
+    finnhub_api_key: str | None = None
+    fred_api_key: str | None = None
+    edgar_user_agent: str = ""
 
     @field_validator("db_path", "ui_dist")
     @classmethod

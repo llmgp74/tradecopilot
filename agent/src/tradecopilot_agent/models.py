@@ -11,7 +11,15 @@ RiskBand = Literal["conservative", "moderate", "aggressive"]
 Horizon = Literal["intraday", "days", "weeks", "months"]
 PortfolioRange = Literal["1D", "1W", "1M", "3M", "1Y", "ALL"]
 JournalStatus = Literal[
-    "proposed", "approved", "edited", "rejected", "deferred", "filled", "failed"
+    "proposed",
+    "approved",
+    "edited",
+    "rejected",
+    "deferred",
+    "submitted",
+    "filled",
+    "failed",
+    "skipped_unfunded",
 ]
 Side = Literal["buy", "sell"]
 UserAction = Literal["approve", "edit", "reject", "defer"]
@@ -64,6 +72,10 @@ class AppSettings(BaseModel):
     alpaca_api_key: str = ""
     alpaca_api_secret: str = ""
     alpaca_base_url: str = ""
+    fmp_api_key: str = ""
+    finnhub_api_key: str = ""
+    fred_api_key: str = ""
+    edgar_user_agent: str = ""
     updated_at: str
 
 
@@ -75,6 +87,10 @@ class AppSettingsPatch(BaseModel):
     alpaca_api_key: str | None = None
     alpaca_api_secret: str | None = None
     alpaca_base_url: str | None = None
+    fmp_api_key: str | None = None
+    finnhub_api_key: str | None = None
+    fred_api_key: str | None = None
+    edgar_user_agent: str | None = None
 
 
 class ThreadSummary(BaseModel):
@@ -151,6 +167,16 @@ class Portfolio(BaseModel):
     equity_curve: list[EquityPoint]
 
 
+class LegOutcome(BaseModel):
+    """One leg of a computed decision outcome."""
+
+    ticker: str
+    entry_price: float
+    return_pct: float
+    alpha_pct: float
+    counterfactual: bool
+
+
 class JournalOutcome(BaseModel):
     """Lazily computed decision outcome."""
 
@@ -163,6 +189,19 @@ class JournalOutcome(BaseModel):
     benchmark_return_pct: float
     alpha_pct: float
     computed_at: str
+    legs: list[LegOutcome] = Field(default_factory=list)
+
+
+class JournalLeg(BaseModel):
+    """One order inside a journal decision."""
+
+    ticker: str
+    side: Side
+    qty: float
+    notional: float
+    fill_price: float | None = None
+    fill_at: str | None = None
+    status: JournalStatus
 
 
 class JournalEntry(BaseModel):
@@ -170,18 +209,14 @@ class JournalEntry(BaseModel):
 
     id: str
     created_at: str
-    tickers: list[str]
-    side: Side
-    qty: float
-    size_pct: float
+    legs: list[JournalLeg]
     thesis: str
+    horizon: Horizon
     evidence_ids: list[str]
     status: JournalStatus
-    user_action: UserAction | None
-    rejection_reason: str | None
-    fill_price: float | None
-    fill_at: str | None
-    outcome: JournalOutcome | None
+    user_action: UserAction | None = None
+    rejection_reason: str | None = None
+    outcome: JournalOutcome | None = None
 
 
 class JournalList(BaseModel):

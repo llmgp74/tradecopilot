@@ -12,9 +12,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from tradecopilot_agent.models import AppSettings
 from tradecopilot_agent.secrets import SecretBox
@@ -41,35 +42,48 @@ CREATE TABLE IF NOT EXISTS settings (
   alpaca_api_key    TEXT NOT NULL DEFAULT '',
   alpaca_api_secret TEXT NOT NULL DEFAULT '',
   alpaca_base_url   TEXT NOT NULL DEFAULT '',
+  fmp_api_key       TEXT NOT NULL DEFAULT '',
+  finnhub_api_key   TEXT NOT NULL DEFAULT '',
+  fred_api_key      TEXT NOT NULL DEFAULT '',
+  edgar_user_agent  TEXT NOT NULL DEFAULT '',
   updated_at        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS journal (
-  id               TEXT PRIMARY KEY,
-  created_at       TEXT NOT NULL,
-  tickers          TEXT NOT NULL,
-  side             TEXT NOT NULL,
-  qty              REAL NOT NULL,
-  size_pct         REAL NOT NULL,
-  thesis           TEXT NOT NULL,
-  evidence_ids     TEXT NOT NULL,
-  status           TEXT NOT NULL,
-  user_action      TEXT,
-  rejection_reason TEXT,
-  fill_price       REAL,
-  fill_at          TEXT,
-  outcome_note     TEXT
+  event_id    TEXT PRIMARY KEY,
+  decision_id TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  payload     TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS journal_decision ON journal (decision_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS journal_created ON journal (created_at DESC);
 """
 
-_SECRET_FIELDS = frozenset({"model_api_key", "alpaca_api_key", "alpaca_api_secret"})
+_SECRET_FIELDS = frozenset(
+    {
+        "model_api_key",
+        "alpaca_api_key",
+        "alpaca_api_secret",
+        "fmp_api_key",
+        "finnhub_api_key",
+        "fred_api_key",
+    }
+)
 _SETTINGS_COLUMNS = (
     "agent_model",
     "model_api_key",
     "alpaca_api_key",
     "alpaca_api_secret",
     "alpaca_base_url",
+    "fmp_api_key",
+    "finnhub_api_key",
+    "fred_api_key",
+    "edgar_user_agent",
+)
+_SETTINGS_SELECT = (
+    "agent_model, model_api_key, alpaca_api_key, alpaca_api_secret, "
+    "alpaca_base_url, fmp_api_key, finnhub_api_key, fred_api_key, "
+    "edgar_user_agent, updated_at"
 )
 
 DEFAULT_PROFILE: dict[str, Any] = {
@@ -168,11 +182,7 @@ class Store:
         """
         with self._connection() as connection:
             row = connection.execute(
-                """
-                SELECT agent_model, model_api_key, alpaca_api_key,
-                       alpaca_api_secret, alpaca_base_url, updated_at
-                FROM settings WHERE id = 1
-                """
+                f"SELECT {_SETTINGS_SELECT} FROM settings WHERE id = 1"
             ).fetchone()
         if row is None:
             return AppSettings(updated_at=now_iso())
@@ -182,7 +192,11 @@ class Store:
             alpaca_api_key=self._secrets.decrypt(str(row[2])),
             alpaca_api_secret=self._secrets.decrypt(str(row[3])),
             alpaca_base_url=str(row[4]),
-            updated_at=str(row[5]),
+            fmp_api_key=self._secrets.decrypt(str(row[5])),
+            finnhub_api_key=self._secrets.decrypt(str(row[6])),
+            fred_api_key=self._secrets.decrypt(str(row[7])),
+            edgar_user_agent=str(row[8]),
+            updated_at=str(row[9]),
         )
 
     def patch_settings(self, changes: dict[str, Any]) -> AppSettings:
@@ -308,6 +322,48 @@ class Store:
         profile["updated_at"] = timestamp
         return profile
 
+    def recent_journal(
+        self, tickers: list[str], since: str, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """Return recent decisions overlapping any of the tickers.
+
+        Args:
+            tickers: Tickers to match against the legs.
+            since: Inclusive lower bound on the creation date.
+            limit: Maximum decisions to return.
+
+        Returns:
+            Decisions, newest first.
+        """
+        wanted = {ticker.upper() for ticker in tickers}
+        rows, _ = self.list_journal(page_no=1, page_size=1000)
+        return [
+            row
+            for row in rows
+            if row.get("created_at", "")[:10] >= since[:10]
+            and any(
+                str(leg.get("ticker", "")).upper() in wanted
+                for leg in row.get("legs", [])
+            )
+        ][:limit]
+
+    def append_journal(self, event: dict[str, Any]) -> None:
+        """Append one journal event as a full decision snapshot.
+
+        Args:
+            event: Decision snapshot with ``decision_id``, ``legs``, ``status``,
+                and the remaining journal fields.
+        """
+        decision_id = str(event["decision_id"])
+        created_at = str(event.get("created_at") or now_iso())
+        payload = {**event, "decision_id": decision_id, "created_at": created_at}
+        with self._connection() as connection:
+            connection.execute(
+                "INSERT INTO journal (event_id, decision_id, created_at, payload) "
+                "VALUES (?, ?, ?, ?)",
+                (uuid4().hex, decision_id, created_at, json.dumps(payload)),
+            )
+
     def list_journal(
         self,
         *,
@@ -318,69 +374,72 @@ class Store:
         from_date: date | None = None,
         to_date: date | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
-        """Return one page of journal rows, newest first.
+        """Return one page of decisions, newest first.
 
         Args:
             page_no: One-based page number.
-            page_size: Rows per page.
-            status: Exact status filter.
-            ticker: Case-insensitive ticker filter.
+            page_size: Decisions per page.
+            status: Exact decision status filter.
+            ticker: Case-insensitive filter over the legs.
             from_date: Inclusive lower bound on the creation date.
             to_date: Inclusive upper bound on the creation date.
 
         Returns:
-            The rows on the page and the total matching row count.
+            The decisions on the page and the total matching count.
         """
-        clauses: list[str] = []
-        params: list[Any] = []
-        if status is not None:
-            clauses.append("status = ?")
-            params.append(status)
-        if ticker is not None:
-            clauses.append(
-                "EXISTS (SELECT 1 FROM json_each(tickers) "
-                "WHERE UPPER(json_each.value) = UPPER(?))"
-            )
-            params.append(ticker)
-        if from_date is not None:
-            clauses.append("created_at >= ?")
-            params.append(from_date.isoformat())
-        if to_date is not None:
-            clauses.append("created_at < ?")
-            params.append((to_date + timedelta(days=1)).isoformat())
-        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        offset = (page_no - 1) * page_size
         with self._connection() as connection:
             rows = connection.execute(
-                f"""
-                SELECT id, created_at, tickers, side, qty, size_pct, thesis,
-                       evidence_ids, status, user_action, rejection_reason,
-                       fill_price, fill_at
-                FROM journal {where} ORDER BY created_at DESC LIMIT ? OFFSET ?
-                """,
-                (*params, page_size, offset),
+                """
+                SELECT payload FROM (
+                  SELECT payload, ROW_NUMBER() OVER (
+                    PARTITION BY decision_id
+                    ORDER BY created_at DESC, rowid DESC
+                  ) AS rank FROM journal
+                ) WHERE rank = 1
+                ORDER BY json_extract(payload, '$.created_at') DESC
+                """
             ).fetchall()
-            total = connection.execute(
-                f"SELECT COUNT(*) FROM journal {where}", params
-            ).fetchone()
-        entries = [_journal_row(row) for row in rows]
-        return entries, int(total[0]) if total is not None else 0
+        entries = [json.loads(str(row[0])) for row in rows]
+        if status is not None:
+            entries = [entry for entry in entries if entry.get("status") == status]
+        if ticker is not None:
+            wanted = ticker.upper()
+            entries = [
+                entry
+                for entry in entries
+                if any(
+                    str(leg.get("ticker", "")).upper() == wanted
+                    for leg in entry.get("legs", [])
+                )
+            ]
+        if from_date is not None:
+            entries = [
+                entry
+                for entry in entries
+                if str(entry.get("created_at", ""))[:10] >= from_date.isoformat()
+            ]
+        if to_date is not None:
+            entries = [
+                entry
+                for entry in entries
+                if str(entry.get("created_at", ""))[:10] <= to_date.isoformat()
+            ]
+        total = len(entries)
+        offset = (page_no - 1) * page_size
+        page = entries[offset : offset + page_size]
+        return [_journal_row(entry) for entry in page], total
 
 
-def _journal_row(row: tuple[Any, ...]) -> dict[str, Any]:
+def _journal_row(payload: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": str(row[0]),
-        "created_at": str(row[1]),
-        "tickers": json.loads(str(row[2])),
-        "side": str(row[3]),
-        "qty": float(row[4]),
-        "size_pct": float(row[5]),
-        "thesis": str(row[6]),
-        "evidence_ids": json.loads(str(row[7])),
-        "status": str(row[8]),
-        "user_action": row[9],
-        "rejection_reason": row[10],
-        "fill_price": row[11],
-        "fill_at": row[12],
-        "outcome": None,
+        "id": str(payload["decision_id"]),
+        "created_at": str(payload["created_at"]),
+        "legs": payload.get("legs", []),
+        "thesis": str(payload.get("thesis", "")),
+        "horizon": str(payload.get("horizon", "weeks")),
+        "evidence_ids": payload.get("evidence_ids", []),
+        "status": str(payload.get("status", "proposed")),
+        "user_action": payload.get("user_action"),
+        "rejection_reason": payload.get("rejection_reason"),
+        "outcome": payload.get("outcome"),
     }

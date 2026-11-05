@@ -1,6 +1,6 @@
 """Memory configuration and storage contract."""
 
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
@@ -10,6 +10,20 @@ MemoryCondition = Literal["none", "prose", "structured", "full"]
 @runtime_checkable
 class MemoryStore(Protocol):
     """Persists the user profile and the append-only decision journal."""
+
+    def get_profile(self) -> dict[str, Any]:
+        """Return the full profile."""
+        ...
+
+    def recent_journal(
+        self, tickers: list[str], since: str, limit: int
+    ) -> list[dict[str, Any]]:
+        """Return recent decisions overlapping the tickers."""
+        ...
+
+    def append_journal(self, event: dict[str, Any]) -> None:
+        """Append one decision event."""
+        ...
 
 
 class MemoryConfig(BaseModel):

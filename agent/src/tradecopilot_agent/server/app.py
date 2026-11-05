@@ -41,6 +41,7 @@ from tradecopilot_agent.server.streaming import (
     sse,
     stream_chat,
 )
+from tradecopilot_agent.sources import LiveSource
 from tradecopilot_agent.store import Store, ThreadRecord
 
 GraphFactory = Callable[[FastAPI], Any]
@@ -433,10 +434,10 @@ def _default_graph(app: FastAPI) -> Any:
     """
     effective = _effective_settings(app)
     _apply_model_key(effective)
-    config = MemoryConfig(condition="full", store=_UnusedStore())
+    config = MemoryConfig(condition="full", store=app.state.store)
     return build_agent(
         config,
-        _UnusedSource(),
+        LiveSource(lambda: _effective_settings(app)),
         checkpointer=app.state.checkpointer,
         model=effective.agent_model or None,
     )
@@ -459,6 +460,10 @@ def _effective_settings(app: FastAPI) -> AppSettings:
         alpaca_api_key=stored.alpaca_api_key or base.alpaca_api_key or "",
         alpaca_api_secret=stored.alpaca_api_secret or base.alpaca_api_secret or "",
         alpaca_base_url=stored.alpaca_base_url or base.alpaca_base_url,
+        fmp_api_key=stored.fmp_api_key or base.fmp_api_key or "",
+        finnhub_api_key=stored.finnhub_api_key or base.finnhub_api_key or "",
+        fred_api_key=stored.fred_api_key or base.fred_api_key or "",
+        edgar_user_agent=stored.edgar_user_agent or base.edgar_user_agent or "",
         updated_at=stored.updated_at,
     )
 
@@ -490,20 +495,17 @@ def _approval_descriptor(
         The ticket and the decision context.
     """
     raw_args = request.get("args")
-    ticket = raw_args if isinstance(raw_args, dict) else {}
+    ticket = state.get("pending_ticket")
+    if not isinstance(ticket, dict):
+        return {"error": "No matching pending ticket."}
+    if isinstance(raw_args, dict) and raw_args.get("ticket_id") != ticket.get("id"):
+        return {"error": "No matching pending ticket."}
     return {
         "ticket": ticket,
         "rationale": state.get("draft_recommendation"),
         "portfolio_impact": state.get("portfolio_impact"),
+        "verification": state.get("verification"),
     }
-
-
-class _UnusedStore:
-    """Stand-in until the SQLite memory store is implemented."""
-
-
-class _UnusedSource:
-    """Stand-in until the live data source is implemented."""
 
 
 def _mount_ui(app: FastAPI) -> None:
