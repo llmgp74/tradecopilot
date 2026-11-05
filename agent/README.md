@@ -39,6 +39,10 @@ screen are stored in SQLite and win over both.
 | `ALPACA_API_KEY` | none | Broker key |
 | `ALPACA_API_SECRET` | none | Broker secret |
 | `ALPACA_BASE_URL` | paper host | Trading API base URL |
+| `FMP_API_KEY` | none | Fundamentals; free plan is 250 calls a day |
+| `FINNHUB_API_KEY` | none | Company news; free plan covers North America |
+| `FRED_API_KEY` | none | Macro series; free |
+| `EDGAR_USER_AGENT` | none | Name and contact email, required by SEC |
 | `DB_PATH` | `~/.tradecopilot/data.db` | SQLite file |
 | `UI_DIST` | `ui/dist` | built frontend directory |
 | `HOST` | `127.0.0.1` | |
