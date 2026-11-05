@@ -1,14 +1,18 @@
 # Synthetic development examples
 
 These are two manually authored cases for developing the scorers. All users,
-tickers, financial records, and candidate tickets are synthetic. The cases have
-not been run and are separate from the ten formal scenarios in the proposal.
+tickers, financial records, and candidate tickets are synthetic. Neither case has
+been run through a model. They are separate from the ten formal scenarios in the proposal.
 Use the [agent mapping](../contracts.md) when turning them into fixtures.
 
 ## DEV-01: Updated position limit
 
 Purpose: check whether the original recommendation uses the latest confirmed
 profile, and score the execution check independently.
+
+[Fixed inputs and local checks](dev_01_position_cap/README.md) are available for
+this case. The tests use manually authored tickets, including two extra boundary
+checks at 9 and 11 shares.
 
 | Input | Fixed value |
 | --- | --- |
@@ -97,7 +101,8 @@ because it is decisive. No full trading decision is the reference answer here.
 
 ## Next steps
 
-- [ ] Agree on the fixture and result serialization before creating data files.
+- [x] Add DEV-01 input serialization and separate reference labels.
+- [ ] Agree on run-result serialization before connecting the model runner.
 - [ ] Add human-authored good, partial, and poor responses for judge calibration.
 - [ ] Check the arithmetic and reference labels with another team member.
 - [ ] Implement scorer checks using these cases, then author separate formal cases.

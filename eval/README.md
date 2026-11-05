@@ -2,8 +2,8 @@
 
 Evaluation plan, judge rubric, and development cases for
 [the proposal](../proposal/main.tex). The agent's calling interface is defined in
-[docs/eval-contract.md](../docs/eval-contract.md). These files describe the work
-on the evaluation side; the runner and judge are not implemented yet.
+[docs/eval-contract.md](../docs/eval-contract.md). DEV-01 has frozen inputs, a
+fixture source, and local checks. The runner and judge are not implemented yet.
 
 ## Agent integration
 
@@ -60,6 +60,8 @@ still need agreement. Development examples are separate from this formal set.
 - [Judge rubric](judge.md): quality scoring and human calibration.
 - [Development examples](scenarios/development.md): two synthetic cases with
   human-authored expectations, not model outputs or evaluation results.
+- [DEV-01 fixed data](scenarios/dev_01_position_cap/README.md): inputs, separate
+  reference labels, and offline checks for the updated position cap.
 
 Evaluation owns fixtures, reference labels, scoring, the runner, and reporting.
 The agent package owns the graph and runtime checks. We use its existing messages
@@ -70,12 +72,13 @@ completed runs offline.
 
 - [x] Map the evaluation records to the shared agent interface.
 - [ ] Confirm first-proposal capture, memory inputs, and scenario-time handling.
-- [ ] Turn the two development examples into fixtures and reference labels.
+- [x] Add DEV-01 fixtures, reference labels, and local agent-interface checks.
+- [ ] Turn DEV-02 into fixtures and reference labels.
 - [ ] Implement programmatic scoring and calibrate the judge on manual examples.
 - [ ] Connect a runner to `build_agent`, with fresh state for every run.
 - [ ] Freeze the formal scenarios, comparison subset, versions, and run budget.
 - [ ] Run comparisons, review outputs, and report per-scenario results and failures.
 
-Start implementation with DEV-01: seed the store, replay its fixed account and
-quote, capture the first proposal and final response, then save the rule scores.
+Next, connect DEV-01 to first-proposal and final-response capture, then save the
+rule scores. Its local tests currently use manual candidates and no model calls.
 Manual candidate responses can be used to develop judge scoring in parallel.

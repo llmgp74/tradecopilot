@@ -3,7 +3,10 @@
 [docs/eval-contract.md](../docs/eval-contract.md) defines how to call the agent.
 This document maps that interface to the records needed for scoring. `RunResult`
 fields below are proposed evaluation-side fields, not additional graph state.
-The runner and serialization format still need implementation.
+The runner and run-result serialization still need implementation.
+The first input format is implemented in
+[DEV-01](scenarios/dev_01_position_cap/README.md), with reference answers stored
+separately from agent inputs.
 
 ## Calling the shared agent
 
@@ -34,6 +37,8 @@ If reusing `Store`, create its parent directory first; it also creates a
 | `journal_before_decision` | Earlier decisions and information then available |
 | `evidence_catalog` | Frozen evidence records with stable IDs |
 | `tool_fixtures` | Responses indexed by data-source method and normalized arguments |
+
+DEV-01 stores its portfolio and evidence records inside `tool_fixtures`.
 
 Reference fact labels, expected rule outcomes, and acceptance criteria stay on
 the evaluation side. Do not send them to the agent as prompts or tool responses.
