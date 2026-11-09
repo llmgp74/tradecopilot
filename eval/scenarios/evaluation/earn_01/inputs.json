@@ -1,0 +1,340 @@
+{
+  "schema_version": 1,
+  "scenario_id": "EARN-01",
+  "split": "evaluation",
+  "synthetic": true,
+  "decision_time": "2026-09-15T14:00:00Z",
+  "request": "SYNCA reported higher revenue. Would adding a small position fit my situation?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 6.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "SYNCA"
+    ],
+    "source_preferences": [
+      "filings"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2026-09-14T12:00:00Z"
+  },
+  "journal_before_decision": [],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "SYNCA"
+      },
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"quote\",\"ticker\":\"SYNCA\",\"price\":50.0,\"currency\":\"USD\"}",
+        "evidence": [
+          {
+            "id": "EARN01-QUOTE",
+            "tool": "get_quote",
+            "args": {
+              "ticker": "SYNCA"
+            },
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "quote",
+              "ticker": "SYNCA",
+              "price": 50.0,
+              "currency": "USD"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "EARN01-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "EARN01-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "fundamentals",
+      "arguments": {
+        "ticker": "SYNCA"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"fundamentals\",\"ticker\":\"SYNCA\",\"sector\":\"Technology\"}",
+        "evidence": [
+          {
+            "id": "EARN01-SECTOR",
+            "tool": "get_fundamentals",
+            "args": {
+              "ticker": "SYNCA"
+            },
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "fundamentals",
+              "ticker": "SYNCA",
+              "sector": "Technology"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "filings",
+      "arguments": {
+        "ticker": "SYNCA",
+        "limit": 10
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"filing\",\"ticker\":\"SYNCA\",\"accession\":\"SYNTHETIC-EARN-01\",\"filing_type\":\"10-K\",\"date\":\"2026-09-14\",\"description\":\"Synthetic annual results: compare revenue and net income across FY2024 and FY2025.\"}",
+        "evidence": [
+          {
+            "id": "EARN01-FILING",
+            "tool": "get_filings",
+            "args": {
+              "ticker": "SYNCA",
+              "limit": 10
+            },
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "filing",
+              "ticker": "SYNCA",
+              "accession": "SYNTHETIC-EARN-01",
+              "filing_type": "10-K",
+              "date": "2026-09-14",
+              "description": "Synthetic annual results: compare revenue and net income across FY2024 and FY2025."
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCA",
+        "tag": "Revenues",
+        "period": "FY2024",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCA\",\"tag\":\"Revenues\",\"period\":\"FY2024\",\"unit\":\"USD\",\"value\":100000000}",
+        "evidence": [
+          {
+            "id": "EARN01-REVENUES-FY2024",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCA",
+              "tag": "Revenues",
+              "period": "FY2024",
+              "unit": "USD"
+            },
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCA",
+              "tag": "Revenues",
+              "period": "FY2024",
+              "unit": "USD",
+              "value": 100000000
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCA",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCA\",\"tag\":\"Revenues\",\"period\":\"FY2025\",\"unit\":\"USD\",\"value\":120000000}",
+        "evidence": [
+          {
+            "id": "EARN01-REVENUES-FY2025",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCA",
+              "tag": "Revenues",
+              "period": "FY2025",
+              "unit": "USD"
+            },
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCA",
+              "tag": "Revenues",
+              "period": "FY2025",
+              "unit": "USD",
+              "value": 120000000
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCA",
+        "tag": "NetIncomeLoss",
+        "period": "FY2024",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCA\",\"tag\":\"NetIncomeLoss\",\"period\":\"FY2024\",\"unit\":\"USD\",\"value\":20000000}",
+        "evidence": [
+          {
+            "id": "EARN01-NETINCOMELOSS-FY2024",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCA",
+              "tag": "NetIncomeLoss",
+              "period": "FY2024",
+              "unit": "USD"
+            },
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCA",
+              "tag": "NetIncomeLoss",
+              "period": "FY2024",
+              "unit": "USD",
+              "value": 20000000
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCA",
+        "tag": "NetIncomeLoss",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCA\",\"tag\":\"NetIncomeLoss\",\"period\":\"FY2025\",\"unit\":\"USD\",\"value\":12000000}",
+        "evidence": [
+          {
+            "id": "EARN01-NETINCOMELOSS-FY2025",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCA",
+              "tag": "NetIncomeLoss",
+              "period": "FY2025",
+              "unit": "USD"
+            },
+            "source": "synthetic_earn_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCA",
+              "tag": "NetIncomeLoss",
+              "period": "FY2025",
+              "unit": "USD",
+              "value": 12000000
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}

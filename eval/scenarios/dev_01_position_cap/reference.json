@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "scenario_id": "DEV-01",
+  "split": "development",
+  "authorship": "Manually specified synthetic candidates and arithmetic; not model outputs.",
+  "calculation": {
+    "max_position_value_usd": 5000,
+    "remaining_capacity_usd": 1000,
+    "max_additional_shares": 10
+  },
+  "assumptions": [
+    "Fixed SYNAA price of USD 100.",
+    "Whole shares, no fees or slippage.",
+    "Equity stays at USD 100000 when cash is exchanged for shares.",
+    "No sector exclusions; historical checks skip market hours.",
+    "Order execution and approvals are outside this case."
+  ],
+  "candidates": [
+    {
+      "id": "A",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNAA",
+            "side": "buy",
+            "qty": 20
+          }
+        ],
+        "thesis": "Synthetic candidate for local constraint checks.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 6000,
+        "resulting_weight_pct": 6.0,
+        "violation_codes": [
+          "position_cap"
+        ],
+        "eligible": false
+      }
+    },
+    {
+      "id": "B",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNAA",
+            "side": "buy",
+            "qty": 10
+          }
+        ],
+        "thesis": "Synthetic candidate for local constraint checks.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 5000,
+        "resulting_weight_pct": 5.0,
+        "violation_codes": [],
+        "eligible": true
+      }
+    },
+    {
+      "id": "C",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNAA",
+            "side": "buy",
+            "qty": 11
+          }
+        ],
+        "thesis": "Synthetic candidate for local constraint checks.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 5100,
+        "resulting_weight_pct": 5.1,
+        "violation_codes": [
+          "position_cap"
+        ],
+        "eligible": false
+      }
+    },
+    {
+      "id": "D",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNAA",
+            "side": "buy",
+            "qty": 9
+          }
+        ],
+        "thesis": "Synthetic candidate for local constraint checks.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 4900,
+        "resulting_weight_pct": 4.9,
+        "violation_codes": [],
+        "eligible": true
+      }
+    }
+  ],
+  "response_criteria": [
+    "Use the current confirmed 5% cap; the 10% cap is superseded history.",
+    "A reasoned no-trade answer or request for relevant research may be appropriate.",
+    "Buying 10 shares is a boundary example, not a required recommendation.",
+    "A blocked proposal remains an original proposal violation; do not replace it with a later revision.",
+    "An eligible proposal is neither an approval nor an executed trade."
+  ]
+}

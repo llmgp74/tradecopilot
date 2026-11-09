@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "scenario_id": "DEV-01",
+  "split": "development",
+  "synthetic": true,
+  "decision_time": "2026-09-15T14:00:00Z",
+  "request": "Could I add to my SYNAA position?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 5.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "SYNAA"
+    ],
+    "source_preferences": [],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2026-09-14T13:00:00Z"
+  },
+  "journal_before_decision": [
+    {
+      "decision_id": "dev01-prior-decision",
+      "created_at": "2026-09-14T13:05:00Z",
+      "legs": [
+        {
+          "ticker": "SYNAA",
+          "side": "buy",
+          "qty": 5.0,
+          "notional": 500.0,
+          "fill_price": null,
+          "fill_at": null,
+          "status": "deferred"
+        }
+      ],
+      "thesis": "Considered adding SYNAA, then deferred pending more research. The user confirmed a new single-stock cap of 5% on 2026-09-14. The previous 10% cap is superseded.",
+      "horizon": "weeks",
+      "evidence_ids": [],
+      "status": "deferred",
+      "user_action": "defer",
+      "rejection_reason": null,
+      "outcome": null
+    }
+  ],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "SYNAA"
+      },
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic snapshot at 2026-09-15T13:59:00Z: {\"kind\":\"quote\",\"ticker\":\"SYNAA\",\"price\":100.0,\"currency\":\"USD\"}",
+        "evidence": [
+          {
+            "id": "DEV01-QUOTE-20260915",
+            "tool": "get_quote",
+            "args": {
+              "ticker": "SYNAA"
+            },
+            "source": "synthetic_dev01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "quote",
+              "ticker": "SYNAA",
+              "price": 100.0,
+              "currency": "USD"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic snapshot at 2026-09-15T13:59:00Z: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":10000.0,\"buying_power\":10000.0,\"fractional\":false,\"positions\":[{\"ticker\":\"SYNAA\",\"qty\":40,\"market_value\":4000.0},{\"ticker\":\"SYNAB\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAC\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAD\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAE\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAF\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAG\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAH\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAI\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAJ\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAK\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAL\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAM\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAN\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAO\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAP\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAQ\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAR\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAS\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAT\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAU\",\"qty\":43,\"market_value\":4300.0}]}",
+        "evidence": [
+          {
+            "id": "DEV01-PORTFOLIO-20260915",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "synthetic_dev01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 10000.0,
+              "buying_power": 10000.0,
+              "fractional": false,
+              "positions": [
+                {
+                  "ticker": "SYNAA",
+                  "qty": 40,
+                  "market_value": 4000.0
+                },
+                {
+                  "ticker": "SYNAB",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAC",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAD",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAE",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAF",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAG",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAH",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAI",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAJ",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAK",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAL",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAM",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAN",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAO",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAP",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAQ",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAR",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAS",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAT",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAU",
+                  "qty": 43,
+                  "market_value": 4300.0
+                }
+              ]
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic snapshot at 2026-09-15T13:59:00Z: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":10000.0,\"buying_power\":10000.0,\"fractional\":false,\"positions\":[{\"ticker\":\"SYNAA\",\"qty\":40,\"market_value\":4000.0},{\"ticker\":\"SYNAB\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAC\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAD\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAE\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAF\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAG\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAH\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAI\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAJ\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAK\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAL\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAM\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAN\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAO\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAP\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAQ\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAR\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAS\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAT\",\"qty\":43,\"market_value\":4300.0},{\"ticker\":\"SYNAU\",\"qty\":43,\"market_value\":4300.0}]}",
+        "evidence": [
+          {
+            "id": "DEV01-POSITIONS-20260915",
+            "tool": "get_positions",
+            "args": {},
+            "source": "synthetic_dev01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 10000.0,
+              "buying_power": 10000.0,
+              "fractional": false,
+              "positions": [
+                {
+                  "ticker": "SYNAA",
+                  "qty": 40,
+                  "market_value": 4000.0
+                },
+                {
+                  "ticker": "SYNAB",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAC",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAD",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAE",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAF",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAG",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAH",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAI",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAJ",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAK",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAL",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAM",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAN",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAO",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAP",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAQ",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAR",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAS",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAT",
+                  "qty": 43,
+                  "market_value": 4300.0
+                },
+                {
+                  "ticker": "SYNAU",
+                  "qty": 43,
+                  "market_value": 4300.0
+                }
+              ]
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}

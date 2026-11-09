@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "scenario_id": "PORT-01",
+  "split": "evaluation",
+  "synthetic": true,
+  "decision_time": "2026-09-15T14:00:00Z",
+  "request": "Can I add to my SYNCE holding?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 4.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "SYNCE"
+    ],
+    "source_preferences": [
+      "filings"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2026-09-14T12:00:00Z"
+  },
+  "journal_before_decision": [
+    {
+      "decision_id": "port-01-earlier-decision",
+      "created_at": "2026-09-14T12:05:00Z",
+      "legs": [
+        {
+          "ticker": "SYNCE",
+          "side": "buy",
+          "qty": 1.0,
+          "notional": 80.0,
+          "fill_price": null,
+          "fill_at": null,
+          "status": "deferred"
+        }
+      ],
+      "thesis": "The user confirmed a reduction in the single-stock cap from 8% to 4% on 2026-09-14. The 8% limit is superseded; the proposed addition was deferred.",
+      "horizon": "weeks",
+      "evidence_ids": [],
+      "status": "deferred",
+      "user_action": "defer",
+      "rejection_reason": null,
+      "outcome": null
+    }
+  ],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "SYNCE"
+      },
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"quote\",\"ticker\":\"SYNCE\",\"price\":80.0,\"currency\":\"USD\"}",
+        "evidence": [
+          {
+            "id": "PORT01-QUOTE",
+            "tool": "get_quote",
+            "args": {
+              "ticker": "SYNCE"
+            },
+            "source": "synthetic_port_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "quote",
+              "ticker": "SYNCE",
+              "price": 80.0,
+              "currency": "USD"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":80000.0,\"cash\":77600.0,\"buying_power\":77600.0,\"fractional\":false,\"positions\":[{\"ticker\":\"SYNCE\",\"qty\":30,\"market_value\":2400.0}]}",
+        "evidence": [
+          {
+            "id": "PORT01-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "synthetic_port_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 80000.0,
+              "cash": 77600.0,
+              "buying_power": 77600.0,
+              "fractional": false,
+              "positions": [
+                {
+                  "ticker": "SYNCE",
+                  "qty": 30,
+                  "market_value": 2400.0
+                }
+              ]
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":80000.0,\"cash\":77600.0,\"buying_power\":77600.0,\"fractional\":false,\"positions\":[{\"ticker\":\"SYNCE\",\"qty\":30,\"market_value\":2400.0}]}",
+        "evidence": [
+          {
+            "id": "PORT01-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "synthetic_port_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 80000.0,
+              "cash": 77600.0,
+              "buying_power": 77600.0,
+              "fractional": false,
+              "positions": [
+                {
+                  "ticker": "SYNCE",
+                  "qty": 30,
+                  "market_value": 2400.0
+                }
+              ]
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "fundamentals",
+      "arguments": {
+        "ticker": "SYNCE"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"fundamentals\",\"ticker\":\"SYNCE\",\"sector\":\"Technology\"}",
+        "evidence": [
+          {
+            "id": "PORT01-SECTOR",
+            "tool": "get_fundamentals",
+            "args": {
+              "ticker": "SYNCE"
+            },
+            "source": "synthetic_port_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "fundamentals",
+              "ticker": "SYNCE",
+              "sector": "Technology"
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "scenario_id": "PORT-02",
+  "split": "evaluation",
+  "synthetic": true,
+  "decision_time": "2026-09-15T14:00:00Z",
+  "request": "Could we reconsider adding SYNCF now?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 5.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "SYNCF"
+    ],
+    "source_preferences": [
+      "filings"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2026-09-14T12:00:00Z"
+  },
+  "journal_before_decision": [
+    {
+      "decision_id": "port-02-earlier-decision",
+      "created_at": "2026-09-10T12:00:00Z",
+      "legs": [
+        {
+          "ticker": "SYNCF",
+          "side": "buy",
+          "qty": 1.0,
+          "notional": 75.0,
+          "fill_price": null,
+          "fill_at": null,
+          "status": "deferred"
+        }
+      ],
+      "thesis": "The user deferred further additions to SYNCF until a published annual result shows an operating margin of at least 15%. Keep that condition for the next review.",
+      "horizon": "weeks",
+      "evidence_ids": [],
+      "status": "deferred",
+      "user_action": "defer",
+      "rejection_reason": null,
+      "outcome": null
+    }
+  ],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "SYNCF"
+      },
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"quote\",\"ticker\":\"SYNCF\",\"price\":75.0,\"currency\":\"USD\"}",
+        "evidence": [
+          {
+            "id": "PORT02-QUOTE",
+            "tool": "get_quote",
+            "args": {
+              "ticker": "SYNCF"
+            },
+            "source": "synthetic_port_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "quote",
+              "ticker": "SYNCF",
+              "price": 75.0,
+              "currency": "USD"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":98500.0,\"buying_power\":98500.0,\"fractional\":false,\"positions\":[{\"ticker\":\"SYNCF\",\"qty\":20,\"market_value\":1500.0}]}",
+        "evidence": [
+          {
+            "id": "PORT02-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "synthetic_port_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 98500.0,
+              "buying_power": 98500.0,
+              "fractional": false,
+              "positions": [
+                {
+                  "ticker": "SYNCF",
+                  "qty": 20,
+                  "market_value": 1500.0
+                }
+              ]
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":98500.0,\"buying_power\":98500.0,\"fractional\":false,\"positions\":[{\"ticker\":\"SYNCF\",\"qty\":20,\"market_value\":1500.0}]}",
+        "evidence": [
+          {
+            "id": "PORT02-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "synthetic_port_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 98500.0,
+              "buying_power": 98500.0,
+              "fractional": false,
+              "positions": [
+                {
+                  "ticker": "SYNCF",
+                  "qty": 20,
+                  "market_value": 1500.0
+                }
+              ]
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "fundamentals",
+      "arguments": {
+        "ticker": "SYNCF"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"fundamentals\",\"ticker\":\"SYNCF\",\"sector\":\"Technology\"}",
+        "evidence": [
+          {
+            "id": "PORT02-SECTOR",
+            "tool": "get_fundamentals",
+            "args": {
+              "ticker": "SYNCF"
+            },
+            "source": "synthetic_port_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "fundamentals",
+              "ticker": "SYNCF",
+              "sector": "Technology"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "filings",
+      "arguments": {
+        "ticker": "SYNCF",
+        "limit": 10
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"filing\",\"ticker\":\"SYNCF\",\"accession\":\"SYNTHETIC-PORT-02\",\"filing_type\":\"10-K\",\"date\":\"2026-09-14\",\"description\":\"Synthetic latest annual results provide revenue and operating income.\"}",
+        "evidence": [
+          {
+            "id": "PORT02-FILING",
+            "tool": "get_filings",
+            "args": {
+              "ticker": "SYNCF",
+              "limit": 10
+            },
+            "source": "synthetic_port_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "filing",
+              "ticker": "SYNCF",
+              "accession": "SYNTHETIC-PORT-02",
+              "filing_type": "10-K",
+              "date": "2026-09-14",
+              "description": "Synthetic latest annual results provide revenue and operating income."
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCF",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCF\",\"tag\":\"Revenues\",\"period\":\"FY2025\",\"unit\":\"USD\",\"value\":100000000}",
+        "evidence": [
+          {
+            "id": "PORT02-REVENUES-FY2025",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCF",
+              "tag": "Revenues",
+              "period": "FY2025",
+              "unit": "USD"
+            },
+            "source": "synthetic_port_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCF",
+              "tag": "Revenues",
+              "period": "FY2025",
+              "unit": "USD",
+              "value": 100000000
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCF",
+        "tag": "OperatingIncomeLoss",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCF\",\"tag\":\"OperatingIncomeLoss\",\"period\":\"FY2025\",\"unit\":\"USD\",\"value\":10000000}",
+        "evidence": [
+          {
+            "id": "PORT02-OPERATINGINCOMELOSS-FY2025",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCF",
+              "tag": "OperatingIncomeLoss",
+              "period": "FY2025",
+              "unit": "USD"
+            },
+            "source": "synthetic_port_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCF",
+              "tag": "OperatingIncomeLoss",
+              "period": "FY2025",
+              "unit": "USD",
+              "value": 10000000
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}

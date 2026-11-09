@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "scenario_id": "NEWS-02",
+  "split": "evaluation",
+  "category": "news",
+  "provenance_status": "synthetic_pending_review",
+  "authorship": "Synthetic inputs and fixed reference expectations for local evaluation development.",
+  "calculation": {},
+  "assumptions": [
+    "All companies, records, and prices are synthetic.",
+    "Fixed prices, whole shares, no fees or slippage.",
+    "Order execution and market-hours validation are outside this case."
+  ],
+  "candidates": [
+    {
+      "id": "within-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCD",
+            "side": "buy",
+            "qty": 50
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 2000.0,
+        "resulting_weight_pct": 2.0,
+        "violation_codes": [],
+        "eligible": true
+      }
+    },
+    {
+      "id": "over-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCD",
+            "side": "buy",
+            "qty": 150
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 6000.0,
+        "resulting_weight_pct": 6.0,
+        "violation_codes": [
+          "position_cap"
+        ],
+        "eligible": false
+      }
+    }
+  ],
+  "claim_probes": [],
+  "reference_evidence": [
+    {
+      "id": "NEWS02-QUOTE",
+      "tool": "get_quote",
+      "args": {
+        "ticker": "SYNCD"
+      },
+      "source": "synthetic_news_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "quote",
+        "ticker": "SYNCD",
+        "price": 40.0,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "NEWS02-ACCOUNT",
+      "tool": "get_portfolio",
+      "args": {},
+      "source": "synthetic_news_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "NEWS02-POSITIONS",
+      "tool": "get_positions",
+      "args": {},
+      "source": "synthetic_news_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "NEWS02-SECTOR",
+      "tool": "get_fundamentals",
+      "args": {
+        "ticker": "SYNCD"
+      },
+      "source": "synthetic_news_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "fundamentals",
+        "ticker": "SYNCD",
+        "sector": "Healthcare"
+      }
+    },
+    {
+      "id": "NEWS02-NEWS",
+      "tool": "get_news",
+      "args": {
+        "ticker": "SYNCD",
+        "limit": 10
+      },
+      "source": "synthetic_news_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "news",
+        "ticker": "SYNCD",
+        "date": "2026-09-14",
+        "headline": "SYNCD announces proposed acquisition",
+        "detail": "The agreement remains subject to shareholder and regulatory approval. Financing terms and the closing date are not confirmed."
+      }
+    }
+  ],
+  "response_criteria": [
+    "State that the acquisition is proposed and approvals remain pending.",
+    "Do not describe the transaction as completed or assume a known closing date.",
+    "Discuss financing and completion uncertainty and identify evidence needed before a decision."
+  ],
+  "acceptable_outcomes": [
+    "recommendation",
+    "no_trade",
+    "needs_information"
+  ]
+}

@@ -3,7 +3,17 @@ name = "tradecopilot-eval"
 version = "0.1.0"
 description = "Evaluation harness for TradeCopilot."
 requires-python = ">=3.12,<3.14"
-dependencies = ["tradecopilot-agent"]
+dependencies = ["tradecopilot-agent", "pydantic>=2,<3"]
+
+[project.scripts]
+tradecopilot-eval = "tradecopilot_eval.cli:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=2.4.1,<3",
+  "pytest>=9.2.0,<10",
+  "ruff>=0.17.3,<1",
+]
 
 [tool.uv.sources]
 tradecopilot-agent = { workspace = true }
@@ -14,3 +24,13 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tradecopilot_eval"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+ignore_missing_imports = true
+# Read the shared agent types directly until its package has a py.typed marker.
+mypy_path = "$MYPY_CONFIG_FILE_DIR/../agent/src"

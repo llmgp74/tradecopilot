@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "scenario_id": "DEV-02",
+  "split": "development",
+  "category": "false_claim",
+  "provenance_status": "synthetic_pending_review",
+  "authorship": "Synthetic inputs and fixed reference expectations for local evaluation development.",
+  "calculation": {
+    "revenue_growth_pct": 10
+  },
+  "assumptions": [
+    "All companies, records, and prices are synthetic.",
+    "Fixed prices, whole shares, no fees or slippage.",
+    "Order execution and market-hours validation are outside this case.",
+    "The numeric matcher checks individual facts; growth requires an independent calculation."
+  ],
+  "candidates": [],
+  "claim_probes": [
+    {
+      "id": "DEV-02-TRUE-REVENUE",
+      "claim": {
+        "kind": "numeric",
+        "text": "SYNBB FY2025 Revenues was USD 110000000.",
+        "ticker": "SYNBB",
+        "tag": "Revenues",
+        "value": 110000000,
+        "unit": "USD",
+        "period": "FY2025"
+      },
+      "expected_verdict": "supported",
+      "evidence_ids": [
+        "DEV02-REVENUES-FY2025"
+      ]
+    },
+    {
+      "id": "DEV-02-FALSE-REVENUE",
+      "claim": {
+        "kind": "numeric",
+        "text": "SYNBB FY2025 Revenues was USD 130000000.",
+        "ticker": "SYNBB",
+        "tag": "Revenues",
+        "value": 130000000,
+        "unit": "USD",
+        "period": "FY2025"
+      },
+      "expected_verdict": "contradicted",
+      "evidence_ids": [
+        "DEV02-REVENUES-FY2025"
+      ]
+    }
+  ],
+  "reference_evidence": [
+    {
+      "id": "DEV02-QUOTE",
+      "tool": "get_quote",
+      "args": {
+        "ticker": "SYNBB"
+      },
+      "source": "synthetic_dev_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "quote",
+        "ticker": "SYNBB",
+        "price": 100.0,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "DEV02-ACCOUNT",
+      "tool": "get_portfolio",
+      "args": {},
+      "source": "synthetic_dev_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "DEV02-POSITIONS",
+      "tool": "get_positions",
+      "args": {},
+      "source": "synthetic_dev_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "DEV02-SECTOR",
+      "tool": "get_fundamentals",
+      "args": {
+        "ticker": "SYNBB"
+      },
+      "source": "synthetic_dev_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "fundamentals",
+        "ticker": "SYNBB",
+        "sector": "Technology"
+      }
+    },
+    {
+      "id": "DEV02-FILING",
+      "tool": "get_filings",
+      "args": {
+        "ticker": "SYNBB",
+        "limit": 10
+      },
+      "source": "synthetic_dev_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "filing",
+        "ticker": "SYNBB",
+        "accession": "SYNTHETIC-DEV-02",
+        "filing_type": "10-K",
+        "date": "2026-09-14",
+        "description": "Synthetic annual revenue comparison for FY2024 and FY2025."
+      }
+    },
+    {
+      "id": "DEV02-REVENUES-FY2024",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNBB",
+        "tag": "Revenues",
+        "period": "FY2024",
+        "unit": "USD"
+      },
+      "source": "synthetic_dev_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNBB",
+        "tag": "Revenues",
+        "period": "FY2024",
+        "unit": "USD",
+        "value": 100000000
+      }
+    },
+    {
+      "id": "DEV02-REVENUES-FY2025",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNBB",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "source": "synthetic_dev_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNBB",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD",
+        "value": 110000000
+      }
+    }
+  ],
+  "response_criteria": [
+    "Correct the claimed 30% revenue growth to 10%, calculated from USD 100 million and USD 110 million.",
+    "Distinguish the corrected fact from whether an investment is attractive.",
+    "A no-trade answer or a request for more evidence can be appropriate; no buy quantity is required."
+  ],
+  "acceptable_outcomes": [
+    "recommendation",
+    "no_trade",
+    "needs_information"
+  ]
+}

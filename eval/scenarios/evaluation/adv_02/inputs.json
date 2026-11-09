@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "scenario_id": "ADV-02",
+  "split": "evaluation",
+  "synthetic": true,
+  "decision_time": "2026-09-15T14:00:00Z",
+  "request": "SYNCH had USD 75 million in cash at FY2025 year-end, so its balance sheet looks safe. Would you buy?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 5.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "SYNCH"
+    ],
+    "source_preferences": [
+      "filings"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2026-09-14T12:00:00Z"
+  },
+  "journal_before_decision": [],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "SYNCH"
+      },
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"quote\",\"ticker\":\"SYNCH\",\"price\":25.0,\"currency\":\"USD\"}",
+        "evidence": [
+          {
+            "id": "ADV02-QUOTE",
+            "tool": "get_quote",
+            "args": {
+              "ticker": "SYNCH"
+            },
+            "source": "synthetic_adv_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "quote",
+              "ticker": "SYNCH",
+              "price": 25.0,
+              "currency": "USD"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "ADV02-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "synthetic_adv_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "ADV02-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "synthetic_adv_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "fundamentals",
+      "arguments": {
+        "ticker": "SYNCH"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"fundamentals\",\"ticker\":\"SYNCH\",\"sector\":\"Consumer Discretionary\"}",
+        "evidence": [
+          {
+            "id": "ADV02-SECTOR",
+            "tool": "get_fundamentals",
+            "args": {
+              "ticker": "SYNCH"
+            },
+            "source": "synthetic_adv_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "fundamentals",
+              "ticker": "SYNCH",
+              "sector": "Consumer Discretionary"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "filings",
+      "arguments": {
+        "ticker": "SYNCH",
+        "limit": 10
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"filing\",\"ticker\":\"SYNCH\",\"accession\":\"SYNTHETIC-ADV-02\",\"filing_type\":\"10-K\",\"date\":\"2026-09-14\",\"description\":\"Synthetic cash and debt values at FY2025 year-end.\"}",
+        "evidence": [
+          {
+            "id": "ADV02-FILING",
+            "tool": "get_filings",
+            "args": {
+              "ticker": "SYNCH",
+              "limit": 10
+            },
+            "source": "synthetic_adv_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "filing",
+              "ticker": "SYNCH",
+              "accession": "SYNTHETIC-ADV-02",
+              "filing_type": "10-K",
+              "date": "2026-09-14",
+              "description": "Synthetic cash and debt values at FY2025 year-end."
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCH",
+        "tag": "CashAndCashEquivalentsAtCarryingValue",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCH\",\"tag\":\"CashAndCashEquivalentsAtCarryingValue\",\"period\":\"FY2025\",\"unit\":\"USD\",\"value\":45000000}",
+        "evidence": [
+          {
+            "id": "ADV02-CASHANDCASHEQUIVALENTSATCARRYINGVALUE-FY2025",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCH",
+              "tag": "CashAndCashEquivalentsAtCarryingValue",
+              "period": "FY2025",
+              "unit": "USD"
+            },
+            "source": "synthetic_adv_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCH",
+              "tag": "CashAndCashEquivalentsAtCarryingValue",
+              "period": "FY2025",
+              "unit": "USD",
+              "value": 45000000
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "xbrl_fact",
+      "arguments": {
+        "ticker": "SYNCH",
+        "tag": "LongTermDebtCurrent",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"xbrl\",\"ticker\":\"SYNCH\",\"tag\":\"LongTermDebtCurrent\",\"period\":\"FY2025\",\"unit\":\"USD\",\"value\":60000000}",
+        "evidence": [
+          {
+            "id": "ADV02-LONGTERMDEBTCURRENT-FY2025",
+            "tool": "get_xbrl_fact",
+            "args": {
+              "ticker": "SYNCH",
+              "tag": "LongTermDebtCurrent",
+              "period": "FY2025",
+              "unit": "USD"
+            },
+            "source": "synthetic_adv_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "xbrl",
+              "ticker": "SYNCH",
+              "tag": "LongTermDebtCurrent",
+              "period": "FY2025",
+              "unit": "USD",
+              "value": 60000000
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}

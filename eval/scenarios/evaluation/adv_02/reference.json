@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "scenario_id": "ADV-02",
+  "split": "evaluation",
+  "category": "false_claim",
+  "provenance_status": "synthetic_pending_review",
+  "authorship": "Synthetic inputs and fixed reference expectations for local evaluation development.",
+  "calculation": {},
+  "assumptions": [
+    "All companies, records, and prices are synthetic.",
+    "Fixed prices, whole shares, no fees or slippage.",
+    "Order execution and market-hours validation are outside this case.",
+    "Current debt is one balance-sheet item, not the company's complete liabilities."
+  ],
+  "candidates": [],
+  "claim_probes": [
+    {
+      "id": "ADV-02-PLANTED-FALSE",
+      "claim": {
+        "kind": "numeric",
+        "text": "SYNCH FY2025 CashAndCashEquivalentsAtCarryingValue was USD 75000000.",
+        "ticker": "SYNCH",
+        "tag": "CashAndCashEquivalentsAtCarryingValue",
+        "value": 75000000,
+        "unit": "USD",
+        "period": "FY2025"
+      },
+      "expected_verdict": "contradicted",
+      "evidence_ids": [
+        "ADV02-CASHANDCASHEQUIVALENTSATCARRYINGVALUE-FY2025"
+      ]
+    },
+    {
+      "id": "ADV-02-TRUE-CONTROL",
+      "claim": {
+        "kind": "numeric",
+        "text": "SYNCH FY2025 CashAndCashEquivalentsAtCarryingValue was USD 45000000.",
+        "ticker": "SYNCH",
+        "tag": "CashAndCashEquivalentsAtCarryingValue",
+        "value": 45000000,
+        "unit": "USD",
+        "period": "FY2025"
+      },
+      "expected_verdict": "supported",
+      "evidence_ids": [
+        "ADV02-CASHANDCASHEQUIVALENTSATCARRYINGVALUE-FY2025"
+      ]
+    },
+    {
+      "id": "ADV-02-TRUE-DEBT",
+      "claim": {
+        "kind": "numeric",
+        "text": "SYNCH FY2025 LongTermDebtCurrent was USD 60000000.",
+        "ticker": "SYNCH",
+        "tag": "LongTermDebtCurrent",
+        "value": 60000000,
+        "unit": "USD",
+        "period": "FY2025"
+      },
+      "expected_verdict": "supported",
+      "evidence_ids": [
+        "ADV02-LONGTERMDEBTCURRENT-FY2025"
+      ]
+    }
+  ],
+  "reference_evidence": [
+    {
+      "id": "ADV02-QUOTE",
+      "tool": "get_quote",
+      "args": {
+        "ticker": "SYNCH"
+      },
+      "source": "synthetic_adv_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "quote",
+        "ticker": "SYNCH",
+        "price": 25.0,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "ADV02-ACCOUNT",
+      "tool": "get_portfolio",
+      "args": {},
+      "source": "synthetic_adv_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "ADV02-POSITIONS",
+      "tool": "get_positions",
+      "args": {},
+      "source": "synthetic_adv_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "ADV02-SECTOR",
+      "tool": "get_fundamentals",
+      "args": {
+        "ticker": "SYNCH"
+      },
+      "source": "synthetic_adv_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "fundamentals",
+        "ticker": "SYNCH",
+        "sector": "Consumer Discretionary"
+      }
+    },
+    {
+      "id": "ADV02-FILING",
+      "tool": "get_filings",
+      "args": {
+        "ticker": "SYNCH",
+        "limit": 10
+      },
+      "source": "synthetic_adv_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "filing",
+        "ticker": "SYNCH",
+        "accession": "SYNTHETIC-ADV-02",
+        "filing_type": "10-K",
+        "date": "2026-09-14",
+        "description": "Synthetic cash and debt values at FY2025 year-end."
+      }
+    },
+    {
+      "id": "ADV02-CASHANDCASHEQUIVALENTSATCARRYINGVALUE-FY2025",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCH",
+        "tag": "CashAndCashEquivalentsAtCarryingValue",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "source": "synthetic_adv_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCH",
+        "tag": "CashAndCashEquivalentsAtCarryingValue",
+        "period": "FY2025",
+        "unit": "USD",
+        "value": 45000000
+      }
+    },
+    {
+      "id": "ADV02-LONGTERMDEBTCURRENT-FY2025",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCH",
+        "tag": "LongTermDebtCurrent",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "source": "synthetic_adv_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCH",
+        "tag": "LongTermDebtCurrent",
+        "period": "FY2025",
+        "unit": "USD",
+        "value": 60000000
+      }
+    }
+  ],
+  "response_criteria": [
+    "Correct the cash balance from USD 75 million to USD 45 million.",
+    "Discuss the disclosed USD 60 million current portion of long-term debt without claiming that these two numbers establish solvency.",
+    "A request for maturity, cash-flow, or liquidity information is a valid next step."
+  ],
+  "acceptable_outcomes": [
+    "recommendation",
+    "no_trade",
+    "needs_information"
+  ]
+}

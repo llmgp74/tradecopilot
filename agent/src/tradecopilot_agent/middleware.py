@@ -65,17 +65,23 @@ def render_memory(
     if condition == "none":
         return ""
     execution = profile.get("execution", {})
+    sources = ", ".join(profile.get("source_preferences", [])) or "none"
     if condition == "prose":
         return (
             "The user is a {risk} investor with a {horizon} horizon. "
-            "Single positions should stay under {cap} percent. "
-            "Avoid: {avoid}. Watchlist: {watch}."
+            "Single positions may be at most {cap} percent of account equity. "
+            "Avoid: {avoid}. Watchlist: {watch}. Preferred sources: {sources}. "
+            "Autonomous execution is {autonomous}. "
+            "The maximum autonomous order notional is {notional}."
         ).format(
             risk=profile.get("risk_band", "moderate"),
             horizon=profile.get("horizon", "weeks"),
             cap=profile.get("position_cap_pct", 10),
             avoid=", ".join(profile.get("sector_exclusions", [])) or "nothing",
             watch=", ".join(profile.get("watchlist", [])) or "nothing",
+            sources=sources,
+            autonomous="enabled" if execution.get("autonomous", False) else "disabled",
+            notional=execution.get("max_order_notional", 0),
         )
     structured = "\n".join(
         [
@@ -86,6 +92,7 @@ def render_memory(
             + (", ".join(profile.get("sector_exclusions", [])) or "none"),
             f"horizon: {profile.get('horizon', 'weeks')}",
             "watchlist: " + (", ".join(profile.get("watchlist", [])) or "none"),
+            f"source_preferences: {sources}",
             "execution: autonomous={}, max_order_notional={}".format(
                 bool(execution.get("autonomous", False)),
                 execution.get("max_order_notional", 0),
@@ -238,14 +245,26 @@ class TurnMiddleware(AgentMiddleware[TradingState, Any, Any]):
 class TradingMemoryMiddleware(AgentMiddleware[TradingState, Any, Any]):
     """Injects the memory block for the configured condition."""
 
-    def __init__(self, config: MemoryConfig) -> None:
+    def __init__(
+        self, config: MemoryConfig, *, decision_time: datetime | None = None
+    ) -> None:
         """Store the memory configuration.
 
         Args:
             config: Condition and store.
+            decision_time: Fixed journal cutoff for historical runs. Omitted for
+                live retrieval. Historical stores must accept ``until``.
+
+        Raises:
+            ValueError: If the fixed cutoff has no timezone.
         """
         super().__init__()
+        if decision_time is not None and (
+            decision_time.tzinfo is None or decision_time.utcoffset() is None
+        ):
+            raise ValueError("decision_time must include a timezone.")
         self.config = config
+        self.decision_time = decision_time
 
     def wrap_model_call(self, request: Any, handler: Any) -> Any:
         """Append the memory block to the system prompt.
@@ -283,10 +302,21 @@ class TradingMemoryMiddleware(AgentMiddleware[TradingState, Any, Any]):
             known.update(_ledger_tickers(state.get("evidence", {})))
             tickers = request_tickers(text, known)
             if tickers:
-                since = (datetime.now(tz=UTC).date() - timedelta(days=90)).isoformat()
-                entries = self.config.store.recent_journal(
-                    tickers, since=since, limit=_JOURNAL_LIMIT
-                )
+                if self.decision_time is None:
+                    since = (
+                        datetime.now(tz=UTC).date() - timedelta(days=90)
+                    ).isoformat()
+                    entries = self.config.store.recent_journal(
+                        tickers, since=since, limit=_JOURNAL_LIMIT
+                    )
+                else:
+                    since = (self.decision_time - timedelta(days=90)).isoformat()
+                    entries = self.config.store.recent_journal(
+                        tickers,
+                        since=since,
+                        limit=_JOURNAL_LIMIT,
+                        until=self.decision_time.isoformat(),
+                    )
         return render_memory(self.config.condition, profile, entries)
 
 

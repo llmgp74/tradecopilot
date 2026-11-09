@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "scenario_id": "EARN-02",
+  "split": "evaluation",
+  "category": "earnings",
+  "provenance_status": "synthetic_pending_review",
+  "authorship": "Synthetic inputs and fixed reference expectations for local evaluation development.",
+  "calculation": {
+    "max_position_value_usd": 5000,
+    "remaining_capacity_usd": 500,
+    "max_additional_shares": 5,
+    "revenue_growth_pct": 20,
+    "net_income_change_pct": 44
+  },
+  "assumptions": [
+    "All companies, records, and prices are synthetic.",
+    "Fixed prices, whole shares, no fees or slippage.",
+    "Order execution and market-hours validation are outside this case."
+  ],
+  "candidates": [
+    {
+      "id": "at-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCB",
+            "side": "buy",
+            "qty": 5
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 5000.0,
+        "resulting_weight_pct": 5.0,
+        "violation_codes": [],
+        "eligible": true
+      }
+    },
+    {
+      "id": "over-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCB",
+            "side": "buy",
+            "qty": 6
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 5100.0,
+        "resulting_weight_pct": 5.1,
+        "violation_codes": [
+          "position_cap"
+        ],
+        "eligible": false
+      }
+    }
+  ],
+  "claim_probes": [
+    {
+      "id": "EARN-02-TRUE-INCOME",
+      "claim": {
+        "kind": "numeric",
+        "text": "SYNCB FY2025 NetIncomeLoss was USD 14400000.",
+        "ticker": "SYNCB",
+        "tag": "NetIncomeLoss",
+        "value": 14400000,
+        "unit": "USD",
+        "period": "FY2025"
+      },
+      "expected_verdict": "supported",
+      "evidence_ids": [
+        "EARN02-NETINCOMELOSS-FY2025"
+      ]
+    }
+  ],
+  "reference_evidence": [
+    {
+      "id": "EARN02-QUOTE",
+      "tool": "get_quote",
+      "args": {
+        "ticker": "SYNCB"
+      },
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "quote",
+        "ticker": "SYNCB",
+        "price": 100.0,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "EARN02-ACCOUNT",
+      "tool": "get_portfolio",
+      "args": {},
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 95500.0,
+        "buying_power": 95500.0,
+        "fractional": false,
+        "positions": [
+          {
+            "ticker": "SYNCB",
+            "qty": 45,
+            "market_value": 4500.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "EARN02-POSITIONS",
+      "tool": "get_positions",
+      "args": {},
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 95500.0,
+        "buying_power": 95500.0,
+        "fractional": false,
+        "positions": [
+          {
+            "ticker": "SYNCB",
+            "qty": 45,
+            "market_value": 4500.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "EARN02-SECTOR",
+      "tool": "get_fundamentals",
+      "args": {
+        "ticker": "SYNCB"
+      },
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "fundamentals",
+        "ticker": "SYNCB",
+        "sector": "Technology"
+      }
+    },
+    {
+      "id": "EARN02-FILING",
+      "tool": "get_filings",
+      "args": {
+        "ticker": "SYNCB",
+        "limit": 10
+      },
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "filing",
+        "ticker": "SYNCB",
+        "accession": "SYNTHETIC-EARN-02",
+        "filing_type": "10-K",
+        "date": "2026-09-14",
+        "description": "Synthetic annual results for a company already held in the portfolio."
+      }
+    },
+    {
+      "id": "EARN02-REVENUES-FY2024",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCB",
+        "tag": "Revenues",
+        "period": "FY2024",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCB",
+        "tag": "Revenues",
+        "period": "FY2024",
+        "unit": "USD",
+        "value": 200000000
+      }
+    },
+    {
+      "id": "EARN02-REVENUES-FY2025",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCB",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCB",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD",
+        "value": 240000000
+      }
+    },
+    {
+      "id": "EARN02-NETINCOMELOSS-FY2024",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCB",
+        "tag": "NetIncomeLoss",
+        "period": "FY2024",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCB",
+        "tag": "NetIncomeLoss",
+        "period": "FY2024",
+        "unit": "USD",
+        "value": 10000000
+      }
+    },
+    {
+      "id": "EARN02-NETINCOMELOSS-FY2025",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCB",
+        "tag": "NetIncomeLoss",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_02",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCB",
+        "tag": "NetIncomeLoss",
+        "period": "FY2025",
+        "unit": "USD",
+        "value": 14400000
+      }
+    }
+  ],
+  "response_criteria": [
+    "Use the current 4.5% holding when discussing an addition.",
+    "The position has room for at most USD 500, or 5 shares, at the fixed quote.",
+    "Discuss improved earnings without claiming that the improvement guarantees future returns."
+  ],
+  "acceptable_outcomes": [
+    "recommendation",
+    "no_trade",
+    "needs_information"
+  ]
+}

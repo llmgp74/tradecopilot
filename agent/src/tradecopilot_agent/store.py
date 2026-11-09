@@ -323,29 +323,72 @@ class Store:
         return profile
 
     def recent_journal(
-        self, tickers: list[str], since: str, limit: int = 10
+        self,
+        tickers: list[str],
+        since: str,
+        limit: int = 10,
+        *,
+        until: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return recent decisions overlapping any of the tickers.
 
         Args:
             tickers: Tickers to match against the legs.
-            since: Inclusive lower bound on the creation date.
+            since: Inclusive lower creation date, or an aware timestamp when
+                ``until`` is provided.
             limit: Maximum decisions to return.
+            until: Inclusive aware timestamp for historical retrieval. Events
+                after it are excluded before selecting a decision snapshot.
 
         Returns:
             Decisions, newest first.
+
+        Raises:
+            ValueError: Historical bounds are invalid or lack a timezone.
         """
         wanted = {ticker.upper() for ticker in tickers}
-        rows, _ = self.list_journal(page_no=1, page_size=1000)
+        if until is None:
+            rows, _ = self.list_journal(page_no=1, page_size=1000)
+            rows = [row for row in rows if row.get("created_at", "")[:10] >= since[:10]]
+        else:
+            rows = self._journal_in_window(since, until)
         return [
             row
             for row in rows
-            if row.get("created_at", "")[:10] >= since[:10]
-            and any(
+            if any(
                 str(leg.get("ticker", "")).upper() in wanted
                 for leg in row.get("legs", [])
             )
         ][:limit]
+
+    def _journal_in_window(self, since: str, until: str) -> list[dict[str, Any]]:
+        """Choose the last known snapshot without letting future updates hide it."""
+        cutoff = _journal_timestamp(until)
+        lower = _journal_timestamp(since)
+        if len(since) == 10:
+            try:
+                lower = datetime.fromisoformat(since).replace(tzinfo=UTC)
+            except ValueError:
+                lower = None
+        if cutoff is None or lower is None:
+            raise ValueError(
+                "Historical journal bounds need valid timezone-aware times."
+            )
+        with self._connection() as connection:
+            rows = connection.execute("SELECT rowid, payload FROM journal").fetchall()
+        latest: dict[str, tuple[datetime, int, dict[str, Any]]] = {}
+        for row_id, raw in rows:
+            payload: dict[str, Any] = json.loads(str(raw))
+            timestamp = _journal_timestamp(payload.get("created_at"))
+            if timestamp is None or not lower <= timestamp <= cutoff:
+                continue
+            decision_id = str(payload["decision_id"])
+            previous = latest.get(decision_id)
+            key = (timestamp, int(row_id))
+            if previous is None or key > previous[:2]:
+                latest[decision_id] = (timestamp, int(row_id), payload)
+        ordered = sorted(latest.values(), key=lambda item: item[:2], reverse=True)
+        return [_journal_row(item[2]) for item in ordered]
 
     def append_journal(self, event: dict[str, Any]) -> None:
         """Append one journal event as a full decision snapshot.
@@ -428,6 +471,19 @@ class Store:
         offset = (page_no - 1) * page_size
         page = entries[offset : offset + page_size]
         return [_journal_row(entry) for entry in page], total
+
+
+def _journal_timestamp(value: Any) -> datetime | None:
+    """Exclude unusable timestamps from historical journal retrieval."""
+    if not isinstance(value, str):
+        return None
+    try:
+        timestamp = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        return None
+    return timestamp.astimezone(UTC)
 
 
 def _journal_row(payload: dict[str, Any]) -> dict[str, Any]:
