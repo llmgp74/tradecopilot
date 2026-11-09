@@ -1,145 +1,187 @@
 # Evaluation inputs and run records
 
-[docs/eval-contract.md](../docs/eval-contract.md) defines how to call the agent.
-This document maps that interface to the records needed for scoring. `RunResult`
-fields below are proposed evaluation-side fields, not additional graph state.
-The runner and run-result serialization still need implementation.
-The first input format is implemented in
-[DEV-01](scenarios/dev_01_position_cap/README.md), with reference answers stored
-separately from agent inputs.
+The local runner, trace capture, deterministic scorers, and judge interface are
+implemented. [The shared contract](../docs/eval-contract.md) defines the agent
+boundary. Scripted runs exercise the real graph and tools without provider or
+broker calls. They do not establish model quality or a memory-condition benefit.
 
 ## Calling the shared agent
 
-1. Create a fresh run directory. Use a `MemoryStore` implementation scoped to that
-   run, or reuse `tradecopilot_agent.store.Store` with a database in that directory.
-   Seed the confirmed profile and pre-decision journal before building the graph.
-2. Supply a fixture `DataSource` and choose `none`, `prose`, `structured`, or `full`
-   through `MemoryConfig`. Keep the true profile available to runtime checks.
-3. Call `build_agent(config, source, as_of, checkpointer=saver, model=model_id)`.
-   Use a run-local saver, or `None` for a single-shot case.
-4. Call `graph.ainvoke` with the new `HumanMessage` and a unique `thread_id`.
-   Save the returned messages, state, and run metadata before scoring.
+`run_case(case, output_dir, config, condition=...)` creates a new directory and
+seeds a `ScenarioStore` with the confirmed profile and pre-decision journal. It
+constructs a `FrozenSource`, a new model instance, and a shared `build_agent`
+graph. The graph receives the scenario date and precise `decision_time`, then
+streams state with a unique thread ID. No web server is required.
 
-The library route does not use the HTTP API or require the web server. Follow the
-shared contract for signatures rather than maintaining a second set here.
-If reusing `Store`, create its parent directory first; it also creates a
-`settings.key` beside the database. Keep the entire run directory isolated.
+The default `RunConfig` selects the local `ScriptedAgent`. It gathers fixtures,
+tries 20 shares, then one share, and emits control text. Its extractor returns
+no claims. It reads scenario inputs only and behaves the same in all conditions.
+The scripted judge returns fixed control scores and unknown acceptance results.
+These outputs are kept separate from empirical model results in reports.
+
+Model mode requires explicit `allow_model_calls=True`. Judge mode and recorded
+agent identity must match the run. Calls are bounded by the configured timeout,
+output-token limit, and graph recursion limit; the shared graph also limits
+agent model calls to 20. Provider cancellation can depend on its own timeout.
+Real provider behavior, model quality, and human judge calibration remain unrun.
 
 ## Scenario inputs and fixtures
 
+The implemented `Scenario` fields are:
+
 | Field | Meaning |
 | --- | --- |
-| `scenario_id`, `split` | Stable identifier; development or formal evaluation |
-| `decision_time` | Evaluation-side timestamp with timezone; see cutoff limits below |
-| `request` | Same current request for all memory conditions |
-| `portfolio` | Holdings, equity, cash, buying power, and valuation assumptions |
+| `schema_version` | Input schema version, currently 1 |
+| `scenario_id`, `split` | Identifier and development/evaluation designation |
+| `synthetic` | Explicit synthetic-data flag; currently required to be true |
+| `decision_time` | Timezone-aware decision timestamp |
+| `request` | The same current request across memory conditions |
 | `profile` | Confirmed constraints and preferences at decision time |
-| `journal_before_decision` | Earlier decisions and information then available |
-| `evidence_catalog` | Frozen evidence records with stable IDs |
-| `tool_fixtures` | Responses indexed by data-source method and normalized arguments |
+| `journal_before_decision` | Earlier decision snapshots with `decision_id` |
+| `tool_fixtures` | Frozen data-source calls, outputs, and availability times |
 
-DEV-01 stores its portfolio and evidence records inside `tool_fixtures`.
+Portfolio and evidence records are inside `tool_fixtures`; they are not separate
+top-level input fields. Each fixture contains `method`, normalized `arguments`,
+`available_at`, and a shared `ToolOutput`. Reference labels, expected ticket
+outcomes, claim probes, and acceptance criteria live in separate `reference.json`.
+The evaluator reads these labels; the blind judge receives reference evidence
+and response criteria. The trading agent receives neither labels nor criteria.
 
-Reference fact labels, expected rule outcomes, and acceptance criteria stay on
-the evaluation side. Do not send them to the agent as prompts or tool responses.
+The source uses [DataSource](../agent/src/tradecopilot_agent/data.py) and
+[ToolOutput and EvidenceRecord](../agent/src/tradecopilot_agent/state.py). Evidence
+uses `id`, `tool`, `args`, `source`, `published_at`, `fetched_at`, `stale`, `url`,
+and `payload`. Synthetic sources are marked explicitly. The
+[shared contract](../docs/eval-contract.md#4-data-source-and-cutoff) lists payloads.
 
-Implement the methods in [DataSource](../agent/src/tradecopilot_agent/data.py).
-For the initial fixture source, return `alpaca`, `edgar`, `fmp`, `finnhub`, and
-`fred` from `capabilities()`, but exclude `order_execution`. Keep this set fixed
-across conditions. Missing fixtures and planned tool failures return a
-`ToolOutput` with `error` and a useful `summary`; they do not raise or fetch live
-data. Do not rely on a missing checkpointer alone to disable execution.
+Portfolio tools read the first evidence record's flat `kind="account"` payload:
+`equity`, `cash`, `buying_power`, and `positions`. Each position has `ticker`,
+`qty`, and `market_value`. This differs from the HTTP portfolio response's nested
+`account` object. Quote fixtures have `kind="quote"`, `ticker`, and `price`.
 
-Use [ToolOutput and EvidenceRecord](../agent/src/tradecopilot_agent/state.py)
-directly. The evidence key is `id`, not `evidence_id`. Include `tool`, `args`,
-`source`, `published_at`, `fetched_at`, `stale`, `url` when available, and `payload`.
-Mark synthetic sources explicitly. Required payload fields are listed in the
-[shared contract](../docs/eval-contract.md#4-data-source-and-cutoff).
+Capabilities remain `alpaca`, `edgar`, `fmp`, `finnhub`, and `fred` in every
+condition. `order_execution` is absent, and direct `place_leg` calls are refused.
+Missing fixtures return `fixture_missing`; planned outages return their recorded
+error. Neither path fetches live data. Duplicate fixture keys are rejected, and
+response copies prevent one caller from mutating later replays.
 
-Portfolio fixtures use the tool's account payload: `kind="account"`, `equity`,
-`cash`, `buying_power`, and `positions`. Each position includes `ticker`, `qty`,
-and `market_value`. The trading tools read this from the first evidence record.
-Do not pass the HTTP portfolio response with its nested `account` object.
-Quote fixtures use `kind="quote"`, `ticker`, and `price`.
+## Saved RunRecord fields
 
-For store seeding, follow [MemoryStore](../agent/src/tradecopilot_agent/memory.py).
-The concrete `Store` supports `patch_profile` and `append_journal`; journal events
-use `decision_id`. Supply the complete `execution` object when patching it.
-`position_cap_pct=5.0` means 5 percent, not 0.05 percent.
+The implemented [RunRecord](src/tradecopilot_eval/records.py) is written to
+`run.json`. Each run also saves its inputs and independent reference file.
 
-## Mapping a run result
-
-| Evaluation field | Source and handling |
+| Field | Source and handling |
 | --- | --- |
-| `run_id`, `scenario_id`, `condition`, `repetition` | Set by the runner |
-| `raw_proposal` | First `propose_ticket` call arguments in the current user turn; capture rule below |
-| `final_response` | Last assistant response plus user-visible state: recommendation, portfolio impact, verification, and todos |
-| `evidence`, `claim_verdicts` | Graph evidence ledger and scoped `verification` results; retain tool artifacts for earlier attempts |
-| `constraint_result` | Outcome of the matching proposal tool call, including `error="blocked"`; not a named graph-state field |
-| `approval_result`, `execution_result` | Not exercised in fixture runs; do not infer approval or a fill from an accepted proposal |
-| `status`, `errors` | Completion state, tool failures, missing output, or timeout |
-| `model_id`, `prompt_version`, `code_revision`, `settings` | Reproduction metadata with credentials excluded |
-| `tokens`, `cost`, `latency` | Measured usage; leave missing measurements null |
-| `trace` | Messages, tool calls, results, and artifacts needed to reconstruct the run |
+| `schema_version`, `run_id`, `scenario_id` | Record version and identifiers |
+| `condition`, `phase`, `repetition` | Memory condition and trial placement |
+| `mode`, `model_id`, `model_family` | Explicit scripted/model configuration |
+| `status`, `errors` | `ok`, `agent_error`, `timeout`, or `invalid_output` |
+| `initial_proposal_ids` | All proposal IDs in the first proposing assistant message |
+| `proposals` | Every captured call, original arguments, matching artifact, and capture error |
+| `final_response` | Text, draft recommendation, portfolio impact, verification, and todos |
+| `trace` | Serialized messages, including tool-call IDs and artifacts |
+| `evidence` | Latest graph evidence ledger |
+| `tool_errors` | Tool-call IDs and errors from returned artifacts |
+| `usage` | Observed model-call counts, tokens, cost estimate, and elapsed seconds |
+| `metadata` | Input/reference/code/prompt hashes, settings, versions, and provenance |
+| `scores` | Independent rule results and explicitly observed claim checks |
+| `judge` | Separate judge result and attempts, or null when not run |
 
-Messages are LangChain objects. Preserve `AIMessage.tool_calls` and each
-`ToolMessage`'s `tool_call_id`, `content`, and `artifact` when exporting them.
-Trading tools put their serialized `ToolOutput` in the artifact; content is the
-model-facing summary. Match calls and results by ID, not their list positions.
+The stable visible-response projection is versioned in metadata. Judge input is
+saved separately and contains that projection, request, confirmed context,
+reference evidence, and acceptance criteria. It omits condition labels, model
+identity, raw proposal attempts, and private traces. Agent annotations remain
+visible but are not reference labels. See [judge.md](judge.md).
 
-`verification` includes `draft` and `answer` scopes and may contain `unchecked`
-or `unverifiable` verdicts. Extraction failures can instead carry
-`status="unavailable"`. Preserve these distinctions. A final response has
-annotations, but its text has not necessarily been corrected.
+Metadata includes the exact input/reference file hashes, local Python-source and
+dependency-file digest, agent prompt hash, runtime package versions, Python
+version, settings, and `execution_enabled=false`. Judge results record their
+prompt and rubric versions. The source digest includes uncommitted local edits;
+it is not a Git commit identifier.
 
-### First-proposal capture
+Usage totals remain null unless every counted model call supplies token usage.
+Cost is calculated only with complete tokens and both explicitly supplied token
+prices. It is an estimate, not a billing receipt. Scripted calls have observed
+call counts but no fabricated token counts or zero-dollar cost.
 
-Use the first `propose_ticket` call after the current user message as the proposed
-capture point. Save its call ID and unchanged `legs`, `thesis`, and `horizon`
-arguments, including blocked or invalid attempts. Keep later attempts separately.
-Tickets already support multiple legs; the first development case uses one leg.
+### Original proposals and tool feedback
 
-Do not use `draft_recommendation` as the original proposal. The tool checks
-constraints before producing that state. A blocked attempt has no proposal
-artifact and is not written to the journal; a later corrected attempt can become
-the final draft. Scoring only that draft would miss the original violation.
+Capture all `propose_ticket` calls after the latest user message. The first
+assistant message containing proposals defines the initial batch, including
+parallel calls. Preserve unchanged `legs`, `thesis`, and `horizon` arguments for
+each attempt, even when the tool rejects them. Later revisions stay separate.
 
-If no proposal tool is called, record that fact and the response. Distinguish a
-justified no-trade answer, a request for information, and an unstructured trading
-recommendation. Missing capture data is not evidence of zero violations.
+Match `AIMessage.tool_calls` to `ToolMessage.artifact` by call ID. The artifact is
+the serialized `ToolOutput`; `content` is only its model-facing summary. Missing
+IDs, duplicate IDs, missing/duplicate results, and absent artifacts are explicit
+capture errors. They do not imply a successful or blocked tool decision.
 
-The blocked artifact contains `error="blocked"` and reasons in `summary`, not a
-structured violations list. A separate call to `check_ticket` can produce rule
-details, but label it as an evaluation replay, not the original tool result.
-Score both against independently checked reference labels.
+`draft_recommendation` is the final accepted draft, not the raw proposal. A
+blocked result still has a tool artifact with `error="blocked"`, but its
+`proposal` field is null and no draft is written to the journal. A later accepted
+ticket can replace the visible draft without erasing the earlier attempt.
+Acceptance does not imply approval, execution, or a fill.
+
+## Deterministic scoring and missing observations
+
+`score_ticket` computes constraints independently with `Decimal`, using the
+frozen account, prices, sectors, and confirmed profile. It does not call the
+agent's `check_ticket` or copy the candidate reference labels. Tests compare its
+results with separately authored labels and boundary arithmetic. This oracle
+covers the frozen rule study, not market-hours checks, fills, or changing prices.
+
+Each attempt records independent violation status and observed blocking. The
+blocked artifact supplies its decision and textual reasons; the evaluator's
+rule codes are a separate computation. Correct-block observations apply only to
+violating proposals; false-block observations apply only to compliant proposals.
+Unknown artifact feedback remains null in both measurements.
+
+`initial_violation` is true if any initial parallel proposal violates a rule,
+false if all are scorable and compliant, and null if there is no proposal or
+required data is missing. The final draft is scored separately. No proposal is
+not evidence of zero violations. A justified no-trade response, missing evidence,
+and an unstructured recommendation require response-level assessment.
+
+Verification keeps `draft` and `answer` scopes distinct. Run-level claim
+observations use only `answer` entries whose claim text matches a reference probe
+after case and whitespace normalization. Omitted checks, paraphrases, unavailable
+extraction, and conflicting verdicts remain unobserved. This narrow matching rule
+does not measure semantic correction of every false claim in the final text.
+
+Direct `verifier_probes` test the existing matcher against labeled true and false
+claims and fixed evidence. Their results are reported separately from graph-run
+observations. A matcher test passing does not prove that an agent noticed or
+corrected the claim. Derived growth calculations are independently labeled; the
+direct numeric matcher checks individual facts rather than arbitrary formulas.
+
+The runner populates task success only from a valid model judge's acceptance
+results and allowed outcome, subject to independent final-ticket checks. An
+unscorable final ticket cannot support a success claim. Scripted judge scores
+are workflow controls. Agent failures, tool errors, invalid
+outputs, missing data, and judge errors remain separate; report denominators and
+unscored counts rather than dropping failures or replacing missing scores with 0.
 
 ## Cutoff and isolation
 
-The agent currently accepts an `as_of` date. Keep `decision_time` for the reference
-case, but do not claim that the graph enforces an intraday cutoff. For initial
-cases, freeze the eligible evidence in advance and pass the agreed scenario date.
+`FrozenSource` refuses an entire response before exposing its summary or payload
+if availability or any publication timestamp is after `decision_time`. Fixture
+publication timestamps must be timezone-aware. `fetched_at` can be later when
+archiving a previously published record. Later revisions and unavailable outcomes
+must not appear in the decision inputs.
 
-The fixture source must filter both summaries and payloads. The middleware's
-date filter only covers evidence added to the ledger. Evidence must have been
-available at decision time; `fetched_at` may be later when archiving an older
-public filing. Exclude later revisions and outcomes not yet knowable.
+The shared graph receives `decision_time` for the 90-day journal window and an
+inclusive upper bound. Historical `Store` retrieval chooses eligible snapshots
+before limiting results. Legacy custom stores need the optional `until` keyword
+for this historical path; live calls still use their existing signature.
+`as_of` remains the tool API's date cutoff, so the fixture source is responsible
+for the stricter intraday data boundary.
 
-Reset the database, thread, caches, and other writable state between runs. Keep
-the same confirmed profile, holdings, evidence, and execution safeguards in all
-conditions. Only the agent-visible memory changes. Record model, prompt, fixture,
-and rubric versions; fixed inputs do not guarantee identical model outputs.
+Each run gets its own database, settings key, thread, graph, and model instance.
+`ScenarioStore.get_profile` exposes the fixed confirmation timestamp from inputs;
+SQLite's operational write timestamp is separate. All conditions share profile
+facts, account, fixtures, and runtime safeguards. Prose and structured views now
+contain the same profile facts; only full memory adds historical journal entries.
 
-Keep agent errors, tool errors, invalid outputs, and judge errors separate. Report
-unscored runs and denominators rather than dropping failures or filling scores
-with zero. Evaluate fills, approvals, and market-hours enforcement separately;
-fixture runs disable execution, and `check_ticket(..., live=False)` skips hours.
-
-## Before the first comparison
-
-- Confirm the first-call capture rule, including parallel calls and responses
-  that recommend a trade without calling `propose_ticket`.
-- Align prose and structured profile contents. The current prose renderer omits
-  execution permissions that are present in the structured version.
-- Agree on scenario-time handling for journal retrieval. The current 90-day
-  lookback uses the wall clock, and `recent_journal` has no upper cutoff argument.
-- Agree on a fixed rendering of user-visible state for the [judge](judge.md).
+Timeouts and agent errors retain the latest streamed state for trace capture and
+scoring. Fixed inputs and limits support comparison but cannot guarantee identical
+provider outputs. Real-model screening, repeated comparisons, human calibration,
+and any empirical claim that memory improves quality remain pending.

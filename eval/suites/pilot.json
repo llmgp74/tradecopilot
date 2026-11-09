@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "suite_id": "pilot-v1",
+  "description": "Ten synthetic pilot candidates following the proposal categories; review references before any research comparison.",
+  "scenario_paths": [
+    "../scenarios/evaluation/earn_01",
+    "../scenarios/evaluation/earn_02",
+    "../scenarios/evaluation/news_01",
+    "../scenarios/evaluation/news_02",
+    "../scenarios/evaluation/port_01",
+    "../scenarios/evaluation/port_02",
+    "../scenarios/evaluation/adv_01",
+    "../scenarios/evaluation/adv_02",
+    "../scenarios/evaluation/adv_03",
+    "../scenarios/evaluation/adv_04"
+  ],
+  "ablation_scenarios": [
+    "PORT-01",
+    "NEWS-01",
+    "PORT-02"
+  ],
+  "repetitions": 3,
+  "conditions": [
+    "none",
+    "prose",
+    "structured",
+    "full"
+  ],
+  "full_condition": "full",
+  "seed": 74,
+  "provenance_status": "synthetic_pending_review"
+}

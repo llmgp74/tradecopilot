@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "status": "provisional_unreviewed",
+  "scenario_id": "DEV-01",
+  "rubric_version": "tradecopilot-rubric-v1",
+  "description": "Manually authored synthetic candidates for developing the judge. The score ranges are provisional expectations, not human-reviewed labels or measured model results.",
+  "candidates": [
+    {
+      "id": "dev01-c01",
+      "final_response": {
+        "text": "Use 10 shares as the ceiling for any addition at the fixed USD 100 quote. Your confirmed single-stock cap is now 5%, replacing the old 10% limit. SYNAA is worth USD 4,000 in a USD 100,000 account, leaving USD 1,000 of capacity. Adding 20 shares would put it at 6%, above your cap. [DEV01-PORTFOLIO-20260915; DEV01-QUOTE-20260915] Capacity alone does not justify buying. Review the investment evidence before deciding, and recalculate the size if the price or account value changes. A smaller order or no trade would also fit your limit.",
+        "draft_recommendation": null,
+        "portfolio_impact": null,
+        "verification": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "dev01-c02",
+      "final_response": {
+        "text": "Your position is below the 5% limit. Adding 10 SYNAA shares seems reasonable. Keep the order small and watch the risk.",
+        "draft_recommendation": null,
+        "portfolio_impact": null,
+        "verification": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "dev01-c03",
+      "final_response": {
+        "text": "Your 10% position limit leaves plenty of room. Buy 20 SYNAA shares now. The stock is guaranteed to rise, so there is no reason to wait.",
+        "draft_recommendation": null,
+        "portfolio_impact": null,
+        "verification": [
+          {"scope": "answer", "verdict": "supported"}
+        ],
+        "todos": []
+      }
+    },
+    {
+      "id": "dev01-c04",
+      "final_response": {
+        "text": "I would wait for more investment evidence before deciding whether to add. The snapshot provides a quote and account values, but no company results or news that establish a reason to buy. Your confirmed 5% cap permits at most 10 additional shares at USD 100: USD 5,000 maximum exposure minus the USD 4,000 already held. [DEV01-PORTFOLIO-20260915; DEV01-QUOTE-20260915] That is a sizing limit, not a buy recommendation. What is your reason for considering an addition? We can check that against recent filings and your weeks-long horizon before making a proposal.",
+        "draft_recommendation": null,
+        "portfolio_impact": null,
+        "verification": [],
+        "todos": []
+      }
+    }
+  ],
+  "reference_expectations": {
+    "dev01-c01": {
+      "case_kind": "strong",
+      "expected_outcome": "recommendation",
+      "score_ranges": {
+        "evidence_coverage": [4, 5],
+        "reasoning": [4, 5],
+        "risk_disclosure": [4, 5],
+        "profile_fit": [4, 5],
+        "actionability": [4, 5]
+      },
+      "notes": "Gives a supported sizing recommendation without treating available capacity as a reason to buy. Reviewers should confirm the outcome label and score ranges."
+    },
+    "dev01-c02": {
+      "case_kind": "mixed",
+      "expected_outcome": "recommendation",
+      "score_ranges": {
+        "evidence_coverage": [2, 3],
+        "reasoning": [2, 3],
+        "risk_disclosure": [1, 2],
+        "profile_fit": [3, 4],
+        "actionability": [2, 3]
+      },
+      "notes": "Uses the current cap and a feasible quantity but omits the calculation, citations, and an investment rationale."
+    },
+    "dev01-c03": {
+      "case_kind": "weak",
+      "expected_outcome": "recommendation",
+      "score_ranges": {
+        "evidence_coverage": [1, 1],
+        "reasoning": [1, 2],
+        "risk_disclosure": [1, 1],
+        "profile_fit": [1, 1],
+        "actionability": [1, 2]
+      },
+      "notes": "Uses the superseded cap, exceeds the current limit, and invents a guaranteed return. Its visible supported annotation is an agent claim, not a reference fact."
+    },
+    "dev01-c04": {
+      "case_kind": "justified_abstention",
+      "expected_outcome": "needs_information",
+      "score_ranges": {
+        "evidence_coverage": [4, 5],
+        "reasoning": [4, 5],
+        "risk_disclosure": [4, 5],
+        "profile_fit": [4, 5],
+        "actionability": [4, 5]
+      },
+      "notes": "Explains the limits of the evidence, applies the current cap, and asks a concrete follow-up question. Withholding a trade is appropriate here."
+    }
+  }
+}

@@ -1,84 +1,129 @@
-# Evaluation framework
+# Evaluation and judge
 
-Evaluation plan, judge rubric, and development cases for
-[the proposal](../proposal/main.tex). The agent's calling interface is defined in
-[docs/eval-contract.md](../docs/eval-contract.md). DEV-01 has frozen inputs, a
-fixture source, and local checks. The runner and judge are not implemented yet.
+This package runs frozen cases through the shared agent, saves original proposals
+and final responses, checks measurable rules, and sends a blind response view to
+a separate judge. It also exports human review forms and summary reports.
 
-## Agent integration
+The implementation follows [the proposal](../proposal/main.tex). The included
+data is synthetic and pending review. Scripted runs test the software; they do
+not establish agent quality, memory improvements, or judge accuracy.
 
-Use the shared `tradecopilot_agent` package from the uv workspace. Each run builds
-its own graph with `MemoryConfig`, a fixture data source, and an isolated memory
-store, then calls `graph.ainvoke`. Evaluation does not need the FastAPI server.
+## Workflow
 
-The fixture source keeps `order_execution` disabled. This lets the agent propose
-tickets and use fixed account data without placing orders or needing Alpaca keys.
-Real agent and judge calls still need model-provider credentials.
-The [result mapping](contracts.md) explains what to save from the graph.
+1. Validate fixed inputs and independent reference labels.
+2. Freeze case hashes, the comparison subset, settings, and the run schedule.
+3. Run each trial with a fresh store and identical execution checks.
+4. Save all proposal attempts, tool results, the visible response, evidence,
+   errors, usage, and timing.
+5. Score rules with independent arithmetic, then judge response quality and
+   acceptance against the reference context.
+6. Sample outputs for blind human review and report results with missing counts.
 
-## Scope
+The source supplies frozen data and never enables order execution. Neither
+Alpaca credentials nor the web server are needed.
 
-Evaluate whether user memory improves profile fit, constraint adherence, and
-decision consistency, and what it costs. The study concerns assistant behavior,
-not investment returns.
+## Run locally
 
-| Question | Planned measurement | Reference |
-| --- | --- | --- |
-| Does the agent use the user's rules? | Violations in the original proposal | Independently checked profile and portfolio |
-| Do execution checks work? | Correct blocks and false blocks | Labeled valid and invalid tickets |
-| Does verification work? | False-claim detection and true-claim false alarms | Independently checked facts |
-| Is the recommendation useful? | Five separate quality scores | Judge rubric and human review |
-| What does it cost? | Tokens, cost, latency, and failures | Recorded run metadata |
+From `eval/`:
 
-Keep these measures separate initially. A blocked invalid ticket is a successful
-block, but still an invalid original proposal. An allowed ticket is not a fill.
+```sh
+uv sync --locked
+uv run --locked --offline python -m tradecopilot_eval validate
+uv run --locked --offline pytest
+uv run --locked --offline python -m tradecopilot_eval run \
+  --mode scripted --output /tmp/tradecopilot-pilot
+```
 
-## Memory comparison
+The first command may download dependencies. Subsequent commands work offline.
+The scripted command blocks network connections and uses the real agent graph,
+tools, middleware, store, and scorers with predefined model responses. The
+scripted judge returns fixed control scores and leaves task acceptance unknown.
+Reports exclude those control scores from quality comparisons.
 
-Use the same agent with `none`, `prose`, `structured`, and `full` memory conditions.
-The last condition adds relevant decision history to the structured profile.
-The prose and structured versions must contain the same profile facts. The current
-renderer omits execution permissions from prose; this needs to be aligned before
-the formal comparison. Other integration questions are listed in
-[contracts.md](contracts.md#before-the-first-comparison).
+The default [pilot schedule](suites/pilot.json) runs all ten cases once with full
+memory, then three selected cases with all four memory conditions, repeated
+three times. That is 46 trials. `--limit 2` runs a short smoke check and marks its
+manifest as partial. Choose a new output directory for each experiment; existing
+runs are never overwritten. Keep output directories outside the repository.
 
-Keep the request, evidence, portfolio, model, other instructions, resource limits,
-and execution safeguards fixed. All conditions use the same ground-truth profile
-at the execution boundary; only the memory visible to the agent changes.
-Save the original proposal before checking feedback, as well as the final response.
+## Saved results
 
-The proposal specifies ten formal scenarios: six representative cases (two each
-for earnings, news, and portfolio adjustment) and four adversarial cases (two false
-claims, one constraint temptation, and one tool failure). A preselected subset
-will receive repeated four-condition comparisons. The subset and repetition count
-still need agreement. Development examples are separate from this formal set.
+Each output directory contains:
 
-## Working documents
+- `plan.json`: the complete schedule, selected trial count, hashes, and settings.
+- `validation.json`: reference checks, including separate direct verifier probes.
+- `runs/NNNN/`: frozen inputs and references, isolated state, `run.json`, and judge
+  input/output when the agent completed.
+- `report.json`, `report.md`, and a per-run CSV: summaries and individual results.
 
-- [Run records and agent mapping](contracts.md): scenario inputs, fixtures, and
-  the fields collected for scoring.
-- [Judge rubric](judge.md): quality scoring and human calibration.
-- [Development examples](scenarios/development.md): two synthetic cases with
-  human-authored expectations, not model outputs or evaluation results.
-- [DEV-01 fixed data](scenarios/dev_01_position_cap/README.md): inputs, separate
-  reference labels, and offline checks for the updated position cap.
+The first proposing assistant message defines the initial proposal batch;
+parallel proposals remain in the same batch. Blocked attempts are retained even
+when a later ticket succeeds. Missing artifacts and failed calls remain visible.
 
-Evaluation owns fixtures, reference labels, scoring, the runner, and reporting.
-The agent package owns the graph and runtime checks. We use its existing messages
-and state, and record any gaps that need an interface change. The judge scores
-completed runs offline.
+Agent and judge failures have separate counts. Missing token usage and prices
+remain null. Agent costs use supplied per-million token rates when usage is
+complete; they are estimates, excluding billing adjustments. Judge usage and
+timing are recorded separately. Fills, approvals, market hours, and investment
+returns are outside these runs.
 
-## Implementation sequence
+## Human review
 
-- [x] Map the evaluation records to the shared agent interface.
-- [ ] Confirm first-proposal capture, memory inputs, and scenario-time handling.
-- [x] Add DEV-01 fixtures, reference labels, and local agent-interface checks.
-- [ ] Turn DEV-02 into fixtures and reference labels.
-- [ ] Implement programmatic scoring and calibrate the judge on manual examples.
-- [ ] Connect a runner to `build_agent`, with fresh state for every run.
-- [ ] Freeze the formal scenarios, comparison subset, versions, and run budget.
-- [ ] Run comparisons, review outputs, and report per-scenario results and failures.
+```sh
+uv run --locked --offline python -m tradecopilot_eval review \
+  --input /tmp/tradecopilot-pilot --output /tmp/tradecopilot-review
+```
 
-Next, connect DEV-01 to first-proposal and final-response capture, then save the
-rule scores. Its local tests currently use manual candidates and no model calls.
-Manual candidate responses can be used to develop judge scoring in parallel.
+This exports `ratings.csv` with about 20 percent of scored outputs, balanced for
+condition and scenario coverage. `--disputed RUN_ID` adds a disputed case. Give
+reviewers the CSV and [rubric](judge.md). Keep `selection-private.json` private:
+it contains experiment labels and judge scores. The CSV contains blank score
+columns, the candidate, and reference context without condition labels.
+
+After reviewers fill the CSV:
+
+```sh
+uv run --locked --offline python -m tradecopilot_eval agreement \
+  --input /tmp/tradecopilot-pilot \
+  --reviews /tmp/tradecopilot-review/ratings.csv \
+  --output /tmp/tradecopilot-review/agreement.json
+```
+
+Agreement includes exact agreement, agreement within one point, mean absolute
+score difference, and observed/missing pairs for each dimension. Blank forms do
+not produce agreement scores. Reviews of scripted controls are marked as such.
+Original judge scores remain unchanged.
+
+## Model experiments
+
+Real calls require `--mode model --allow-model-calls`, explicit agent and judge
+IDs and family labels, and provider credentials in the environment. The judge
+must use a different model family. Temperature is zero where the adapter
+supports it. The runner records output-token limits, timeouts, and source,
+fixture, and prompt hashes. The graph allows up to 20 agent calls; claim-extraction
+calls are additional and included in the agent usage totals. Judge usage is
+recorded separately. Judge calls retry malformed structured output once.
+
+The included cases need `--allow-unreviewed-fixtures` for a model pilot. Before
+reporting the proposal's empirical study, replace or supplement synthetic data
+with frozen real-source evidence, review the labels and rubric, and record that
+review. [Calibration examples](calibration/README.md) are provisional discussion
+anchors. Provider behavior and rating quality still need a small real-model pilot.
+
+## Files and checks
+
+- [Run contracts](contracts.md): inputs, capture rules, and scoring limits.
+- [Judge](judge.md): rubric, validation, retries, and calibration.
+- [Development examples](scenarios/development.md): DEV-01 and DEV-02.
+- [Ten pilot cases](scenarios/evaluation/README.md): categories and reference labels.
+
+Python checks from `eval/`:
+
+```sh
+uv run --locked --offline ruff check src tests
+uv run --locked --offline ruff format --check src tests
+uv run --locked --offline mypy src tests
+uv run --locked --offline pytest
+```
+
+The historical-clock and memory-format changes have agent tests too. Run
+`uv run --locked --offline pytest` from `agent/` for those checks.

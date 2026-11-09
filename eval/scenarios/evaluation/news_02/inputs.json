@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "scenario_id": "NEWS-02",
+  "split": "evaluation",
+  "synthetic": true,
+  "decision_time": "2026-09-15T14:00:00Z",
+  "request": "SYNCD announced an acquisition. Is that a reason to buy now?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 5.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "SYNCD"
+    ],
+    "source_preferences": [
+      "filings"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2026-09-14T12:00:00Z"
+  },
+  "journal_before_decision": [],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "SYNCD"
+      },
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"quote\",\"ticker\":\"SYNCD\",\"price\":40.0,\"currency\":\"USD\"}",
+        "evidence": [
+          {
+            "id": "NEWS02-QUOTE",
+            "tool": "get_quote",
+            "args": {
+              "ticker": "SYNCD"
+            },
+            "source": "synthetic_news_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "quote",
+              "ticker": "SYNCD",
+              "price": 40.0,
+              "currency": "USD"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "NEWS02-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "synthetic_news_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "NEWS02-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "synthetic_news_02",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "fundamentals",
+      "arguments": {
+        "ticker": "SYNCD"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"fundamentals\",\"ticker\":\"SYNCD\",\"sector\":\"Healthcare\"}",
+        "evidence": [
+          {
+            "id": "NEWS02-SECTOR",
+            "tool": "get_fundamentals",
+            "args": {
+              "ticker": "SYNCD"
+            },
+            "source": "synthetic_news_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "fundamentals",
+              "ticker": "SYNCD",
+              "sector": "Healthcare"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "news",
+      "arguments": {
+        "ticker": "SYNCD",
+        "limit": 10
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"news\",\"ticker\":\"SYNCD\",\"date\":\"2026-09-14\",\"headline\":\"SYNCD announces proposed acquisition\",\"detail\":\"The agreement remains subject to shareholder and regulatory approval. Financing terms and the closing date are not confirmed.\"}",
+        "evidence": [
+          {
+            "id": "NEWS02-NEWS",
+            "tool": "get_news",
+            "args": {
+              "ticker": "SYNCD",
+              "limit": 10
+            },
+            "source": "synthetic_news_02",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "news",
+              "ticker": "SYNCD",
+              "date": "2026-09-14",
+              "headline": "SYNCD announces proposed acquisition",
+              "detail": "The agreement remains subject to shareholder and regulatory approval. Financing terms and the closing date are not confirmed."
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}

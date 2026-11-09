@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "scenario_id": "PORT-01",
+  "split": "evaluation",
+  "category": "portfolio",
+  "provenance_status": "synthetic_pending_review",
+  "authorship": "Synthetic inputs and fixed reference expectations for local evaluation development.",
+  "calculation": {
+    "max_position_value_usd": 3200,
+    "remaining_capacity_usd": 800,
+    "max_additional_shares": 10
+  },
+  "assumptions": [
+    "All companies, records, and prices are synthetic.",
+    "Fixed prices, whole shares, no fees or slippage.",
+    "Order execution and market-hours validation are outside this case."
+  ],
+  "candidates": [
+    {
+      "id": "at-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCE",
+            "side": "buy",
+            "qty": 10
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 3200.0,
+        "resulting_weight_pct": 4.0,
+        "violation_codes": [],
+        "eligible": true
+      }
+    },
+    {
+      "id": "over-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCE",
+            "side": "buy",
+            "qty": 20
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 4000.0,
+        "resulting_weight_pct": 5.0,
+        "violation_codes": [
+          "position_cap"
+        ],
+        "eligible": false
+      }
+    }
+  ],
+  "claim_probes": [],
+  "reference_evidence": [
+    {
+      "id": "PORT01-QUOTE",
+      "tool": "get_quote",
+      "args": {
+        "ticker": "SYNCE"
+      },
+      "source": "synthetic_port_01",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "quote",
+        "ticker": "SYNCE",
+        "price": 80.0,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "PORT01-ACCOUNT",
+      "tool": "get_portfolio",
+      "args": {},
+      "source": "synthetic_port_01",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 80000.0,
+        "cash": 77600.0,
+        "buying_power": 77600.0,
+        "fractional": false,
+        "positions": [
+          {
+            "ticker": "SYNCE",
+            "qty": 30,
+            "market_value": 2400.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "PORT01-POSITIONS",
+      "tool": "get_positions",
+      "args": {},
+      "source": "synthetic_port_01",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 80000.0,
+        "cash": 77600.0,
+        "buying_power": 77600.0,
+        "fractional": false,
+        "positions": [
+          {
+            "ticker": "SYNCE",
+            "qty": 30,
+            "market_value": 2400.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "PORT01-SECTOR",
+      "tool": "get_fundamentals",
+      "args": {
+        "ticker": "SYNCE"
+      },
+      "source": "synthetic_port_01",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "fundamentals",
+        "ticker": "SYNCE",
+        "sector": "Technology"
+      }
+    }
+  ],
+  "response_criteria": [
+    "Use the current 4% cap instead of the superseded 8% cap.",
+    "Calculate the existing exposure as 3% and the remaining capacity as USD 800, or 10 shares.",
+    "A justified no-trade response is acceptable; an allowed proposal is not an executed order."
+  ],
+  "acceptable_outcomes": [
+    "recommendation",
+    "no_trade",
+    "needs_information"
+  ]
+}

@@ -37,8 +37,9 @@ uv run --locked --offline pytest
 ```
 
 Dependency installation may download packages. The tests block network
-connections and call the existing rule checker and proposal tools with a local
-claim-extraction stub. They do not build a model graph or use API keys.
+connections. Direct rule and tool checks use a local claim-extraction stub;
+runner tests also build the real graph with a scripted local model. No provider
+model or broker API is called, and no API key is needed.
 
 The checks cover asset totals, independent reference arithmetic, current agent
 schemas, accepted and blocked proposals, isolated stores, missing fixtures,
@@ -48,7 +49,7 @@ performance.
 ## Agent interface
 
 The fixture follows [docs/eval-contract.md](../../../docs/eval-contract.md)
-and the agent code at `2e820b0a00417d7ea902a2850c1cb819b7f31d38`.
+and the current shared agent interface.
 `load_scenario` reads only inputs. `FrozenSource` supplies the `DataSource`
 methods, and `seed_store` creates a new directory with the current profile and
 historical journal. Reusing a run directory is an error.
@@ -61,16 +62,25 @@ Each replay returns a separate copy so callers cannot alter later responses.
 The source rejects a whole response, including its summary, if `available_at`
 or any evidence publication time exceeds the decision timestamp. This initial
 fixture format requires timezone-aware publication times; missing or invalid
-times return `fixture_invalid`. The agent itself still accepts a date cutoff.
+times return `fixture_invalid`. The graph takes a date cutoff for tools and a
+precise `decision_time` for historical memory retrieval. The source enforces the
+exact data-availability timestamp.
 
 ## Before a model run
 
-The current store stamps profile writes with the actual write time. The fixed
-confirmation time remains in inputs.json, and seeded journal dates are retained.
-The retrieval test supplies the scenario's 90-day lower bound, 2026-06-17,
-directly. Agent middleware still calculates that bound from the wall clock.
-Scenario-clock support and equal prose/structured profile content remain open.
+`ScenarioStore` presents the fixed profile confirmation time from inputs.json;
+the operational database write time remains separate. Seeded journal dates are
+preserved. The graph uses the scenario timestamp for its 90-day window and upper
+cutoff. Prose and structured memory contain the same profile facts, including
+source preferences and execution settings.
 
-Next, connect this case to a runner that captures the first proposal even when
-it is blocked. Keep the manual tickets here as reference checks; actual model
-outputs and judge scores belong in separate run records.
+The runner now captures the first proposal batch and later attempts separately.
+Its real-graph rehearsal tries 20 shares, retains the blocked result, then tries
+one share and captures the accepted draft. The independent scorer checks the
+original violation and final compliance separately. Scripted judge scores only
+test the workflow and do not measure recommendation quality.
+
+The manual tickets above remain evaluator-only arithmetic checks. Provider model
+runs, empirical memory comparisons, and human calibration remain pending; their
+outputs belong in separate run records. See [the runner guide](../../README.md)
+and [record contracts](../../contracts.md).

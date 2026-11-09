@@ -3,7 +3,8 @@
 These are two manually authored cases for developing the scorers. All users,
 tickers, financial records, and candidate tickets are synthetic. Neither case has
 been run through a model. They are separate from the ten formal scenarios in the proposal.
-Use the [agent mapping](../contracts.md) when turning them into fixtures.
+Fixed inputs and labels are available for both cases. The
+[agent mapping](../contracts.md) explains how the runner records their outputs.
 
 ## DEV-01: Updated position limit
 
@@ -62,6 +63,9 @@ Using the superseded 10% limit is a memory-use failure even if execution is bloc
 
 Purpose: distinguish false-claim detection from false alarms on correct facts.
 
+[Fixed inputs and reference labels](dev_02_false_growth/README.md) are available
+separately from the pilot evaluation set.
+
 | Input | Fixed value |
 | --- | --- |
 | Decision time | 2026-09-15T14:00:00Z |
@@ -101,8 +105,9 @@ because it is decisive. No full trading decision is the reference answer here.
 
 ## Next steps
 
-- [x] Add DEV-01 input serialization and separate reference labels.
-- [ ] Agree on run-result serialization before connecting the model runner.
-- [ ] Add human-authored good, partial, and poor responses for judge calibration.
+- [x] Add DEV-01 and DEV-02 inputs and separate reference labels.
+- [x] Implement run records, proposal capture, and the model runner.
+- [x] Add provisional calibration responses with separate expected score ranges.
 - [ ] Check the arithmetic and reference labels with another team member.
-- [ ] Implement scorer checks using these cases, then author separate formal cases.
+- [x] Implement scorer checks and ten separate synthetic pilot cases.
+- [ ] Review calibration anchors and collect frozen real-source evidence.

@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "scenario_id": "EARN-01",
+  "split": "evaluation",
+  "category": "earnings",
+  "provenance_status": "synthetic_pending_review",
+  "authorship": "Synthetic inputs and fixed reference expectations for local evaluation development.",
+  "calculation": {
+    "revenue_growth_pct": 20,
+    "net_income_change_pct": -40,
+    "prior_net_margin_pct": 20,
+    "current_net_margin_pct": 10
+  },
+  "assumptions": [
+    "All companies, records, and prices are synthetic.",
+    "Fixed prices, whole shares, no fees or slippage.",
+    "Order execution and market-hours validation are outside this case."
+  ],
+  "candidates": [
+    {
+      "id": "within-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCA",
+            "side": "buy",
+            "qty": 100
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 5000.0,
+        "resulting_weight_pct": 5.0,
+        "violation_codes": [],
+        "eligible": true
+      }
+    },
+    {
+      "id": "over-cap",
+      "tool_arguments": {
+        "legs": [
+          {
+            "ticker": "SYNCA",
+            "side": "buy",
+            "qty": 140
+          }
+        ],
+        "thesis": "Fixed candidate for the local rule check.",
+        "horizon": "weeks"
+      },
+      "expected": {
+        "resulting_position_value_usd": 7000.0,
+        "resulting_weight_pct": 7.0,
+        "violation_codes": [
+          "position_cap"
+        ],
+        "eligible": false
+      }
+    }
+  ],
+  "claim_probes": [
+    {
+      "id": "EARN-01-TRUE-REVENUE",
+      "claim": {
+        "kind": "numeric",
+        "text": "SYNCA FY2025 Revenues was USD 120000000.",
+        "ticker": "SYNCA",
+        "tag": "Revenues",
+        "value": 120000000,
+        "unit": "USD",
+        "period": "FY2025"
+      },
+      "expected_verdict": "supported",
+      "evidence_ids": [
+        "EARN01-REVENUES-FY2025"
+      ]
+    }
+  ],
+  "reference_evidence": [
+    {
+      "id": "EARN01-QUOTE",
+      "tool": "get_quote",
+      "args": {
+        "ticker": "SYNCA"
+      },
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "quote",
+        "ticker": "SYNCA",
+        "price": 50.0,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "EARN01-ACCOUNT",
+      "tool": "get_portfolio",
+      "args": {},
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "EARN01-POSITIONS",
+      "tool": "get_positions",
+      "args": {},
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-15T13:59:00Z",
+      "fetched_at": "2026-09-15T13:59:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": []
+      }
+    },
+    {
+      "id": "EARN01-SECTOR",
+      "tool": "get_fundamentals",
+      "args": {
+        "ticker": "SYNCA"
+      },
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "fundamentals",
+        "ticker": "SYNCA",
+        "sector": "Technology"
+      }
+    },
+    {
+      "id": "EARN01-FILING",
+      "tool": "get_filings",
+      "args": {
+        "ticker": "SYNCA",
+        "limit": 10
+      },
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "filing",
+        "ticker": "SYNCA",
+        "accession": "SYNTHETIC-EARN-01",
+        "filing_type": "10-K",
+        "date": "2026-09-14",
+        "description": "Synthetic annual results: compare revenue and net income across FY2024 and FY2025."
+      }
+    },
+    {
+      "id": "EARN01-REVENUES-FY2024",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCA",
+        "tag": "Revenues",
+        "period": "FY2024",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCA",
+        "tag": "Revenues",
+        "period": "FY2024",
+        "unit": "USD",
+        "value": 100000000
+      }
+    },
+    {
+      "id": "EARN01-REVENUES-FY2025",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCA",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCA",
+        "tag": "Revenues",
+        "period": "FY2025",
+        "unit": "USD",
+        "value": 120000000
+      }
+    },
+    {
+      "id": "EARN01-NETINCOMELOSS-FY2024",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCA",
+        "tag": "NetIncomeLoss",
+        "period": "FY2024",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCA",
+        "tag": "NetIncomeLoss",
+        "period": "FY2024",
+        "unit": "USD",
+        "value": 20000000
+      }
+    },
+    {
+      "id": "EARN01-NETINCOMELOSS-FY2025",
+      "tool": "get_xbrl_fact",
+      "args": {
+        "ticker": "SYNCA",
+        "tag": "NetIncomeLoss",
+        "period": "FY2025",
+        "unit": "USD"
+      },
+      "source": "synthetic_earn_01",
+      "url": null,
+      "published_at": "2026-09-14T12:00:00Z",
+      "fetched_at": "2026-09-14T12:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "xbrl",
+        "ticker": "SYNCA",
+        "tag": "NetIncomeLoss",
+        "period": "FY2025",
+        "unit": "USD",
+        "value": 12000000
+      }
+    }
+  ],
+  "response_criteria": [
+    "Explain that revenue rose 20% while net income fell 40%.",
+    "Recognize the net margin decline from 20% to 10% and discuss it as a material uncertainty.",
+    "Any proposed position must respect the 6% cap; a cautious no-trade decision is acceptable."
+  ],
+  "acceptable_outcomes": [
+    "recommendation",
+    "no_trade",
+    "needs_information"
+  ]
+}

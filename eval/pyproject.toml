@@ -5,6 +5,9 @@ description = "Evaluation harness for TradeCopilot."
 requires-python = ">=3.12,<3.14"
 dependencies = ["tradecopilot-agent", "pydantic>=2,<3"]
 
+[project.scripts]
+tradecopilot-eval = "tradecopilot_eval.cli:main"
+
 [dependency-groups]
 dev = [
   "mypy>=2.4.1,<3",

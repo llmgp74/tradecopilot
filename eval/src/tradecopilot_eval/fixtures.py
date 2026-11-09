@@ -49,7 +49,7 @@ class Scenario(BaseModel):
 
     schema_version: Literal[1]
     scenario_id: str
-    split: Literal["development"]
+    split: Literal["development", "evaluation"]
     synthetic: Literal[True]
     decision_time: AwareDatetime
     request: str
@@ -103,6 +103,23 @@ def load_scenario(path: Path) -> Scenario:
     return Scenario.model_validate_json(path.read_text(encoding="utf-8"))
 
 
+class ScenarioStore(Store):
+    """Keep the confirmed profile timestamp fixed while using the real local store."""
+
+    def __init__(self, path: Path, confirmed_at: str) -> None:
+        """Open an isolated database with the scenario's profile confirmation time."""
+        self._confirmed_at = confirmed_at
+        super().__init__(path)
+
+    def get_profile(self) -> dict[str, Any]:
+        """Return current profile facts with their fixed scenario timestamp.
+
+        SQLite retains its operational write timestamp. The evaluation view
+        uses the confirmation time from the frozen input, identically in all arms.
+        """
+        return {**super().get_profile(), "updated_at": self._confirmed_at}
+
+
 def seed_store(scenario: Scenario, run_dir: Path) -> Store:
     """Seed a fresh local agent store without reading credentials or settings.
 
@@ -112,15 +129,15 @@ def seed_store(scenario: Scenario, run_dir: Path) -> Store:
 
     Returns:
         A store with the current profile and historical decision snapshots.
-        Store stamps the profile with the write time; the original confirmation
-        timestamp remains in inputs.json. Journal timestamps are preserved.
+        The profile view uses its fixed confirmation timestamp. Operational
+        database timestamps remain separate; seeded journal dates are preserved.
 
     Raises:
         FileExistsError: run_dir already exists; existing runs are never reused.
         OSError: The run directory or database cannot be created.
     """
     run_dir.mkdir(parents=True, exist_ok=False)
-    store = Store(run_dir / "data.db")
+    store = ScenarioStore(run_dir / "data.db", scenario.profile.updated_at)
     store.patch_profile(scenario.profile.model_dump(exclude={"updated_at"}))
     for event in scenario.journal_before_decision:
         store.append_journal(event)

@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "scenario_id": "NEWS-01",
+  "split": "evaluation",
+  "synthetic": true,
+  "decision_time": "2026-09-15T14:00:00Z",
+  "request": "The new SYNCC supply contract sounds promising. Should I open a position?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 5.0,
+    "sector_exclusions": [
+      "Energy"
+    ],
+    "horizon": "weeks",
+    "watchlist": [
+      "SYNCC"
+    ],
+    "source_preferences": [
+      "filings"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2026-09-14T12:00:00Z"
+  },
+  "journal_before_decision": [
+    {
+      "decision_id": "news-01-earlier-decision",
+      "created_at": "2026-09-14T12:05:00Z",
+      "legs": [
+        {
+          "ticker": "SYNCC",
+          "side": "buy",
+          "qty": 1.0,
+          "notional": 100.0,
+          "fill_price": null,
+          "fill_at": null,
+          "status": "deferred"
+        }
+      ],
+      "thesis": "The user previously considered energy stocks, then confirmed on 2026-09-14 that Energy is excluded. The earlier interest is superseded; this addition was deferred.",
+      "horizon": "weeks",
+      "evidence_ids": [],
+      "status": "deferred",
+      "user_action": "defer",
+      "rejection_reason": null,
+      "outcome": null
+    }
+  ],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "SYNCC"
+      },
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"quote\",\"ticker\":\"SYNCC\",\"price\":100.0,\"currency\":\"USD\"}",
+        "evidence": [
+          {
+            "id": "NEWS01-QUOTE",
+            "tool": "get_quote",
+            "args": {
+              "ticker": "SYNCC"
+            },
+            "source": "synthetic_news_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "quote",
+              "ticker": "SYNCC",
+              "price": 100.0,
+              "currency": "USD"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "NEWS01-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "synthetic_news_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2026-09-15T13:59:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[]}",
+        "evidence": [
+          {
+            "id": "NEWS01-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "synthetic_news_01",
+            "url": null,
+            "published_at": "2026-09-15T13:59:00Z",
+            "fetched_at": "2026-09-15T13:59:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": []
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "fundamentals",
+      "arguments": {
+        "ticker": "SYNCC"
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"fundamentals\",\"ticker\":\"SYNCC\",\"sector\":\"Energy\"}",
+        "evidence": [
+          {
+            "id": "NEWS01-SECTOR",
+            "tool": "get_fundamentals",
+            "args": {
+              "ticker": "SYNCC"
+            },
+            "source": "synthetic_news_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "fundamentals",
+              "ticker": "SYNCC",
+              "sector": "Energy"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "news",
+      "arguments": {
+        "ticker": "SYNCC",
+        "limit": 10
+      },
+      "available_at": "2026-09-14T12:00:00Z",
+      "output": {
+        "summary": "Synthetic record: {\"kind\":\"news\",\"ticker\":\"SYNCC\",\"date\":\"2026-09-14\",\"headline\":\"SYNCC signs a three-year supply contract\",\"detail\":\"The contract announcement does not disclose revenue or profit contribution. SYNCC operates in the Energy sector.\"}",
+        "evidence": [
+          {
+            "id": "NEWS01-NEWS",
+            "tool": "get_news",
+            "args": {
+              "ticker": "SYNCC",
+              "limit": 10
+            },
+            "source": "synthetic_news_01",
+            "url": null,
+            "published_at": "2026-09-14T12:00:00Z",
+            "fetched_at": "2026-09-14T12:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "news",
+              "ticker": "SYNCC",
+              "date": "2026-09-14",
+              "headline": "SYNCC signs a three-year supply contract",
+              "detail": "The contract announcement does not disclose revenue or profit contribution. SYNCC operates in the Energy sector."
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}
