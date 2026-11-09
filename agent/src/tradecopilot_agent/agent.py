@@ -1,6 +1,7 @@
 """Build the agent graph shared by the live app and the evaluation harness."""
 
-from datetime import date
+from collections.abc import Callable
+from datetime import UTC, date, datetime, time
 from typing import Any
 
 from deepagents import create_deep_agent
@@ -9,6 +10,7 @@ from langchain.agents.middleware import (
     ModelCallLimitMiddleware,
     TodoListMiddleware,
 )
+from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
@@ -26,7 +28,7 @@ from tradecopilot_agent.middleware import (
     TurnMiddleware,
 )
 from tradecopilot_agent.prompt import SYSTEM_PROMPT
-from tradecopilot_agent.state import TradingState
+from tradecopilot_agent.state import Claim, TradingState
 from tradecopilot_agent.tools import build_tools
 
 MODEL_CALL_LIMIT = 20
@@ -38,7 +40,9 @@ def build_agent(
     as_of: date | None = None,
     *,
     checkpointer: BaseCheckpointSaver[Any] | None = None,
-    model: str | None = None,
+    model: str | BaseChatModel | None = None,
+    extract_claims: Callable[[str], list[Claim]] | None = None,
+    decision_time: datetime | None = None,
 ) -> CompiledStateGraph[Any, Any, Any, Any]:
     """Build one agent graph for a memory condition and a data source.
 
@@ -50,36 +54,55 @@ def build_agent(
         checkpointer: Persists threads and interrupts. The server passes the
             shared SQLite saver. The evaluation harness passes a saver bound
             to its scenario database, or ``None`` for single-shot runs.
-        model: ``provider:model`` override. Falls back to ``AGENT_MODEL``.
+        model: ``provider:model`` override or a constructed chat model. Falls
+            back to ``AGENT_MODEL`` when omitted. A local model avoids provider
+            construction, but must support tool binding.
+        extract_claims: Optional claim extractor. Local tests pass a deterministic
+            function to avoid constructing or calling an extraction model.
+        decision_time: Timezone-aware cutoff for journal retrieval. If omitted,
+            ``as_of`` uses that UTC day's end; live runs use the current time.
 
     Returns:
         The compiled agent graph.
 
     Raises:
         RuntimeError: If no model is provided or configured.
+        ValueError: If ``decision_time`` has no timezone.
     """
-    model_name = model or get_settings().agent_model
-    if model_name is None:
-        raise RuntimeError(
-            "AGENT_MODEL is not set. Provide a provider:model string, "
-            "for example anthropic:claude-sonnet-5."
-        )
+    if decision_time is not None and (
+        decision_time.tzinfo is None or decision_time.utcoffset() is None
+    ):
+        raise ValueError("decision_time must include a timezone.")
+    memory_time = decision_time
+    if memory_time is None and as_of is not None:
+        memory_time = datetime.combine(as_of, time.max, tzinfo=UTC)
 
-    chat_model = build_chat_model(model_name)
-    extract_claims = build_extractor(chat_model)
+    if isinstance(model, BaseChatModel):
+        chat_model = model
+    else:
+        model_name = model or get_settings().agent_model
+        if model_name is None:
+            raise RuntimeError(
+                "AGENT_MODEL is not set. Provide a provider:model string, "
+                "for example anthropic:claude-sonnet-5."
+            )
+        chat_model = build_chat_model(model_name)
+    extractor = (
+        extract_claims if extract_claims is not None else build_extractor(chat_model)
+    )
     middleware: list[AgentMiddleware[Any, Any, Any]] = [
         TurnMiddleware(),
-        TradingMemoryMiddleware(config),
+        TradingMemoryMiddleware(config, decision_time=memory_time),
         ToolAvailabilityMiddleware(source),
         ToolResultMiddleware(as_of),
-        AnnotationMiddleware(extract_claims),
+        AnnotationMiddleware(extractor),
         TodoStreamMiddleware(),
         TodoListMiddleware(),
         ModelCallLimitMiddleware(run_limit=MODEL_CALL_LIMIT, exit_behavior="end"),
     ]
     return create_deep_agent(
         model=chat_model,
-        tools=build_tools(source, config.store, as_of, extract_claims),
+        tools=build_tools(source, config.store, as_of, extractor),
         system_prompt=SYSTEM_PROMPT,
         middleware=middleware,
         state_schema=TradingState,

@@ -16,9 +16,26 @@ class MemoryStore(Protocol):
         ...
 
     def recent_journal(
-        self, tickers: list[str], since: str, limit: int
+        self,
+        tickers: list[str],
+        since: str,
+        limit: int,
+        *,
+        until: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return recent decisions overlapping the tickers."""
+        """Return recent decisions overlapping the tickers.
+
+        Args:
+            tickers: Tickers to match.
+            since: Inclusive lower date or timestamp bound.
+            limit: Maximum number of decisions.
+            until: Inclusive timezone-aware cutoff for historical runs. Select
+                each decision's latest eligible event before applying the limit.
+                Live callers omit this keyword.
+
+        Returns:
+            Decision snapshots, newest first.
+        """
         ...
 
     def append_journal(self, event: dict[str, Any]) -> None:
