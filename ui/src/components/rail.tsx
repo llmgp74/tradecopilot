@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { groupThreads } from "@/lib/conversation";
+import { isMacDesktop } from "@/lib/platform";
 import type { ThreadSummary } from "@/lib/api";
 
 /** Destinations that open as dialogs. */
@@ -85,6 +86,9 @@ export function Rail({
         aria-label="Navigation"
         className="flex h-full w-13 shrink-0 flex-col items-center gap-1 border-r bg-sidebar py-3"
       >
+        {isMacDesktop() ? (
+          <div data-tauri-drag-region className="h-8 w-full shrink-0" />
+        ) : null}
         <Button
           variant="ghost"
           size="icon"
@@ -132,6 +136,9 @@ export function Rail({
         aria-label="Navigation"
         className="fixed inset-y-0 left-0 z-40 flex h-full w-[clamp(232px,20vw,280px)] shrink-0 flex-col border-r bg-sidebar p-2 lg:static lg:z-auto"
       >
+        {isMacDesktop() ? (
+          <div data-tauri-drag-region className="h-8 w-full shrink-0" />
+        ) : null}
         <div className="flex items-center gap-2 px-1 pb-3">
           <img src="/logo.svg" alt="TradeCopilot" className="size-7" />
           <span className="text-sm font-semibold">TradeCopilot</span>

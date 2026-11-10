@@ -148,6 +148,7 @@ export default function App() {
         <TopBar
           title={activeThread?.title ?? "New conversation"}
           onToggleRail={() => setRailOpen((value) => !value)}
+          railOpen={railOpen}
         />
         <main className="min-h-0 flex-1">
           <Chat
