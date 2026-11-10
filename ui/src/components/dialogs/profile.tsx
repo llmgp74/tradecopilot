@@ -19,6 +19,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { getProfile, patchProfile, type Profile, type ProfilePatch } from "@/lib/api";
@@ -110,25 +117,30 @@ function ProfileForm({ profile }: { profile: Profile }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <label className="space-y-1 text-xs">
+        <div className="space-y-1 text-xs">
           <span className="font-medium">Risk band</span>
-          <select
-            className="h-8 w-full rounded-md border bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          <Select
+            items={RISK_BANDS.map((value) => ({ value, label: value }))}
             value={draft.risk_band}
-            onChange={(event) =>
+            onValueChange={(value) =>
               setDraft({
                 ...draft,
-                risk_band: event.target.value as Profile["risk_band"],
+                risk_band: value as Profile["risk_band"],
               })
             }
           >
-            {RISK_BANDS.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger aria-label="Risk band" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RISK_BANDS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <label className="space-y-1 text-xs">
           <span className="font-medium">Position cap (%)</span>
           <Input
@@ -144,22 +156,27 @@ function ProfileForm({ profile }: { profile: Profile }) {
             }
           />
         </label>
-        <label className="space-y-1 text-xs">
+        <div className="space-y-1 text-xs">
           <span className="font-medium">Horizon</span>
-          <select
-            className="h-8 w-full rounded-md border bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          <Select
+            items={HORIZONS.map((value) => ({ value, label: value }))}
             value={draft.horizon}
-            onChange={(event) =>
-              setDraft({ ...draft, horizon: event.target.value as Profile["horizon"] })
+            onValueChange={(value) =>
+              setDraft({ ...draft, horizon: value as Profile["horizon"] })
             }
           >
-            {HORIZONS.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger aria-label="Horizon" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {HORIZONS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <label className="space-y-1 text-xs">
           <span className="font-medium">Max notional per ticket</span>
           <Input

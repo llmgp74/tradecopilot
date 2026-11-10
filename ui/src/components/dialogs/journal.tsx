@@ -10,6 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listJournal, type JournalEntry, type JournalStatus } from "@/lib/api";
 import { journalQuery, outcomeLabel, type JournalFilters } from "@/lib/journal";
@@ -25,6 +32,11 @@ const STATUSES: JournalStatus[] = [
   "filled",
   "failed",
   "skipped_unfunded",
+];
+
+const STATUS_ITEMS = [
+  { value: "all", label: "All statuses" },
+  ...STATUSES.map((status) => ({ value: status, label: status })),
 ];
 
 const PAGE_SIZE = 20;
@@ -101,24 +113,27 @@ export function JournalDialog({ open, onOpenChange }: DialogProps) {
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <select
-            aria-label="Status"
-            className="h-8 rounded-md border bg-transparent px-2 text-xs"
-            value={filters.status ?? ""}
-            onChange={(event) =>
+          <Select
+            items={STATUS_ITEMS}
+            value={filters.status ?? "all"}
+            onValueChange={(value) =>
               setFilters({
                 ...filters,
-                status: (event.target.value || undefined) as JournalStatus | undefined,
+                status: value === "all" ? undefined : (value as JournalStatus),
               })
             }
           >
-            <option value="">All statuses</option>
-            {STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="Status" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             aria-label="Ticker"
             placeholder="Ticker"
