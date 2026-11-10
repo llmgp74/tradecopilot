@@ -280,11 +280,6 @@ async def run_case(
             case.scenario.as_of,
             model=model,
             decision_time=case.scenario.decision_time,
-            **(
-                {"extract_claims": lambda _text: []}
-                if config.mode == "scripted"
-                else {}
-            ),
         )
         async with asyncio.timeout(config.timeout_seconds):
             async for update in graph.astream(

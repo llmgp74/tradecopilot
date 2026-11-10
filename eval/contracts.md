@@ -14,8 +14,9 @@ graph. The graph receives the scenario date and precise `decision_time`, then
 streams state with a unique thread ID. No web server is required.
 
 The default `RunConfig` selects the local `ScriptedAgent`. It gathers fixtures,
-tries 20 shares, then one share, and emits control text. Its extractor returns
-no claims. It reads scenario inputs only and behaves the same in all conditions.
+tries 20 shares, then one share, and emits control text. It does not call the
+claim checker. It reads scenario inputs only and behaves the same in all
+conditions.
 The scripted judge returns fixed control scores and unknown acceptance results.
 These outputs are kept separate from empirical model results in reports.
 
@@ -141,10 +142,9 @@ required data is missing. The final draft is scored separately. No proposal is
 not evidence of zero violations. A justified no-trade response, missing evidence,
 and an unstructured recommendation require response-level assessment.
 
-Verification keeps `draft` and `answer` scopes distinct. Run-level claim
-observations use only `answer` entries whose claim text matches a reference probe
-after case and whitespace normalization. Omitted checks, paraphrases, unavailable
-extraction, and conflicting verdicts remain unobserved. This narrow matching rule
+Run-level claim observations use only `answer` entries whose claim text matches a
+reference probe after case and whitespace normalization. Omitted checks,
+paraphrases, and conflicting verdicts remain unobserved. This narrow matching rule
 does not measure semantic correction of every false claim in the final text.
 
 Direct `verifier_probes` test the existing matcher against labeled true and false

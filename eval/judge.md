@@ -23,19 +23,19 @@ Each scoring request contains:
 - Acceptance criteria, including when clarification or abstention is appropriate.
 - The candidate `final_response` and this rubric's version.
 
-Build `final_response` from the last assistant message and the user-visible state
-in the [agent contract](../docs/eval-contract.md): the recommendation, portfolio
-impact, verification annotations, and todos. Use the same rendering across
-conditions and record its version.
+Build `final_response` from the last assistant message and the visible state in
+the [agent contract](../docs/eval-contract.md): the recommendation, portfolio
+impact, and todos. Use the same rendering across conditions and record its
+version.
 
-Treat visible verification annotations as claims made by the agent. Check them
-against the reference evidence; a `supported` label does not establish correctness.
-Keep these annotations within the candidate response, separate from reference
-labels and acceptance criteria.
+The response may also carry verdicts from the model's own claim checks. Treat them
+as claims made by the agent. Check them against the reference evidence; a
+`supported` label does not establish correctness. Keep these verdicts within the
+candidate response, separate from reference labels and acceptance criteria.
 
-Exclude the memory condition, agent model label, raw pre-check proposal, private
-traces, and internal verdicts that were not displayed to the user. Keep experiment
-labels in the runner's records for analysis, including filenames that reveal them.
+Exclude the memory condition, agent model label, raw pre-check proposal, and
+private traces. Keep experiment labels in the runner's records for analysis,
+including filenames that reveal them.
 
 ## Prompt constraints
 

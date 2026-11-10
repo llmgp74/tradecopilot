@@ -63,7 +63,6 @@ def test_real_graph_retains_initial_block_and_later_allowed_ticket(
     """
     monkeypatch.setattr("tradecopilot_eval.runner.build_chat_model", _forbidden)
     monkeypatch.setattr("tradecopilot_agent.agent.build_chat_model", _forbidden)
-    monkeypatch.setattr("tradecopilot_agent.agent.build_extractor", _forbidden)
     monkeypatch.setattr(FrozenSource, "place_leg", _forbidden)
     case = load_case(_CASE)
     output = tmp_path / "run"
@@ -149,7 +148,6 @@ def test_each_condition_gets_fresh_store_and_same_profile_facts(tmp_path: Path) 
         assert isinstance(kwargs["model"], ScriptedAgent)
         assert kwargs["decision_time"] == case.scenario.decision_time
         assert as_of == case.scenario.as_of
-        assert kwargs["extract_claims"]("A local answer") == []
         assert "order_execution" not in source.capabilities()
         profile = config.store.get_profile()
         profiles.append(profile)

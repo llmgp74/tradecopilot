@@ -118,11 +118,9 @@ def test_candidate_proposal_and_constraint_result(
     assert [item["code"] for item in violations] == expected["violation_codes"]
 
     before, before_count = store.list_journal(page_no=1, page_size=100)
-    tools = TradingTools(source, store, scenario.as_of, extract_claims=lambda _: [])
+    tools = TradingTools(source, store, scenario.as_of)
     output = asyncio.run(
-        tools.propose(
-            arguments["legs"], arguments["thesis"], arguments["horizon"], evidence={}
-        )
+        tools.propose(arguments["legs"], arguments["thesis"], arguments["horizon"])
     )
     after, after_count = store.list_journal(page_no=1, page_size=100)
     if expected["eligible"]:
@@ -158,13 +156,12 @@ def test_execution_guard_does_not_call_source(
 
     source = FrozenSource(scenario.tool_fixtures, scenario.decision_time)
     store = seed_store(scenario, tmp_path / "run")
-    tools = TradingTools(source, store, scenario.as_of, extract_claims=lambda _: [])
+    tools = TradingTools(source, store, scenario.as_of)
     proposal = asyncio.run(
         tools.propose(
             [{"ticker": "SYNAA", "side": "buy", "qty": 10}],
             "Synthetic candidate for local constraint checks.",
             "weeks",
-            evidence={},
         )
     )
     assert proposal.proposal is not None
