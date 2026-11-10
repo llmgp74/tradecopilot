@@ -13,8 +13,13 @@ jobs:
         include:
         - os: macos-15
           target: aarch64-apple-darwin
+          artifacts: |
+            ui/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
         - os: windows-latest
           target: x86_64-pc-windows-msvc
+          artifacts: |
+            ui/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            ui/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -35,4 +40,4 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: tradecopilot-${{ matrix.target }}
-        path: ui/src-tauri/target/${{ matrix.target }}/release/bundle/**
+        path: ${{ matrix.artifacts }}
