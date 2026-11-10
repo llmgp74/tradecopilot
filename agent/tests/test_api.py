@@ -295,6 +295,17 @@ def test_settings_change_discards_the_graph(tmp_path: Path) -> None:
     assert app.state.graph is None
 
 
+def test_exa_key_change_discards_the_graph(tmp_path: Path) -> None:
+    """Changing the Exa key invalidates the search provider in the graph."""
+    graph = StubGraph()
+    app = create_app(Settings(db_path=tmp_path / "data.db"), lambda _app: graph)
+    with TestClient(app) as client:
+        app.state.graph = graph
+        client.patch("/api/settings", json={"exa_api_key": "exa-secret"})
+
+    assert app.state.graph is None
+
+
 def test_portfolio_returns_the_injected_snapshot(tmp_path: Path) -> None:
     """The endpoint maps a portfolio snapshot to JSON."""
 

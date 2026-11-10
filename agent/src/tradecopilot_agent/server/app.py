@@ -308,7 +308,9 @@ def create_app(
             if value is not None
         }
         app.state.store.patch_settings(changes)
-        if {"agent_model", "model_api_key"} & changes.keys():
+        # The graph captures the model, its key and the search provider's
+        # Exa key when it is built. Other provider keys are read per request.
+        if {"agent_model", "model_api_key", "exa_api_key"} & changes.keys():
             app.state.graph = None
         response.headers["Cache-Control"] = "no-store"
         return _effective_settings(app)
