@@ -3,9 +3,10 @@
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
+use std::time::Duration;
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -119,7 +120,14 @@ pub fn download_and_install_uv(runtime: &Path) -> Result<(), String> {
         .ok_or_else(|| "Invalid uv path.".to_string())?;
     fs::create_dir_all(bin_dir).map_err(|error| format!("Cannot create {bin_dir:?}: {error}"))?;
 
-    let response = reqwest::blocking::get(archive_url(&release))
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(600))
+        .build()
+        .map_err(|error| format!("Could not build the HTTP client: {error}"))?;
+    let response = client
+        .get(archive_url(&release))
+        .send()
         .map_err(|error| format!("Could not download uv: {error}"))?;
     if !response.status().is_success() {
         return Err(format!("Downloading uv failed with {}.", response.status()));
@@ -193,6 +201,7 @@ pub fn install_steps(
     runtime: &Path,
     resources: &Path,
     emit: &mut dyn FnMut(&str, &str),
+    uv_child: &Arc<Mutex<Option<Child>>>,
 ) -> Result<(), String> {
     if !uv_binary(runtime).is_file() {
         emit("uv", "Downloading uv");
@@ -200,7 +209,13 @@ pub fn install_steps(
         emit("uv", "uv is ready");
     }
 
-    run_uv(runtime, "python", &["python", "install", "3.13"], emit)?;
+    run_uv(
+        runtime,
+        "python",
+        &["python", "install", "3.13"],
+        emit,
+        uv_child,
+    )?;
 
     let venv = runtime.join("venv");
     let venv_text = venv.to_string_lossy().to_string();
@@ -210,6 +225,7 @@ pub fn install_steps(
         "venv",
         &["venv", &venv_text, "--python", "3.13", "--allow-existing"],
         emit,
+        uv_child,
     )?;
 
     let python = venv_python(runtime);
@@ -228,6 +244,7 @@ pub fn install_steps(
             &requirements_text,
         ],
         emit,
+        uv_child,
     )?;
 
     write_marker(runtime, env!("CARGO_PKG_VERSION"))
@@ -239,6 +256,7 @@ fn run_uv(
     step: &str,
     args: &[&str],
     emit: &mut dyn FnMut(&str, &str),
+    uv_child: &Arc<Mutex<Option<Child>>>,
 ) -> Result<(), String> {
     let mut child = Command::new(uv_binary(runtime))
         .args(args)
@@ -252,13 +270,26 @@ fn run_uv(
         .spawn()
         .map_err(|error| format!("Could not start uv: {error}"))?;
 
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    // The job or a crash-closed handle reaps this child with the app.
+    #[cfg(windows)]
+    let _job = crate::windows_job::WindowsJob::new().ok().inspect(|job| {
+        let _ = job.assign(&child);
+    });
+
+    if let Ok(mut slot) = uv_child.lock() {
+        *slot = Some(child);
+    }
+
     let (sender, receiver) = mpsc::channel::<String>();
     let mut readers = Vec::new();
-    if let Some(stdout) = child.stdout.take() {
+    if let Some(stdout) = stdout {
         let sender = sender.clone();
         readers.push(thread::spawn(move || forward(stdout, sender)));
     }
-    if let Some(stderr) = child.stderr.take() {
+    if let Some(stderr) = stderr {
         let sender = sender.clone();
         readers.push(thread::spawn(move || forward(stderr, sender)));
     }
@@ -273,6 +304,11 @@ fn run_uv(
         let _ = reader.join();
     }
 
+    let mut child = uv_child
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take())
+        .ok_or_else(|| format!("{step} was stopped."))?;
     let status = child
         .wait()
         .map_err(|error| format!("uv did not finish: {error}"))?;

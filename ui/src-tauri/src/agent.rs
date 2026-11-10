@@ -23,6 +23,8 @@ pub struct AgentState {
     pub base: Arc<Mutex<Option<String>>>,
     /// Setup worker, so concurrent bootstrap calls do not install twice.
     pub setup: Arc<Mutex<Option<JoinHandle<()>>>>,
+    /// Currently running setup command, killed on exit.
+    pub uv_child: Arc<Mutex<Option<Child>>>,
     /// Set once the startup timeout has fired.
     pub timed_out: Arc<AtomicBool>,
     /// Set when the shell stops the agent on purpose.
@@ -124,20 +126,10 @@ pub fn spawn(
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     #[cfg(windows)]
-    {
-        let mut job = state
-            .job
-            .lock()
-            .map_err(|_| "Agent state is poisoned.".to_string())?;
-        if job.is_none() {
-            let created = crate::windows_job::WindowsJob::new()
-                .map_err(|error| format!("Cannot create the job object: {error}"))?;
-            *job = Some(created);
-        }
-        if let Some(job) = job.as_ref() {
-            job.assign(&child)
-                .map_err(|error| format!("Cannot assign the agent to the job object: {error}"))?;
-        }
+    if let Err(message) = assign_to_job(state, &child) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(message);
     }
     *guard = Some(child);
     drop(guard);
@@ -268,19 +260,44 @@ pub fn spawn(
     Ok(())
 }
 
-/// Stops the agent on purpose.
+/// Stops the agent and any running setup command.
 pub fn stop(state: &AgentState) {
     state.stopping.store(true, Ordering::SeqCst);
-    if let Ok(mut guard) = state.child.lock()
+    kill_tracked(&state.child);
+    kill_tracked(&state.uv_child);
+    if let Ok(mut slot) = state.base.lock() {
+        slot.take();
+    }
+    state.timed_out.store(true, Ordering::SeqCst);
+}
+
+/// Kills and waits for a tracked child, clearing its slot.
+fn kill_tracked(slot: &Arc<Mutex<Option<Child>>>) {
+    if let Ok(mut guard) = slot.lock()
         && let Some(mut child) = guard.take()
     {
         let _ = child.kill();
         let _ = child.wait();
     }
-    if let Ok(mut slot) = state.base.lock() {
-        slot.take();
+}
+
+/// Creates the job object on first use and assigns the child to it.
+#[cfg(windows)]
+fn assign_to_job(state: &AgentState, child: &Child) -> Result<(), String> {
+    let mut job = state
+        .job
+        .lock()
+        .map_err(|_| "Agent state is poisoned.".to_string())?;
+    if job.is_none() {
+        let created = crate::windows_job::WindowsJob::new()
+            .map_err(|error| format!("Cannot create the job object: {error}"))?;
+        *job = Some(created);
     }
-    state.timed_out.store(true, Ordering::SeqCst);
+    if let Some(job) = job.as_ref() {
+        job.assign(child)
+            .map_err(|error| format!("Cannot assign the agent to the job object: {error}"))?;
+    }
+    Ok(())
 }
 
 /// Appends one line to the agent log, creating its directory when needed.
@@ -314,6 +331,16 @@ mod tests {
             find_listening_port("{\"event\": \"listening\", \"port\":"),
             None
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn kill_tracked_terminates_and_clears_the_child() {
+        let slot: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
+        let child = Command::new("sleep").arg("30").spawn().unwrap();
+        *slot.lock().unwrap() = Some(child);
+        kill_tracked(&slot);
+        assert!(slot.lock().unwrap().is_none());
     }
 
     #[test]

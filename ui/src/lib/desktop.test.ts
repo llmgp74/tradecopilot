@@ -79,6 +79,50 @@ it("retries from failed back to boot", () => {
   expect(bootReducer(failed, { type: "retry" })).toEqual({ phase: "boot" });
 });
 
+it("keeps the conversation mounted while retrying a degraded agent", () => {
+  const degraded: BootState = {
+    phase: "degraded",
+    base: "http://127.0.0.1:1",
+    message: "agent exited",
+  };
+  expect(bootReducer(degraded, { type: "retry" })).toEqual({
+    phase: "restarting",
+    base: "http://127.0.0.1:1",
+  });
+});
+
+it("ignores a late health response after a failure", () => {
+  const failed: BootState = {
+    phase: "failed",
+    message: "gone",
+    logPath: "/tmp/agent.log",
+  };
+  expect(bootReducer(failed, { type: "health_ok", base: "http://x" })).toEqual(failed);
+});
+
+it("keeps restarting when the new agent reports ready", () => {
+  const restarting: BootState = { phase: "restarting", base: "http://old" };
+  expect(bootReducer(restarting, { type: "agent_ready", base: "http://new" })).toEqual({
+    phase: "restarting",
+    base: "http://new",
+  });
+});
+
+it("degrades if the restarted agent dies", () => {
+  const restarting: BootState = { phase: "restarting", base: "http://new" };
+  expect(
+    bootReducer(restarting, {
+      type: "agent_failed",
+      message: "agent exited",
+      logPath: "/tmp/agent.log",
+    }),
+  ).toEqual({
+    phase: "degraded",
+    base: "http://new",
+    message: "agent exited",
+  });
+});
+
 it("health polling tolerates one early failure", async () => {
   const fetchMock = vi
     .fn()

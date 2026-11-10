@@ -13,7 +13,11 @@ use windows_sys::Win32::System::JobObjects::{
 };
 
 /// A job with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
-pub struct WindowsJob(HANDLE);
+///
+/// The handle is stored as `isize` so the type is `Send` and `Sync`; the raw
+/// `HANDLE` pointer type is neither, which would make `AgentState` unusable
+/// from Tauri managed state and worker threads.
+pub struct WindowsJob(isize);
 
 impl WindowsJob {
     /// Creates a job whose members die when the last handle closes.
@@ -36,14 +40,14 @@ impl WindowsJob {
                 CloseHandle(handle);
                 return Err(error);
             }
-            Ok(Self(handle))
+            Ok(Self(handle as isize))
         }
     }
 
     /// Adds a child process to the job.
     pub fn assign(&self, child: &Child) -> io::Result<()> {
         unsafe {
-            if AssignProcessToJobObject(self.0, child.as_raw_handle() as HANDLE) == 0 {
+            if AssignProcessToJobObject(self.0 as HANDLE, child.as_raw_handle() as HANDLE) == 0 {
                 return Err(io::Error::last_os_error());
             }
             Ok(())
@@ -54,7 +58,7 @@ impl WindowsJob {
 impl Drop for WindowsJob {
     fn drop(&mut self) {
         unsafe {
-            CloseHandle(self.0);
+            CloseHandle(self.0 as HANDLE);
         }
     }
 }

@@ -82,6 +82,7 @@ fn bootstrap_inner(app: &AppHandle, state: &AgentState) -> Result<(), String> {
                             },
                         );
                     },
+                    &worker_state.uv_child,
                 );
                 match result {
                     Ok(()) => {

@@ -102,7 +102,11 @@ export function DesktopBoot({ children }: { children: ReactNode }) {
     }
   };
 
-  if (state.phase === "ready" || state.phase === "degraded") {
+  if (
+    state.phase === "ready" ||
+    state.phase === "degraded" ||
+    state.phase === "restarting"
+  ) {
     return (
       <>
         {state.phase === "degraded" ? (
@@ -114,6 +118,14 @@ export function DesktopBoot({ children }: { children: ReactNode }) {
             <Button variant="outline" size="sm" onClick={retry}>
               Retry
             </Button>
+          </div>
+        ) : null}
+        {state.phase === "restarting" ? (
+          <div
+            role="status"
+            className="border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
+          >
+            Restarting the agent...
           </div>
         ) : null}
         {children}

@@ -5,6 +5,7 @@ export type BootState =
   | { phase: "starting"; base: string }
   | { phase: "ready"; base: string }
   | { phase: "degraded"; base: string; message: string }
+  | { phase: "restarting"; base: string }
   | { phase: "failed"; message: string; logPath: string };
 
 /** Events emitted by the Rust shell or by health polling. */
@@ -34,20 +35,33 @@ export function bootReducer(state: BootState, event: BootEvent): BootState {
     case "setup_failed":
       return { phase: "failed", message: event.message, logPath: event.logPath };
     case "agent_ready":
-      return { phase: "starting", base: event.base };
+      return state.phase === "restarting"
+        ? { phase: "restarting", base: event.base }
+        : { phase: "starting", base: event.base };
     case "health_ok":
-      return { phase: "ready", base: event.base };
+      return state.phase === "boot" ||
+        state.phase === "starting" ||
+        state.phase === "restarting"
+        ? { phase: "ready", base: event.base }
+        : state;
     case "health_failed":
-      return state.phase === "starting"
+      return state.phase === "starting" || state.phase === "restarting"
         ? { phase: "failed", message: event.message, logPath: "" }
         : state;
     case "agent_failed": {
-      if (state.phase === "ready" || state.phase === "degraded") {
+      if (
+        state.phase === "ready" ||
+        state.phase === "degraded" ||
+        state.phase === "restarting"
+      ) {
         return { phase: "degraded", base: state.base, message: event.message };
       }
       return { phase: "failed", message: event.message, logPath: event.logPath };
     }
     case "retry":
+      if (state.phase === "ready" || state.phase === "degraded") {
+        return { phase: "restarting", base: state.base };
+      }
       return initialBootState;
   }
 }
