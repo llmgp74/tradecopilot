@@ -17,10 +17,9 @@ flowchart TB
   subgraph PROC["One local process on 127.0.0.1"]
     API["FastAPI<br/>UI message stream adapter + REST"]
     subgraph AGENT["DeepAgents graph - one agent"]
-      LOOP["Plan -> gather evidence -> draft"]
-      VER["Verification middleware<br/>claims vs XBRL, EDGAR, news"]
+      LOOP["Plan -> gather evidence -><br/>check claims -> draft"]
       CON["Constraint middleware<br/>user profile, deterministic<br/>approval in execute_ticket"]
-      LOOP --> VER --> CON
+      LOOP --> CON
     end
     TOOLS["Tools<br/>quote, bars, portfolio, filings,<br/>XBRL facts, news, macro, orders"]
     DB[("SQLite<br/>profile, journal, runs,<br/>checkpoints")]
@@ -70,28 +69,31 @@ Middleware (passed via `middleware=`):
 
 - Memory middleware: injects the active memory condition into the system prompt per
   request.
-- Verification check: extract the main claims from the draft recommendation as
-  `{text, type, value, period, evidence_hint}`, where type is numeric, filing, news,
-  or opinion. Numeric claims are matched deterministically against EDGAR XBRL facts on
-  tag, period, and unit with a tolerance. Filing claims are checked against EDGAR,
-  news claims against the evidence set. Verdicts are supported, contradicted, or
-  unverifiable. Contradicted claims are removed from the user-facing recommendation
-  and shown in the verdict panel. There is no automatic re-draft; verification runs
-  once per response.
 - Constraint check: deterministic validation of the order ticket against the user's
   profile. Hard blocks: position cap, sector exclusions, execution permissions, buying
   power, market hours. The check always uses the ground-truth structured profile, in
   every memory condition. The condition changes what the agent sees, not the safety
   boundary.
 
+Claim checking is a tool, not middleware. The model calls `verify_claims` with
+the main claims it intends to state, as `{text, type, value, period, evidence_hint}`,
+where type is numeric, filing, news, or opinion. Numeric claims are matched
+deterministically against EDGAR XBRL facts on tag, period, and unit with a
+tolerance. Filing claims are checked against EDGAR, news claims against the evidence
+set. Verdicts are supported, contradicted, unchecked, or unverifiable. The model
+drafts the answer from those verdicts and must not state a contradicted claim as
+fact. Nothing checks the prose after the answer is written, and the verdicts stay in
+the tool result and the run state; the chat interface does not render them.
+
 Plan/todo and summarization are built-in middleware.
 
-Loop: plan -> gather evidence -> draft -> verify -> constrain -> interrupt or execute.
+Loop: plan -> gather evidence -> check claims -> draft -> propose -> constrain ->
+interrupt or execute.
 
 Approval comes from `interrupt()` inside `execute_ticket` in manual mode. The
 interrupt becomes an AI SDK `tool-approval-request` part; the ticket, rationale, and
-portfolio impact travel in the part's approval descriptor. Verification verdicts are
-already streamed as a data part. The client answers with `addToolApprovalResponse`, and the next
+portfolio impact travel in the part's approval descriptor. The client answers with
+`addToolApprovalResponse`, and the next
 chat request resumes the graph. Resume accepts approve or reject with a reason.
 Autonomous mode skips the interrupt only when preset permissions allow the order.
 
@@ -123,6 +125,7 @@ different model family from the agent.
 | `get_news` | Finnhub, FMP fallback | - |
 | `get_social_sentiment` | social sentiment | fixture-backed only |
 | `get_macro` | FRED | - |
+| `web_search` | DeepSeek Search, Exa fallback | DeepSeek models use the model key from settings; other models use the Exa key from settings; hidden when unconfigured |
 | `propose_ticket` | - | one or more legs; builds a ticket, no side effect |
 | `execute_ticket` | Alpaca | approval or autonomous permission; every rejection logged |
 | `update_preference` | memory | writes the profile; hard-constraint changes need confirmation |
@@ -217,7 +220,7 @@ def build_agent(config: MemoryConfig, source: DataSource, as_of: date | None) ->
         model=AGENT_MODEL,
         tools=TOOLS,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[MemoryMiddleware(config), VerificationCheck(), ConstraintCheck()],
+        middleware=[MemoryMiddleware(config), ConstraintCheck()],
         checkpointer=...,
     )
 ```
@@ -265,7 +268,6 @@ custom, tool, reasoning, step, and interrupt translation, plus `UIMessage` to
 LangChain message conversion. It is tested against the pinned AI SDK major version.
 Domain events are sent as data parts:
 
-- `data-verification`
 - `data-todos`
 
 Approval uses the AI SDK tool approval parts, not a data part.
@@ -274,7 +276,7 @@ Approval uses the AI SDK tool approval parts, not a data part.
 
 The conversation is the main surface. A left panel has tabs for Portfolio, Profile,
 and Journal. The approval card renders from the tool approval part; its descriptor
-carries the ticket, rationale, evidence, verdicts, and portfolio impact.
+carries the ticket, rationale, evidence, and portfolio impact.
 
 ## 6. Evaluation
 

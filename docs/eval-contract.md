@@ -17,7 +17,6 @@ graph = build_agent(
     source,
     scenario.as_of,
     model=chat_model,
-    extract_claims=local_extractor,
     decision_time=scenario.decision_time,
 )
 ```
@@ -34,9 +33,6 @@ graph = build_agent(
 - `model`: a `provider:model` string or a constructed `BaseChatModel` that supports
   tool binding. Omission falls back to `AGENT_MODEL`. Injecting a local model
   avoids provider construction.
-- `extract_claims`: optional `Callable[[str], list[Claim]]`. Local rehearsals pass
-  a deterministic function. Omission builds the normal extractor from the chat
-  model and can result in additional model calls.
 - `decision_time`: optional timezone-aware timestamp for journal retrieval. The
   historical window ends at this instant and starts 90 days earlier. Without
   it, `as_of` uses the end of that UTC date; with neither argument, live retrieval
@@ -85,10 +81,10 @@ The user-visible projection is the last assistant answer and those four visible
 state fields. They reset at a new user turn, not an approval resume. A failure
 before initialization can leave fields absent; the runner records missing output.
 
-Each verification verdict carries `scope` (`draft` or `answer`) and a verdict
-such as `supported`, `contradicted`, `unchecked`, or `unverifiable`. An extraction
-failure can carry `status="unavailable"` instead. An annotation does not mean the
-answer text was corrected.
+Each verification verdict carries `scope` (`answer`) and a verdict such as
+`supported`, `contradicted`, `unchecked`, or `unverifiable`. Verdicts come only
+from the model's `verify_claims` calls; a verdict does not mean the answer text
+was corrected.
 
 Trading tools return the model-facing summary in `ToolMessage.content` and the
 serialized `ToolOutput` in `ToolMessage.artifact`. Pair proposal calls and results

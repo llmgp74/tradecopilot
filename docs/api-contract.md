@@ -98,8 +98,7 @@ Attached to a `propose_order` tool part while `state` is `approval-requested`.
 
 `ticket.side` is `buy` or `sell`. `order_type` is `market` or `limit`; `limit_price` is
 null for market orders. `rationale` and `portfolio_impact` may be null when they were
-not produced for the turn. Verification verdicts are not repeated here; they arrive in
-`data-verification`.
+not produced for the turn.
 
 ### 2.3 Profile
 
@@ -146,6 +145,7 @@ server is loopback-only and has no authentication.
   "finnhub_api_key": "",
   "fred_api_key": "",
   "edgar_user_agent": "TradeCopilot you@example.com",
+  "exa_api_key": "",
   "updated_at": "2026-11-05T03:00:12Z"
 }
 ```
@@ -161,6 +161,7 @@ server is loopback-only and has no authentication.
 | `finnhub_api_key` | string | Company news; its tools are hidden when empty |
 | `fred_api_key` | string | Macro series; its tools are hidden when empty |
 | `edgar_user_agent` | string | Name and contact email required by SEC EDGAR |
+| `exa_api_key` | string | Web search for non-DeepSeek models; its tools are hidden when empty |
 | `updated_at` | timestamp | Server-managed |
 
 Resolution order for every field: stored setting, then process environment, then
@@ -251,7 +252,6 @@ the `finish` part. Frames are not batched.
 | `tool-approval-request` | `approvalId`, `toolCallId`, `reason`, `approvalDescriptor` |
 | `data-thread` | `data`, `transient` |
 | `data-todos` | `data` |
-| `data-verification` | `data` |
 | `error` | `errorText` |
 | `finish` | - |
 
@@ -284,32 +284,6 @@ added to `useChat` state. It is emitted even when the turn fails before the grap
 ```
 
 `todos[].status` is `pending`, `in_progress`, or `completed`.
-
-`data-verification`:
-
-```json
-{
-  "type": "data-verification",
-  "data": {
-    "type": "verification",
-    "claims": [
-      {
-        "text": "Revenue grew 94 percent year over year.",
-        "type": "numeric",
-        "value": 35.08,
-        "unit": "USD_billions",
-        "period": "FY2026Q3",
-        "verdict": "supported",
-        "evidence_ids": ["ev1"],
-        "note": null
-      }
-    ]
-  }
-}
-```
-
-`claims[].type` is `numeric`, `filing`, `news`, or `opinion`. `verdict` is `supported`,
-`contradicted`, or `unverifiable`.
 
 #### Approval response
 
@@ -426,8 +400,8 @@ Messages are rehydrated from the checkpoint:
   `state: "output-available"`.
 - A pending interrupt produces `state: "approval-requested"` with the same descriptor
   the live stream would send, so an interrupted thread resumes after a restart.
-- The `verification` and `todos` channels become `data-verification` and `data-todos`
-  parts on the last assistant message, because they are transient on the live stream.
+- The `todos` channel becomes a `data-todos` part on the last assistant message,
+  because it is transient on the live stream.
 - `data-thread` is not included; the thread id is the resource key.
 
 #### Errors
