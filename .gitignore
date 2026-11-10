@@ -43,8 +43,3 @@ pnpm-debug.log*
 .env
 .env.local
 !.env.example
-
-# Editors
-.vscode/
-.idea/
-*.swp
