@@ -13,9 +13,6 @@ jobs:
         include:
         - os: macos-15
           target: aarch64-apple-darwin
-        # Use the current x86_64 macOS runner label if macos-13 is retired.
-        - os: macos-13
-          target: x86_64-apple-darwin
         - os: windows-latest
           target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
@@ -27,6 +24,9 @@ jobs:
     - uses: astral-sh/setup-uv@v5
     - run: uv sync --frozen
     - run: npm ci
+      working-directory: ui
+    # cargo test runs the Tauri build script, which requires the resources.
+    - run: node scripts/stage-resources.mjs
       working-directory: ui
     - run: cargo test
       working-directory: ui/src-tauri
