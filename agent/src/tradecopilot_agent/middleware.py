@@ -1,28 +1,21 @@
-"""Middleware that adds memory, availability, evidence, and annotation.
+"""Middleware that adds memory, tool availability, and evidence recording.
 
 Only the tool artifact is trusted for state updates. Tool content is written by
 the tool itself; nothing here parses model-facing text.
 """
 
 import re
-from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.config import get_stream_writer
 from langgraph.types import Command
 
-from tradecopilot_agent.claims import match_claims
 from tradecopilot_agent.data import DataSource
 from tradecopilot_agent.memory import MemoryConfig
-from tradecopilot_agent.state import (
-    TURN_FIELDS,
-    Claim,
-    ToolOutput,
-    TradingState,
-)
+from tradecopilot_agent.state import TURN_FIELDS, ToolOutput, TradingState
 from tradecopilot_agent.tools import (
     EVIDENCE_TOOL_NAMES,
     GATHER_BUDGET,
@@ -185,31 +178,6 @@ def _evidence_calls(messages: list[Any]) -> int:
         if isinstance(message, ToolMessage) and message.name in EVIDENCE_TOOL_NAMES:
             count += 1
     return count
-
-
-def annotate(
-    text: str,
-    evidence: dict[str, Any],
-    extract: Callable[[str], list[Claim]],
-) -> list[dict[str, Any]]:
-    """Extract and check the claims in a final answer.
-
-    Args:
-        text: The assistant answer.
-        evidence: The ledger.
-        extract: Claim extractor.
-
-    Returns:
-        Verdicts with the answer scope, or one ``unavailable`` entry when the
-        extractor fails.
-    """
-    if not text.strip():
-        return []
-    try:
-        claims = extract(text)
-        return match_claims(claims, evidence, scope="answer")
-    except Exception:
-        return [{"scope": "answer", "status": "unavailable"}]
 
 
 def _available(source: DataSource) -> tuple[set[str], set[str]]:
@@ -456,45 +424,6 @@ def _with_updates(result: Any, as_of: date | None) -> Any:
     return Command(update={**updates, "messages": [result]})
 
 
-class AnnotationMiddleware(AgentMiddleware[TradingState, Any, Any]):
-    """Checks the claims in the final answer."""
-
-    def __init__(self, extract: Callable[[str], list[Claim]]) -> None:
-        """Store the claim extractor.
-
-        Args:
-            extract: Callable that turns prose into claims.
-        """
-        super().__init__()
-        self.extract = extract
-
-    def after_agent(self, state: TradingState, runtime: Any) -> dict[str, Any] | None:
-        """Emit answer verdicts after the agent finishes.
-
-        Args:
-            state: Final graph state.
-            runtime: Runtime context.
-
-        Returns:
-            The verification channel update, or ``None`` when there is no text.
-        """
-        text = _last_answer_text(state)
-        if not text:
-            return None
-        verdicts = annotate(text, state.get("evidence", {}), self.extract)
-        if not verdicts:
-            return None
-        writer = get_stream_writer()
-        writer({"type": "verification", "claims": verdicts})
-        return {"verification": verdicts}
-
-    async def aafter_agent(
-        self, state: TradingState, runtime: Any
-    ) -> dict[str, Any] | None:
-        """Async version of ``after_agent``."""
-        return self.after_agent(state, runtime)
-
-
 class TodoStreamMiddleware(AgentMiddleware[TradingState, Any, Any]):
     """Streams the todo list as a data part when it changes."""
 
@@ -538,16 +467,6 @@ def _last_user_text(request: Any) -> str:
     messages = getattr(request, "messages", []) or []
     for message in reversed(messages):
         if isinstance(message, HumanMessage):
-            content = message.content
-            return content if isinstance(content, str) else str(content)
-    return ""
-
-
-def _last_answer_text(state: TradingState) -> str:
-    for message in reversed(state.get("messages", [])):
-        if isinstance(message, AIMessage):
-            if message.tool_calls:
-                continue
             content = message.content
             return content if isinstance(content, str) else str(content)
     return ""

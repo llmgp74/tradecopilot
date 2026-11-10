@@ -43,6 +43,7 @@ from tradecopilot_agent.server.streaming import (
 )
 from tradecopilot_agent.sources import LiveSource
 from tradecopilot_agent.store import Store, ThreadRecord
+from tradecopilot_agent.web import build_web_search
 
 GraphFactory = Callable[[FastAPI], Any]
 PortfolioFetcher = Callable[[AppSettings, str], Awaitable[Portfolio]]
@@ -440,6 +441,11 @@ def _default_graph(app: FastAPI) -> Any:
         LiveSource(lambda: _effective_settings(app)),
         checkpointer=app.state.checkpointer,
         model=effective.agent_model or None,
+        web_search=build_web_search(
+            effective.agent_model,
+            effective.model_api_key,
+            effective.exa_api_key,
+        ),
     )
 
 
@@ -464,6 +470,7 @@ def _effective_settings(app: FastAPI) -> AppSettings:
         finnhub_api_key=stored.finnhub_api_key or base.finnhub_api_key or "",
         fred_api_key=stored.fred_api_key or base.fred_api_key or "",
         edgar_user_agent=stored.edgar_user_agent or base.edgar_user_agent or "",
+        exa_api_key=stored.exa_api_key or base.exa_api_key or "",
         updated_at=stored.updated_at,
     )
 
@@ -476,7 +483,9 @@ def _apply_model_key(settings: AppSettings) -> None:
     """
     if not settings.model_api_key:
         return
-    provider = settings.agent_model.split(":", 1)[0]
+    provider, _, model_id = settings.agent_model.partition(":")
+    if provider == "anthropic" and model_id.startswith("deepseek"):
+        provider = "deepseek"
     variable = _PROVIDER_ENV.get(provider)
     if variable is not None:
         os.environ[variable] = settings.model_api_key
@@ -504,7 +513,6 @@ def _approval_descriptor(
         "ticket": ticket,
         "rationale": state.get("draft_recommendation"),
         "portfolio_impact": state.get("portfolio_impact"),
-        "verification": state.get("verification"),
     }
 
 

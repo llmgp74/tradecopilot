@@ -127,9 +127,7 @@ class FakeSource:
 
 def _tools(tmp_path: Path, source: FakeSource) -> tuple[TradingTools, Store]:
     store = Store(tmp_path / "data.db")
-    tools = TradingTools(
-        source, store, as_of=date(2026, 11, 5), extract_claims=lambda _text: []
-    )
+    tools = TradingTools(source, store, as_of=date(2026, 11, 5))
     return tools, store
 
 
@@ -148,7 +146,6 @@ def test_a_proposal_orders_sells_first(tmp_path: Path) -> None:
             ],
             "rebalance",
             "weeks",
-            {},
         )
     )
 
@@ -164,7 +161,7 @@ def test_a_blocked_ticket_is_not_stored(tmp_path: Path) -> None:
 
     output = asyncio.run(
         tools.propose(
-            [{"ticker": "AAPL", "side": "buy", "qty": 20}], "too big", "weeks", {}
+            [{"ticker": "AAPL", "side": "buy", "qty": 20}], "too big", "weeks"
         )
     )
 
@@ -190,9 +187,7 @@ def test_autonomous_execution_fills_the_ticket(tmp_path: Path) -> None:
         {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
     )
     proposed = asyncio.run(
-        tools.propose(
-            [{"ticker": "AAPL", "side": "buy", "qty": 5}], "thesis", "weeks", {}
-        )
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 5}], "thesis", "weeks")
     )
     assert proposed.proposal is not None
 
@@ -218,9 +213,7 @@ def test_rejection_is_recorded(tmp_path: Path, monkeypatch) -> None:
     )
     tools, store = _tools(tmp_path, FakeSource())
     proposed = asyncio.run(
-        tools.propose(
-            [{"ticker": "AAPL", "side": "buy", "qty": 1}], "thesis", "weeks", {}
-        )
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 1}], "thesis", "weeks")
     )
     assert proposed.proposal is not None
 
@@ -242,9 +235,7 @@ def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
         {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
     )
     proposed = asyncio.run(
-        tools.propose(
-            [{"ticker": "AAPL", "side": "buy", "qty": 1}], "thesis", "weeks", {}
-        )
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 1}], "thesis", "weeks")
     )
     assert proposed.proposal is not None, proposed.summary
 

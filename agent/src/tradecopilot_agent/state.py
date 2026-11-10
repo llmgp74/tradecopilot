@@ -106,23 +106,27 @@ def merge_evidence(current: dict[str, Any], incoming: dict[str, Any]) -> dict[st
     return dict(list(merged.items())[-EVIDENCE_CAP:])
 
 
-def merge_scoped(current: list[Any], incoming: list[Any]) -> list[Any]:
-    """Replace verdicts of the incoming scopes and keep the rest.
+def merge_verdicts(current: list[Any], incoming: list[Any]) -> list[Any]:
+    """Merge verdicts by claim text, with the newest verdict winning.
+
+    The claim checker may run more than once in a turn, for example when the
+    model checks a first batch, gathers more evidence, then checks the rest.
+    Replacing the whole channel would lose the earlier batches.
 
     Args:
         current: Verdicts already in state.
-        incoming: New verdicts, each with a ``scope``.
+        incoming: New verdicts, each with a ``text``.
 
     Returns:
-        The combined list.
+        The combined list, with one entry per claim text.
     """
-    scopes = {item.get("scope") for item in incoming if isinstance(item, dict)}
-    kept = [
-        item
-        for item in current
-        if not (isinstance(item, dict) and item.get("scope") in scopes)
-    ]
-    return [*kept, *incoming]
+    merged: dict[str, Any] = {
+        str(item.get("text")): item for item in current if isinstance(item, dict)
+    }
+    for item in incoming:
+        if isinstance(item, dict):
+            merged[str(item.get("text"))] = item
+    return list(merged.values())
 
 
 class TradingState(DeepAgentState):
@@ -130,7 +134,7 @@ class TradingState(DeepAgentState):
 
     evidence: NotRequired[Annotated[dict[str, Any], merge_evidence]]
     draft_recommendation: NotRequired[dict[str, Any] | None]
-    verification: NotRequired[Annotated[list[Any], merge_scoped]]
+    verification: NotRequired[Annotated[list[Any], merge_verdicts]]
     portfolio_impact: NotRequired[dict[str, Any] | None]
     pending_ticket: NotRequired[dict[str, Any] | None]
     todos_snapshot: NotRequired[list[Any]]

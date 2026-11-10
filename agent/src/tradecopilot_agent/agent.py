@@ -1,6 +1,5 @@
 """Build the agent graph shared by the live app and the evaluation harness."""
 
-from collections.abc import Callable
 from datetime import UTC, date, datetime, time
 from typing import Any
 
@@ -14,22 +13,21 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
-from tradecopilot_agent.claims import build_extractor
 from tradecopilot_agent.config import get_settings
 from tradecopilot_agent.data import DataSource
 from tradecopilot_agent.llm import build_chat_model
 from tradecopilot_agent.memory import MemoryConfig
 from tradecopilot_agent.middleware import (
-    AnnotationMiddleware,
     TodoStreamMiddleware,
     ToolAvailabilityMiddleware,
     ToolResultMiddleware,
     TradingMemoryMiddleware,
     TurnMiddleware,
 )
-from tradecopilot_agent.prompt import SYSTEM_PROMPT
-from tradecopilot_agent.state import Claim, TradingState
+from tradecopilot_agent.prompt import SYSTEM_PROMPT, WEB_SEARCH_PROMPT
+from tradecopilot_agent.state import TradingState
 from tradecopilot_agent.tools import build_tools
+from tradecopilot_agent.web import WebSearch
 
 MODEL_CALL_LIMIT = 20
 
@@ -41,8 +39,8 @@ def build_agent(
     *,
     checkpointer: BaseCheckpointSaver[Any] | None = None,
     model: str | BaseChatModel | None = None,
-    extract_claims: Callable[[str], list[Claim]] | None = None,
     decision_time: datetime | None = None,
+    web_search: WebSearch | None = None,
 ) -> CompiledStateGraph[Any, Any, Any, Any]:
     """Build one agent graph for a memory condition and a data source.
 
@@ -57,10 +55,9 @@ def build_agent(
         model: ``provider:model`` override or a constructed chat model. Falls
             back to ``AGENT_MODEL`` when omitted. A local model avoids provider
             construction, but must support tool binding.
-        extract_claims: Optional claim extractor. Local tests pass a deterministic
-            function to avoid constructing or calling an extraction model.
         decision_time: Timezone-aware cutoff for journal retrieval. If omitted,
             ``as_of`` uses that UTC day's end; live runs use the current time.
+        web_search: Web search provider. The tool is hidden when omitted.
 
     Returns:
         The compiled agent graph.
@@ -87,23 +84,20 @@ def build_agent(
                 "for example anthropic:claude-sonnet-5."
             )
         chat_model = build_chat_model(model_name)
-    extractor = (
-        extract_claims if extract_claims is not None else build_extractor(chat_model)
-    )
     middleware: list[AgentMiddleware[Any, Any, Any]] = [
         TurnMiddleware(),
         TradingMemoryMiddleware(config, decision_time=memory_time),
         ToolAvailabilityMiddleware(source),
         ToolResultMiddleware(as_of),
-        AnnotationMiddleware(extractor),
         TodoStreamMiddleware(),
         TodoListMiddleware(),
         ModelCallLimitMiddleware(run_limit=MODEL_CALL_LIMIT, exit_behavior="end"),
     ]
     return create_deep_agent(
         model=chat_model,
-        tools=build_tools(source, config.store, as_of, extractor),
-        system_prompt=SYSTEM_PROMPT,
+        tools=build_tools(source, config.store, as_of, searcher=web_search),
+        system_prompt=SYSTEM_PROMPT
+        + (WEB_SEARCH_PROMPT if web_search is not None else ""),
         middleware=middleware,
         state_schema=TradingState,
         checkpointer=checkpointer,

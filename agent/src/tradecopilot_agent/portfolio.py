@@ -20,12 +20,30 @@ _log = logging.getLogger(__name__)
 
 _RANGES: dict[str, tuple[str, str]] = {
     "1D": ("1D", "5Min"),
-    "1W": ("1W", "30Min"),
-    "1M": ("1M", "1Day"),
-    "3M": ("3M", "1Day"),
-    "1Y": ("1Y", "1Day"),
-    "ALL": ("all", "1Day"),
+    "1W": ("1W", "15Min"),
+    "1M": ("1M", "1D"),
+    "3M": ("3M", "1D"),
+    "1Y": ("1A", "1D"),
+    "ALL": ("all", "1D"),
 }
+
+
+def history_params(range_: str) -> dict[str, str]:
+    """Return the Alpaca query for an equity curve window.
+
+    Alpaca accepts ``1Min``, ``5Min``, ``15Min``, ``1H``, and ``1D`` as
+    timeframes, and ``D``, ``W``, ``M``, and ``A`` as period units. The
+    one-year window is therefore ``1A``, not ``1Y``.
+
+    Args:
+        range_: One of ``1D``, ``1W``, ``1M``, ``3M``, ``1Y``, ``ALL``.
+
+    Returns:
+        The ``period`` and ``timeframe`` parameters. Unknown ranges use one
+        month.
+    """
+    period, timeframe = _RANGES.get(range_, _RANGES["1M"])
+    return {"period": period, "timeframe": timeframe}
 
 
 class PortfolioUnavailable(Exception):
@@ -63,7 +81,6 @@ async def fetch_portfolio(settings: AppSettings, range_: str) -> Portfolio:
     if not settings.alpaca_api_key or not settings.alpaca_api_secret:
         raise PortfolioUnavailable("Broker is not configured.")
 
-    period, timeframe = _RANGES.get(range_, _RANGES["1M"])
     headers = {
         "APCA-API-KEY-ID": settings.alpaca_api_key,
         "APCA-API-SECRET-KEY": settings.alpaca_api_secret,
@@ -78,7 +95,7 @@ async def fetch_portfolio(settings: AppSettings, range_: str) -> Portfolio:
             positions_response = await client.get("/v2/positions")
             history_response = await client.get(
                 "/v2/account/portfolio/history",
-                params={"period": period, "timeframe": timeframe},
+                params=history_params(range_),
             )
             for response in (
                 account_response,

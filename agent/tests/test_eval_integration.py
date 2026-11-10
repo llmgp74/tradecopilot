@@ -19,7 +19,7 @@ from tradecopilot_agent import agent as agent_module
 from tradecopilot_agent.data import DataSource
 from tradecopilot_agent.memory import MemoryConfig, MemoryStore
 from tradecopilot_agent.middleware import TradingMemoryMiddleware, render_memory
-from tradecopilot_agent.state import Claim, EvidenceRecord, ToolOutput
+from tradecopilot_agent.state import EvidenceRecord, ToolOutput
 from tradecopilot_agent.store import Store
 
 _DECISION = datetime(2020, 9, 15, 14, tzinfo=UTC)
@@ -206,7 +206,7 @@ def test_live_memory_does_not_require_the_new_keyword() -> None:
 def test_local_graph_uses_the_scenario_clock_and_injected_models(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, precise_time: bool
 ) -> None:
-    """Run the actual graph, quote tool, memory, and annotation without APIs.
+    """Run the actual graph, quote tool, and memory without APIs.
 
     Args:
         tmp_path: Isolated database directory.
@@ -214,7 +214,6 @@ def test_local_graph_uses_the_scenario_clock_and_injected_models(
         precise_time: Use a timestamp or the backward-compatible as_of date.
     """
     monkeypatch.setattr(agent_module, "build_chat_model", _forbidden)
-    monkeypatch.setattr(agent_module, "build_extractor", _forbidden)
     monkeypatch.setattr(agent_module, "get_settings", _forbidden)
     store = Store(tmp_path / "data.db")
     store.patch_profile({"watchlist": ["SYNAA"]})
@@ -253,18 +252,11 @@ def test_local_graph_uses_the_scenario_clock_and_injected_models(
             AIMessage(content="The quote is 100."),
         ]
     )
-    extracted: list[str] = []
-
-    def extract(text: str) -> list[Claim]:
-        extracted.append(text)
-        return [Claim(text=text, kind="numeric", value=100.0)]
-
     graph = agent_module.build_agent(
         MemoryConfig(condition="full", store=store),
         source,
         _DECISION.date(),
         model=model,
-        extract_claims=extract,
         decision_time=_DECISION if precise_time else None,
     )
     result = asyncio.run(
@@ -273,8 +265,7 @@ def test_local_graph_uses_the_scenario_clock_and_injected_models(
     assert result["messages"][-1].content == "The quote is 100."
     source.quote.assert_awaited_once_with("SYNAA")
     assert result["evidence"]["quote-1"]["payload"]["price"] == 100.0
-    assert extracted == ["The quote is 100."]
-    assert result["verification"][0]["scope"] == "answer"
+    assert "verification" not in result or result["verification"] == []
     assert any(
         isinstance(message, ToolMessage) and message.tool_call_id == "quote-call"
         for message in result["messages"]

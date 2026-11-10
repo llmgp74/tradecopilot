@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS settings (
   finnhub_api_key   TEXT NOT NULL DEFAULT '',
   fred_api_key      TEXT NOT NULL DEFAULT '',
   edgar_user_agent  TEXT NOT NULL DEFAULT '',
+  exa_api_key       TEXT NOT NULL DEFAULT '',
   updated_at        TEXT NOT NULL
 );
 
@@ -67,6 +68,7 @@ _SECRET_FIELDS = frozenset(
         "fmp_api_key",
         "finnhub_api_key",
         "fred_api_key",
+        "exa_api_key",
     }
 )
 _SETTINGS_COLUMNS = (
@@ -79,11 +81,12 @@ _SETTINGS_COLUMNS = (
     "finnhub_api_key",
     "fred_api_key",
     "edgar_user_agent",
+    "exa_api_key",
 )
 _SETTINGS_SELECT = (
     "agent_model, model_api_key, alpaca_api_key, alpaca_api_secret, "
     "alpaca_base_url, fmp_api_key, finnhub_api_key, fred_api_key, "
-    "edgar_user_agent, updated_at"
+    "edgar_user_agent, exa_api_key, updated_at"
 )
 
 DEFAULT_PROFILE: dict[str, Any] = {
@@ -143,6 +146,9 @@ class Store:
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path)
+        # The checkpointer shares this database. Wait for its short writes
+        # instead of failing with "database is locked".
+        connection.execute("PRAGMA busy_timeout=5000")
         try:
             yield connection
             connection.commit()
@@ -196,7 +202,8 @@ class Store:
             finnhub_api_key=self._secrets.decrypt(str(row[6])),
             fred_api_key=self._secrets.decrypt(str(row[7])),
             edgar_user_agent=str(row[8]),
-            updated_at=str(row[9]),
+            exa_api_key=self._secrets.decrypt(str(row[9])),
+            updated_at=str(row[10]),
         )
 
     def patch_settings(self, changes: dict[str, Any]) -> AppSettings:

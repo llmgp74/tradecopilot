@@ -76,6 +76,7 @@ class AppSettings(BaseModel):
     finnhub_api_key: str = ""
     fred_api_key: str = ""
     edgar_user_agent: str = ""
+    exa_api_key: str = ""
     updated_at: str
 
 
@@ -91,6 +92,7 @@ class AppSettingsPatch(BaseModel):
     finnhub_api_key: str | None = None
     fred_api_key: str | None = None
     edgar_user_agent: str | None = None
+    exa_api_key: str | None = None
 
 
 class ThreadSummary(BaseModel):

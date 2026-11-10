@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     finnhub_api_key: str | None = None
     fred_api_key: str | None = None
     edgar_user_agent: str = ""
+    exa_api_key: str | None = None
 
     @field_validator("db_path", "ui_dist")
     @classmethod

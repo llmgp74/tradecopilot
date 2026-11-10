@@ -159,8 +159,8 @@ def to_ui_messages(
     """Convert checkpointed graph state to AI SDK UI messages.
 
     Tool results are attached to their call, pending interrupts become
-    ``approval-requested`` parts, and the verification and todo channels become
-    data parts on the last assistant message.
+    ``approval-requested`` parts, and the todo channel becomes a data part on
+    the last assistant message.
 
     Args:
         values: Graph state, holding the ``messages`` channel.
@@ -217,7 +217,6 @@ def to_ui_messages(
                 approval_descriptor,
             )
 
-    _append_data_part(ui_messages, "verification", values.get("verification"), "claims")
     _append_data_part(ui_messages, "todos", values.get("todos"), "todos")
     return ui_messages
 

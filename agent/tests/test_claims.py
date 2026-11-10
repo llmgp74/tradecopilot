@@ -1,4 +1,4 @@
-"""Claim extraction inputs and the deterministic matcher."""
+"""Deterministic claim matching against the evidence ledger."""
 
 from tradecopilot_agent.claims import match_claims
 from tradecopilot_agent.state import Claim, EvidenceRecord
@@ -155,6 +155,85 @@ def test_news_claim_matches_date_window() -> None:
     verdicts = match_claims([claim], _ledger(record), scope="answer")
 
     assert verdicts[0]["verdict"] == "supported"
+
+
+def _account_record() -> EvidenceRecord:
+    return EvidenceRecord(
+        id="ev_account",
+        tool="get_portfolio",
+        args={},
+        source="alpaca",
+        fetched_at="2026-11-05T14:03:11Z",
+        payload={
+            "kind": "account",
+            "equity": 1_000_000.0,
+            "cash": 1_000_000.0,
+            "buying_power": 4_000_000.0,
+            "positions": [],
+        },
+    )
+
+
+def test_account_figures_match_the_broker_record() -> None:
+    """Equity, cash, buying power, and position count verify against Alpaca."""
+    claims = [
+        Claim(text="Total equity is $1,000,000.", kind="numeric", value=1_000_000.0),
+        Claim(text="Cash is $1,000,000.", kind="numeric", value=1_000_000.0),
+        Claim(text="Buying power is $4,000,000.", kind="numeric", value=4_000_000.0),
+        Claim(
+            text="There are no open positions.",
+            kind="numeric",
+            value=0,
+            unit="positions",
+        ),
+    ]
+
+    verdicts = match_claims(claims, _ledger(_account_record()), scope="answer")
+
+    assert [item["verdict"] for item in verdicts] == ["supported"] * 4
+    assert all(item["source"] == "alpaca" for item in verdicts)
+
+
+def test_wrong_account_figure_is_contradicted() -> None:
+    """A wrong account number is contradicted by the broker record."""
+    claim = Claim(text="Cash is $2,000,000.", kind="numeric", value=2_000_000.0)
+
+    verdict = match_claims([claim], _ledger(_account_record()), scope="answer")[0]
+
+    assert verdict["verdict"] == "contradicted"
+    assert verdict["matched_value"] == 1_000_000.0
+
+
+def test_tagged_claim_ignores_an_unrelated_quote() -> None:
+    """A tagged metric is not checked against a same-ticker price record."""
+    quote = _record(
+        "ev_quote",
+        source="alpaca",
+        tool="get_quote",
+        payload={"kind": "quote", "ticker": "NVDA", "price": 195.0},
+    )
+
+    verdict = match_claims(
+        [_numeric_claim()], _ledger(_record("ev_1"), quote), scope="answer"
+    )[0]
+
+    assert verdict["verdict"] == "supported"
+    assert verdict["evidence_ids"] == ["ev_1"]
+
+
+def test_quote_matches_a_ticker_numeric_claim() -> None:
+    """A quoted price verifies against the quote record."""
+    record = _record(
+        "ev_quote",
+        source="alpaca",
+        tool="get_quote",
+        payload={"kind": "quote", "ticker": "NVDA", "price": 195.0},
+    )
+    claim = Claim(text="NVDA is at 195.", kind="numeric", ticker="NVDA", value=195.0)
+
+    verdict = match_claims([claim], _ledger(record), scope="answer")[0]
+
+    assert verdict["verdict"] == "supported"
 
 
 def test_opinion_produces_no_verdict() -> None:

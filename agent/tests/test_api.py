@@ -140,7 +140,6 @@ def test_thread_detail_restores_a_pending_approval(tmp_path: Path) -> None:
                 AIMessage(content="", id="a1", tool_calls=[tool_call]),
             ],
             "pending_ticket": pending,
-            "verification": [{"scope": "draft", "verdict": "supported", "text": "x"}],
         },
         interrupts=(
             Interrupt(
@@ -166,7 +165,7 @@ def test_thread_detail_restores_a_pending_approval(tmp_path: Path) -> None:
     assert part["state"] == "approval-requested"
     assert part["approval"]["id"] == "call_1"
     assert part["approval"]["ticket"] == pending
-    assert part["approval"]["verification"][0]["scope"] == "draft"
+    assert "verification" not in part["approval"]
 
 
 def test_unknown_thread_is_404(tmp_path: Path) -> None:

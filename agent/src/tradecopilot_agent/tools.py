@@ -8,9 +8,8 @@ not configured, so the tools behave the same inside a subagent.
 
 import hashlib
 import json
-from collections.abc import Callable
 from datetime import UTC, date, datetime
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
 
 from langchain.tools import ToolRuntime, tool
@@ -29,6 +28,7 @@ from tradecopilot_agent.state import (
     ToolOutput,
 )
 from tradecopilot_agent.store import now_iso
+from tradecopilot_agent.web import WebResult, WebSearch, WebSearchUnavailable
 
 MAX_LEGS = 10
 GATHER_BUDGET = 12
@@ -59,6 +59,7 @@ EVIDENCE_TOOL_NAMES = frozenset(
         "get_xbrl_fact",
         "get_news",
         "get_macro",
+        "web_search",
     }
 )
 
@@ -106,6 +107,53 @@ def _text(output: ToolOutput) -> str:
     return output.summary + (f"\nEvidence: {', '.join(ids)}" if ids else "")
 
 
+def web_output(query: str, results: list[WebResult]) -> ToolOutput:
+    """Turn web results into a tool result with provenance.
+
+    Args:
+        query: Search query the results answer.
+        results: Ranked web results.
+
+    Returns:
+        The summary for the model and one evidence record per result.
+    """
+    evidence = [
+        EvidenceRecord(
+            id=evidence_id(
+                "web_search",
+                {"query": query, "url": result.url},
+                result.source,
+                result.published_at,
+            ),
+            tool="web_search",
+            args={"query": query, "url": result.url},
+            source=result.source,
+            url=result.url,
+            published_at=result.published_at,
+            fetched_at=now_iso(),
+            payload={
+                "title": result.title,
+                "summary": result.summary,
+                "authority": result.authority,
+            },
+        )
+        for result in results
+    ]
+    summary = json.dumps(
+        [
+            {
+                "title": result.title,
+                "url": result.url,
+                "published_at": result.published_at,
+                "summary": result.summary,
+            }
+            for result in results
+        ],
+        default=str,
+    )
+    return ToolOutput(summary=summary, evidence=evidence)
+
+
 def _blocked(violations: list[dict[str, Any]]) -> ToolOutput:
     lines = [f"{item['code']}: {item['message']}" for item in violations]
     return ToolOutput(
@@ -123,7 +171,6 @@ class TradingTools:
         source: DataSource,
         store: MemoryStore,
         as_of: date | None,
-        extract_claims: Callable[[str], list[Claim]],
     ) -> None:
         """Bind the tools to a source, store, and cutoff.
 
@@ -131,12 +178,10 @@ class TradingTools:
             source: Provider data or fixtures.
             store: Profile and journal storage.
             as_of: Evaluation cutoff, or ``None`` for live runs.
-            extract_claims: Claim extractor used for proposals.
         """
         self.source = source
         self.store = store
         self.as_of = as_of
-        self.extract_claims = extract_claims
 
     def capabilities(self) -> set[str]:
         """Return the source capabilities available to the tools."""
@@ -199,19 +244,17 @@ class TradingTools:
         self,
         claims: list[Claim],
         evidence: dict[str, Any],
-        scope: Literal["draft", "answer"],
     ) -> ToolOutput:
         """Match claims against the ledger.
 
         Args:
             claims: Claims to check.
             evidence: Ledger keyed by evidence id.
-            scope: ``draft`` or ``answer``.
 
         Returns:
             Verdicts in the summary and in ``verification``.
         """
-        verdicts = match_claims(claims, evidence, scope=scope)
+        verdicts = match_claims(claims, evidence, scope="answer")
         return ToolOutput(
             summary=json.dumps(verdicts, default=str), verification=verdicts
         )
@@ -221,7 +264,6 @@ class TradingTools:
         legs: list[dict[str, Any]],
         thesis: str,
         horizon: str,
-        evidence: dict[str, Any],
     ) -> ToolOutput:
         """Build a ticket, check it, and store the proposal.
 
@@ -229,10 +271,9 @@ class TradingTools:
             legs: Legs with ticker, side, and qty.
             thesis: Rationale in prose.
             horizon: Stated holding horizon.
-            evidence: Ledger already gathered this session.
 
         Returns:
-            The proposal, impact, verdicts, and evidence.
+            The proposal, its evidence, and the portfolio impact.
         """
         guard = self._guard("alpaca")
         if guard is not None:
@@ -304,11 +345,6 @@ class TradingTools:
             created_at=now_iso(),
         )
         impact = self._impact(account, prices, ordered)
-        try:
-            claims = self.extract_claims(thesis)
-            verdicts = match_claims(claims, evidence, scope="draft")
-        except Exception:
-            verdicts = [{"scope": "draft", "status": "unavailable"}]
 
         simulation = self._simulation_record(ticket_id, impact)
         records = [*account_output.evidence, *quote_evidence, simulation]
@@ -316,7 +352,6 @@ class TradingTools:
         pending = {
             **ticket.model_dump(),
             "portfolio_impact": impact,
-            "verification": verdicts,
             "evidence_ids": evidence_ids,
         }
         self.store.append_journal(
@@ -347,14 +382,12 @@ class TradingTools:
                     "ticket_id": ticket_id,
                     "legs": ordered,
                     "portfolio_impact": impact,
-                    "verdicts": verdicts,
                 },
                 default=str,
             ),
             evidence=records,
             proposal=pending,
             portfolio_impact=impact,
-            verification=verdicts,
         )
 
     async def execute(self, ticket_id: str, state: dict[str, Any]) -> ToolOutput:
@@ -637,7 +670,7 @@ def build_tools(
     source: DataSource,
     store: MemoryStore,
     as_of: date | None,
-    extract_claims: Callable[[str], list[Claim]],
+    searcher: WebSearch | None = None,
 ) -> list[BaseTool]:
     """Create the trading tools bound to one source and store.
 
@@ -645,12 +678,12 @@ def build_tools(
         source: Data source for every provider-backed tool.
         store: Profile and journal store.
         as_of: Evaluation cutoff, or ``None`` for live runs.
-        extract_claims: Callable that extracts claims from prose.
+        searcher: Web search provider. The web tool is omitted when absent.
 
     Returns:
         The tool objects passed to the agent.
     """
-    impl = TradingTools(source, store, as_of, extract_claims)
+    impl = TradingTools(source, store, as_of)
     artifact = tool(response_format="content_and_artifact")
 
     @artifact
@@ -715,23 +748,20 @@ def build_tools(
     async def verify_claims(
         claims: list[Claim],
         runtime: ToolRuntime,
-        scope: Literal["draft", "answer"] = "answer",
     ) -> tuple[str, dict[str, Any]]:
         """Check claims against evidence already gathered in this session."""
         evidence = runtime.state.get("evidence", {}) if runtime.state else {}
-        output = impl.verify(claims, evidence, scope)
+        output = impl.verify(claims, evidence)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
     async def propose_ticket(
         legs: list[dict[str, Any]],
         thesis: str,
-        runtime: ToolRuntime,
         horizon: str = "weeks",
     ) -> tuple[str, dict[str, Any]]:
         """Propose one ticket with one or more legs. No order is placed."""
-        evidence = runtime.state.get("evidence", {}) if runtime.state else {}
-        output = await impl.propose(legs, thesis, horizon, evidence)
+        output = await impl.propose(legs, thesis, horizon)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
@@ -742,7 +772,7 @@ def build_tools(
         output = await impl.execute(ticket_id, runtime.state or {})
         return _text(output), output.model_dump(mode="json")
 
-    return [
+    tools: list[BaseTool] = [
         get_quote,
         get_bars,
         get_portfolio,
@@ -756,3 +786,28 @@ def build_tools(
         propose_ticket,
         execute_ticket,
     ]
+
+    if searcher is not None:
+
+        @artifact
+        async def web_search(query: str, count: int = 8) -> tuple[str, dict[str, Any]]:
+            """Search the public web for current events and general news."""
+            cleaned = query.strip()
+            if not cleaned:
+                output = ToolOutput(
+                    summary="A search query is required.", error="invalid"
+                )
+            else:
+                try:
+                    results = await searcher.search(
+                        cleaned, max(1, min(int(count), 10))
+                    )
+                except WebSearchUnavailable as exc:
+                    output = ToolOutput(summary=str(exc), error="unavailable")
+                else:
+                    output = web_output(cleaned, results)
+            return _text(output), output.model_dump(mode="json")
+
+        tools.append(web_search)
+
+    return tools

@@ -6,13 +6,12 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
 from tradecopilot_agent.middleware import (
     _with_updates,
-    annotate,
     artifact_updates,
     budget_denied,
     render_memory,
     request_tickers,
 )
-from tradecopilot_agent.state import Claim, EvidenceRecord, ToolOutput
+from tradecopilot_agent.state import EvidenceRecord, ToolOutput, merge_verdicts
 
 AS_OF = date(2026, 11, 5)
 
@@ -136,44 +135,21 @@ def test_budget_denies_after_twelve_evidence_calls() -> None:
     assert budget_denied({"messages": calls[:2]}, "get_quote") is False
 
 
-def test_annotation_marks_claims_and_survives_extractor_failure() -> None:
-    """Verdicts use the answer scope; a failed extractor is recorded."""
-    evidence = {
-        "ev_1": _record(
-            "ev_1",
-            payload={
-                "kind": "xbrl",
-                "ticker": "NVDA",
-                "tag": "Revenues",
-                "period": "2025-10-26",
-                "unit": "USD",
-                "value": 35_082_000_000.0,
-            },
-        ).model_dump(mode="json")
-    }
+def test_verdict_merges_keep_each_claim_and_use_the_latest_verdict() -> None:
+    """Batched checks accumulate; re-checking a claim replaces its verdict."""
+    first = [
+        {"text": "A", "verdict": "unchecked"},
+        {"text": "B", "verdict": "supported"},
+    ]
+    second = [
+        {"text": "A", "verdict": "supported"},
+        {"text": "C", "verdict": "contradicted"},
+    ]
 
-    def extract(_text: str) -> list[Claim]:
-        return [
-            Claim(
-                text="NVDA revenue was 35.1B",
-                kind="numeric",
-                ticker="NVDA",
-                tag="Revenues",
-                value=35_100_000_000.0,
-                unit="USD",
-                period="2025-10-26",
-            )
-        ]
+    merged = merge_verdicts(first, second)
 
-    verdicts = annotate("NVDA revenue was 35.1B", evidence, extract)
-    assert verdicts[0]["verdict"] == "supported"
-    assert verdicts[0]["scope"] == "answer"
-
-    def broken(_text: str) -> list[Claim]:
-        raise RuntimeError("boom")
-
-    unavailable = annotate("anything", evidence, broken)
-    assert unavailable[0]["status"] == "unavailable"
+    assert [item["text"] for item in merged] == ["A", "B", "C"]
+    assert merged[0]["verdict"] == "supported"
 
 
 def test_tool_result_becomes_a_state_command() -> None:

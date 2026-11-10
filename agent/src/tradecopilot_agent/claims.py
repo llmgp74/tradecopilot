@@ -1,22 +1,13 @@
-"""Claim extraction and deterministic matching against the evidence ledger."""
+"""Deterministic matching of claims against the evidence ledger."""
 
+import re
 from datetime import date, timedelta
 from typing import Any, Literal
-
-from langchain.chat_models import init_chat_model
-from langchain_core.language_models import BaseChatModel
-from pydantic import BaseModel
 
 from tradecopilot_agent.state import Claim
 
 NUMERIC_TOLERANCE = 0.005
 NEWS_WINDOW = timedelta(days=1)
-
-
-class ExtractedClaims(BaseModel):
-    """Structured output of the claim extractor."""
-
-    claims: list[Claim]
 
 
 def _relative_difference(left: float, right: float) -> float:
@@ -78,10 +69,118 @@ def _verdict(
     }
 
 
+_ACCOUNT_FIELDS = (
+    ("buying power", "buying_power"),
+    ("equity", "equity"),
+    ("cash", "cash"),
+    ("positions?", "positions"),
+)
+
+
+def _account_verdict(
+    claim: Claim, evidence: dict[str, Any], scope: str
+) -> dict[str, Any] | None:
+    """Match a broker account figure against the Alpaca record."""
+    if claim.value is None:
+        return None
+    text = claim.text.lower()
+    field = next(
+        (name for needle, name in _ACCOUNT_FIELDS if re.search(rf"\b{needle}\b", text)),
+        None,
+    )
+    for record in evidence.values():
+        payload = _record_payload(record)
+        if payload.get("kind") != "account":
+            continue
+        if field == "positions":
+            positions = payload.get("positions")
+            if not isinstance(positions, list):
+                continue
+            actual = float(len(positions))
+        elif field is not None:
+            raw = payload.get(field)
+            if not isinstance(raw, int | float):
+                continue
+            actual = float(raw)
+        else:
+            scalars = [
+                float(value)
+                for key in ("equity", "cash", "buying_power")
+                if isinstance((value := payload.get(key)), int | float)
+            ]
+            matches = [
+                value
+                for value in scalars
+                if _relative_difference(value, claim.value) <= NUMERIC_TOLERANCE
+            ]
+            if not matches:
+                continue
+            return _verdict(
+                claim,
+                scope=scope,
+                verdict="supported",
+                records=[record],
+                matched_value=matches[0],
+            )
+        verdict = (
+            "supported"
+            if _relative_difference(actual, claim.value) <= NUMERIC_TOLERANCE
+            else "contradicted"
+        )
+        return _verdict(
+            claim,
+            scope=scope,
+            verdict=verdict,
+            records=[record],
+            matched_value=actual,
+        )
+    return None
+
+
+def _quote_verdict(
+    claim: Claim, evidence: dict[str, Any], scope: str
+) -> dict[str, Any] | None:
+    """Match a ticker price against the latest quote record."""
+    if claim.ticker is None or claim.value is None:
+        return None
+    for record in evidence.values():
+        payload = _record_payload(record)
+        if payload.get("kind") != "quote":
+            continue
+        if payload.get("ticker") != claim.ticker:
+            continue
+        raw = payload.get("price")
+        if not isinstance(raw, int | float):
+            continue
+        actual = float(raw)
+        verdict = (
+            "supported"
+            if _relative_difference(actual, claim.value) <= NUMERIC_TOLERANCE
+            else "contradicted"
+        )
+        return _verdict(
+            claim,
+            scope=scope,
+            verdict=verdict,
+            records=[record],
+            matched_value=actual,
+        )
+    return None
+
+
 def _numeric(claim: Claim, evidence: dict[str, Any], scope: str) -> dict[str, Any]:
     if claim.value is None:
         return _verdict(claim, scope=scope, verdict="unchecked", reason="no value")
+    # Account and quote figures are untagged by construction. A tagged claim is
+    # a financial metric, so matching it against a balance or a price would
+    # compare unrelated quantities and report a false contradiction.
     if claim.tag is None:
+        account = _account_verdict(claim, evidence, scope)
+        if account is not None:
+            return account
+        quote = _quote_verdict(claim, evidence, scope)
+        if quote is not None:
+            return quote
         return _verdict(claim, scope=scope, verdict="unchecked", reason="no XBRL tag")
 
     candidates = [
@@ -228,33 +327,3 @@ def match_claims(
         else:
             verdicts.append(_news(claim, evidence, scope))
     return verdicts
-
-
-def build_extractor(model: BaseChatModel | str) -> Any:
-    """Return a callable that extracts claims from prose.
-
-    Args:
-        model: A chat model, or a ``provider:model`` string.
-
-    Returns:
-        A synchronous callable taking text and returning claims.
-    """
-    base = (
-        model
-        if isinstance(model, BaseChatModel)
-        else init_chat_model(model, temperature=0)
-    )
-    structured = base.with_structured_output(ExtractedClaims)
-
-    def extract(text: str) -> list[Claim]:
-        if not text.strip():
-            return []
-        result: Any = structured.invoke(
-            "Extract every factual claim from the text. Use kind numeric for "
-            "numbers, filing for SEC filing references, news for dated news, and "
-            "opinion otherwise. Give numeric claims their XBRL tag when known. "
-            f"Text:\n{text}"
-        )
-        return list(ExtractedClaims.model_validate(result).claims)
-
-    return extract
