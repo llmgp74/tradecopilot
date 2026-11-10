@@ -1,0 +1,47 @@
+"""Desktop entrypoint. Serves the API on an OS-chosen loopback port."""
+
+import json
+import threading
+import time
+
+import uvicorn
+
+from tradecopilot_agent.server.app import create_app
+
+
+def listening_line(port: int) -> str:
+    """Render the one stdout line the desktop shell parses.
+
+    Args:
+        port: Bound TCP port.
+
+    Returns:
+        Compact JSON with no trailing newline.
+    """
+    return json.dumps({"event": "listening", "port": port})
+
+
+def create_server() -> uvicorn.Server:
+    """Build a server bound to an ephemeral loopback port.
+
+    Returns:
+        A server that has not started yet.
+    """
+    config = uvicorn.Config(create_app(), host="127.0.0.1", port=0)
+    return uvicorn.Server(config)
+
+
+def main() -> None:
+    """Run until the parent process kills this process."""
+    server = create_server()
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    while not server.started:
+        time.sleep(0.05)
+    port = server.servers[0].sockets[0].getsockname()[1]
+    print(listening_line(port), flush=True)
+    thread.join()
+
+
+if __name__ == "__main__":
+    main()

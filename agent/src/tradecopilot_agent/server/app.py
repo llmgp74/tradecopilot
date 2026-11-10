@@ -9,6 +9,7 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
@@ -115,6 +116,19 @@ def create_app(
         version=__version__,
         description="Single-user local trading co-pilot.",
         lifespan=_lifespan,
+    )
+    # The desktop webview origin differs from the agent origin, so the app
+    # must answer CORS preflight for it. No cookies are used.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "tauri://localhost",
+            "http://tauri.localhost",
+            "http://localhost:1420",
+        ],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.state.settings = settings or get_settings()
     app.state.graph_factory = graph_factory

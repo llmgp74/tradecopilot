@@ -22,6 +22,7 @@ import {
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
+import { apiUrl } from "@/lib/api-base";
 import { chatRequest } from "@/lib/chat-request";
 import { normalizeMessages, type TodoItem } from "@/lib/parts";
 
@@ -75,7 +76,7 @@ export function Chat({
   const transport = useMemo(
     () =>
       new DefaultChatTransport<UIMessage>({
-        api: "/api/chat",
+        api: apiUrl("/api/chat"),
         prepareSendMessagesRequest: ({ messages }) =>
           chatRequest(messages as UIMessage[], threadId),
       }),

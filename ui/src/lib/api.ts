@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import { apiUrl } from "./api-base";
 
 /** Error raised for any non-2xx API response. */
 export class ApiError extends Error {
@@ -201,7 +202,7 @@ export type AppSettingsPatch = Partial<Omit<AppSettings, "updated_at">>;
  * @throws ApiError When the response status is not 2xx.
  */
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const response = await fetch(apiUrl(path), init);
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     throw new ApiError(response.status, detailText(payload));
