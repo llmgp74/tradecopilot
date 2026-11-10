@@ -1,0 +1,36 @@
+name: desktop
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: macos-14
+          target: aarch64-apple-darwin
+        # Use the current x86_64 macOS runner label if macos-13 is retired.
+        - os: macos-13
+          target: x86_64-apple-darwin
+        - os: windows-latest
+          target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    - uses: astral-sh/setup-uv@v5
+    - run: uv sync --frozen
+    - run: npm ci
+      working-directory: ui
+    - run: npm run tauri build -- --target ${{ matrix.target }}
+      working-directory: ui
+    - uses: actions/upload-artifact@v4
+      with:
+        name: tradecopilot-${{ matrix.target }}
+        path: ui/src-tauri/target/${{ matrix.target }}/release/bundle/**
