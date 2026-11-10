@@ -1,3 +1,4 @@
+mod agent;
 mod runtime;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
