@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./app";
+import { DesktopBoot } from "./components/desktop-boot";
 import { ErrorBoundary } from "./components/error-boundary";
 import { ThemeProvider } from "./theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -12,7 +13,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <ThemeProvider>
       <TooltipProvider>
         <ErrorBoundary>
-          <App />
+          <DesktopBoot>
+            <App />
+          </DesktopBoot>
         </ErrorBoundary>
         <Toaster position="top-center" />
       </TooltipProvider>
