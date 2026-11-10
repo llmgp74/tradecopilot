@@ -29,6 +29,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "resources": {
       "resources/agent/": "agent/",
       "resources/requirements.lock.txt": "requirements.lock.txt"
