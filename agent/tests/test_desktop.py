@@ -12,6 +12,11 @@ def test_listening_line_is_compact_json() -> None:
     assert desktop.listening_line(51234) == '{"event": "listening", "port": 51234}'
 
 
+def test_parent_change_is_detected() -> None:
+    assert desktop.parent_gone(100, 1)
+    assert not desktop.parent_gone(100, 100)
+
+
 def test_server_binds_an_ephemeral_loopback_port() -> None:
     server = desktop.create_server()
     assert server.config.host == "127.0.0.1"
