@@ -24,7 +24,7 @@ impl WindowsJob {
     pub fn new() -> io::Result<Self> {
         unsafe {
             let handle = CreateJobObjectW(ptr::null(), ptr::null());
-            if handle == 0 {
+            if handle.is_null() {
                 return Err(io::Error::last_os_error());
             }
             let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
