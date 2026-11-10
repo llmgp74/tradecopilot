@@ -4,8 +4,14 @@ Single-user, local trading co-pilot.
 
 ## Requirements
 
+For development:
+
 - Python 3.12 or later and [uv](https://docs.astral.sh/uv/)
-<!-- - Node.js 20 or later and npm, for the frontend -->
+- Node.js 22 or later and npm, for the frontend and the desktop build
+- Rust, for the Tauri shell
+
+The desktop app ships with its own Python runtime. End users need none of the
+above.
 
 ## Setup
 
@@ -66,3 +72,17 @@ uv run tradecopilot serve
 The server listens on `http://127.0.0.1:8000`. API documentation is at `/docs`,
 `/redoc`, and `/openapi.json`. When `ui/dist` exists, the same process serves the
 built frontend at `/`.
+
+## Build the desktop app
+
+```bash
+cd ui
+npm ci
+npm run tauri build
+```
+
+The build stages the agent source and exported requirements into the Tauri
+resources, then bundles the frontend. The first launch downloads uv, CPython
+3.13 and the locked dependencies into `~/.tradecopilot/runtime`, so it needs
+network access. Later launches start the managed runtime and the agent
+directly.
