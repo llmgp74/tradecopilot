@@ -204,10 +204,11 @@ pub fn install_steps(
 
     let venv = runtime.join("venv");
     let venv_text = venv.to_string_lossy().to_string();
+    // --allow-existing lets Retry repair a venv left by a failed setup.
     run_uv(
         runtime,
         "venv",
-        &["venv", &venv_text, "--python", "3.13"],
+        &["venv", &venv_text, "--python", "3.13", "--allow-existing"],
         emit,
     )?;
 

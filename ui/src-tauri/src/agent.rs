@@ -96,14 +96,13 @@ pub fn spawn(
         .child
         .lock()
         .map_err(|_| "Agent state is poisoned.".to_string())?;
-    if let Some(child) = guard.as_mut() {
-        if child
+    if let Some(child) = guard.as_mut()
+        && child
             .try_wait()
             .map_err(|error| format!("Cannot check the agent: {error}"))?
             .is_none()
-        {
-            return Ok(());
-        }
+    {
+        return Ok(());
     }
 
     let mut command = Command::new(runtime::venv_python(runtime));
@@ -272,11 +271,11 @@ pub fn spawn(
 /// Stops the agent on purpose.
 pub fn stop(state: &AgentState) {
     state.stopping.store(true, Ordering::SeqCst);
-    if let Ok(mut guard) = state.child.lock() {
-        if let Some(mut child) = guard.take() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
+    if let Ok(mut guard) = state.child.lock()
+        && let Some(mut child) = guard.take()
+    {
+        let _ = child.kill();
+        let _ = child.wait();
     }
     if let Ok(mut slot) = state.base.lock() {
         slot.take();
