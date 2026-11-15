@@ -49,6 +49,7 @@ def _run(
             "reference_sha256": "reference",
             "code_sha256": "code",
             "agent_prompt_sha256": "prompt",
+            "projection_version": "visible-response-v1",
             "settings": {"max_output_tokens": 4096},
         },
     )
@@ -305,3 +306,38 @@ def test_saved_plan_distinguishes_partial_selection_and_missing_runs(
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["plan_coverage"]["status"] == "complete"
     assert report["by_mode"][0]["failed_runs"] == 1
+
+
+def test_tool_checks_and_archived_answer_annotations_have_separate_rates() -> None:
+    """Keep both measurement methods interpretable in a mixed-version report."""
+    old = _run("old")
+    current = _run("current")
+    old.scores["answer_claim_observations"] = [
+        {"expected": "contradicted", "observed": "supported"}
+    ]
+    current.scores["tool_claim_observations"] = [
+        {"expected": "contradicted", "observed": "contradicted"},
+        {"expected": "contradicted", "observed": None},
+    ]
+    current.metadata["projection_version"] = "visible-response-v2"
+    old.judge, current.judge = _judge(1), _judge(5)
+    rows = build_report([old, current])["by_condition"]
+    legacy, live = rows
+    assert legacy["quality"]["reasoning"]["mean"] == 1
+    assert live["quality"]["reasoning"]["mean"] == 5
+    assert legacy["verification"]["false_claim_detected"]["rate"] == 0
+    assert legacy["tool_verification"]["false_claim_detected"]["total"] == 0
+    assert live["verification"]["false_claim_detected"]["total"] == 0
+    assert live["tool_verification"]["false_claim_detected"] == {
+        "numerator": 1,
+        "observed": 1,
+        "total": 2,
+        "missing": 1,
+        "rate": 1.0,
+    }
+
+    current.condition = "none"
+    pair = build_report([old, current])["paired_ablation"][0]
+    assert pair["status"] == "mismatched_inputs"
+    assert pair["mismatched_metadata"] == ["projection_version"]
+    assert pair["metrics"] == {}

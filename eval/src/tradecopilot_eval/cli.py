@@ -57,6 +57,24 @@ def _parser() -> argparse.ArgumentParser:
         "validate", help="Check cases and reference labels locally"
     )
     validate.add_argument("--suite", type=Path, default=_default_suite())
+    validate.add_argument("--evidence-root", type=Path)
+    reference_review = commands.add_parser(
+        "reference-review", help="Prepare case and calibration review files offline"
+    )
+    reference_review.add_argument("--suite", type=Path, default=_default_suite())
+    reference_review.add_argument("--development-case", type=Path, action="append")
+    reference_review.add_argument(
+        "--calibration-data",
+        type=Path,
+        default=_default_suite().parent.parent / "calibration/dev01.json",
+    )
+    reference_review.add_argument(
+        "--calibration-case",
+        type=Path,
+        default=_default_suite().parent.parent / "scenarios/dev_01_position_cap",
+    )
+    reference_review.add_argument("--output", type=Path, required=True)
+    reference_review.add_argument("--evidence-root", type=Path)
     run = commands.add_parser(
         "run", help="Run a frozen suite; defaults to scripted rehearsal"
     )
@@ -64,6 +82,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--output", type=Path, required=True)
     run.add_argument("--limit", type=int)
     run.add_argument("--allow-unreviewed-fixtures", action="store_true")
+    run.add_argument("--evidence-root", type=Path)
     _model_options(run)
     calibration = commands.add_parser(
         "calibrate", help="Check judge development examples"
@@ -79,6 +98,7 @@ def _parser() -> argparse.ArgumentParser:
         default=_default_suite().parent.parent / "scenarios/dev_01_position_cap",
     )
     calibration.add_argument("--output", type=Path, required=True)
+    calibration.add_argument("--evidence-root", type=Path)
     _model_options(calibration)
     report = commands.add_parser("report", help="Rebuild a report from saved runs")
     report.add_argument("--input", type=Path, required=True)
@@ -141,7 +161,7 @@ async def _calibrate(args: argparse.Namespace) -> bool:
     if config.mode == "model" and not config.allow_model_calls:
         raise PermissionError("Model calls require explicit enablement.")
     examples = load_calibration(args.data)
-    case = load_case(args.case)
+    case = load_case(args.case, evidence_root=args.evidence_root)
     if examples.scenario_id != case.scenario.scenario_id:
         raise ValueError("Calibration examples and scenario IDs disagree.")
     placeholder = RunRecord(
@@ -185,9 +205,15 @@ def _review_items(directory: Path) -> list[ReviewItem]:
         record = RunRecord.model_validate_json(path.read_text(encoding="utf-8"))
         if record.judge is None:
             continue
-        candidate = JudgeInput.model_validate_json(
+        saved = json.loads(
             (path.parent / "judge-input.json").read_text(encoding="utf-8")
         )
+        if not isinstance(saved, dict):
+            raise ValueError("Saved judge input must be a JSON object.")
+        version = record.metadata.get("projection_version", "visible-response-v1")
+        if saved.get("projection_version", version) != version:
+            raise ValueError("Saved judge input and run use different projections.")
+        candidate = JudgeInput.model_validate({**saved, "projection_version": version})
         items.append(
             ReviewItem(
                 run_id=record.run_id,
@@ -217,10 +243,32 @@ def main(argv: list[str] | None = None) -> int:
         from tradecopilot_eval.report import write_report
 
         if args.command == "validate":
-            suite, cases = load_suite(args.suite)
+            suite, cases = load_suite(args.suite, evidence_root=args.evidence_root)
             result = validate_cases(cases)
             print(json.dumps({"suite_id": suite.suite_id, **result}, indent=2))
             return 0 if result["status"] == "passed" else 1
+        if args.command == "reference-review":
+            from tradecopilot_eval.reference_review import write_reference_review
+
+            development = args.development_case
+            if development is None:
+                scenarios = _default_suite().parent.parent / "scenarios"
+                development = [
+                    scenarios / "dev_01_position_cap",
+                    scenarios / "dev_02_false_growth",
+                ]
+            with offline_connections():
+                manifest = write_reference_review(
+                    args.suite,
+                    development,
+                    args.calibration_data,
+                    args.calibration_case,
+                    args.output,
+                    evidence_root=args.evidence_root,
+                )
+            print(f"Saved review materials to {args.output.resolve()}")
+            print("Human review is pending; all review fields are blank.")
+            return 0 if manifest["validation"]["status"] == "passed" else 1
         if args.command == "calibrate":
             guard = offline_connections() if args.mode == "scripted" else nullcontext()
             with guard:
@@ -241,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
                         judge,
                         limit=args.limit,
                         allow_unreviewed=args.allow_unreviewed_fixtures,
+                        evidence_root=args.evidence_root,
                     )
                 )
             write_report(records, args.output)

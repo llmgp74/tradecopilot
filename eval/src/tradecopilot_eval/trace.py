@@ -9,8 +9,9 @@ from langchain_core.messages import (
     ToolMessage,
     message_to_dict,
 )
+from tradecopilot_agent.server.ai_sdk.utils import message_text
 
-from tradecopilot_eval.records import Proposal, VisibleResponse
+from tradecopilot_eval.records import ChatAnswer, PlanItem, Proposal
 
 
 def capture_proposals(messages: list[BaseMessage]) -> tuple[list[Proposal], list[str]]:
@@ -74,37 +75,40 @@ def capture_proposals(messages: list[BaseMessage]) -> tuple[list[Proposal], list
     return attempts, first_ids
 
 
-def response_projection(state: dict[str, Any]) -> VisibleResponse:
-    """Return the last answer and the five visible contract fields.
+def response_projection(state: dict[str, Any]) -> ChatAnswer:
+    """Read the final answer and plan using the chat adapter's text rules.
 
     Args:
-        state: Final or latest available graph state.
+        state: Final or latest available graph state in a frozen research run.
 
     Returns:
-        A versioned-by-run-metadata projection with no private memory labels.
+        The answer and plan for the current user turn. Tool cards, reasoning and
+        graph artifacts are outside the recommendation-quality rubric. A final
+        tool call without a subsequent answer leaves the answer text empty.
+
+    Raises:
+        ValueError: The plan contains an invalid display item.
     """
-    messages = list(state.get("messages", []))
-    text = ""
-    for message in reversed(messages):
+    for message in reversed(state.get("messages", [])):
         if isinstance(message, HumanMessage):
             break
-        if isinstance(message, AIMessage) and not message.tool_calls:
-            content = message.content
-            if isinstance(content, str):
-                text = content
-            else:
-                text = "\n".join(
-                    part if isinstance(part, str) else str(part.get("text", ""))
-                    for part in content
+        if isinstance(message, AIMessage):
+            steps = state.get("todos", [])
+            if not isinstance(steps, list):
+                raise ValueError("The chat plan must be a list.")
+            todos = []
+            for step in steps:
+                if not isinstance(step, dict):
+                    raise ValueError("Each chat plan step must be an object.")
+                todos.append(
+                    PlanItem.model_validate(
+                        {key: step[key] for key in ("content", "status") if key in step}
+                    )
                 )
-            break
-    return VisibleResponse(
-        text=text,
-        draft_recommendation=state.get("draft_recommendation"),
-        portfolio_impact=state.get("portfolio_impact"),
-        verification=state.get("verification", []),
-        todos=state.get("todos", []),
-    )
+            return ChatAnswer(
+                text="" if message.tool_calls else message_text(message), todos=todos
+            )
+    return ChatAnswer()
 
 
 def serialize_trace(messages: list[BaseMessage]) -> list[dict[str, Any]]:

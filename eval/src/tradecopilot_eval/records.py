@@ -1,6 +1,6 @@
 """Persisted evaluation records; missing observations remain null."""
 
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from tradecopilot_agent.memory import MemoryCondition
@@ -22,8 +22,25 @@ class Proposal(Record):
     capture_error: str | None = None
 
 
+PROJECTION_VERSION: Final = "visible-response-v2"
+
+
+class PlanItem(Record):
+    """The two fields displayed for a step in the chat plan."""
+
+    content: str
+    status: str
+
+
+class ChatAnswer(Record):
+    """Final assistant text and plan displayed for a frozen evaluation turn."""
+
+    text: str = ""
+    todos: list[PlanItem] = Field(default_factory=list)
+
+
 class VisibleResponse(Record):
-    """Stable projection of the response shown to a user and a blind judge."""
+    """Archived v1 projection, including fields taken directly from graph state."""
 
     text: str = ""
     draft_recommendation: dict[str, Any] | None = None
@@ -33,7 +50,7 @@ class VisibleResponse(Record):
 
 
 class Usage(Record):
-    """Usage across agent and claim-extraction calls; price is optional."""
+    """Usage reported by model callbacks during a run."""
 
     model_calls: int = 0
     calls_with_usage: int = 0
@@ -60,7 +77,8 @@ class RunRecord(Record):
     errors: list[str] = Field(default_factory=list)
     initial_proposal_ids: list[str] = Field(default_factory=list)
     proposals: list[Proposal] = Field(default_factory=list)
-    final_response: VisibleResponse = Field(default_factory=VisibleResponse)
+    final_response: ChatAnswer | VisibleResponse = Field(default_factory=ChatAnswer)
+    final_draft: dict[str, Any] | None = None
     trace: list[dict[str, Any]] = Field(default_factory=list)
     evidence: dict[str, Any] = Field(default_factory=dict)
     tool_errors: list[dict[str, Any]] = Field(default_factory=list)

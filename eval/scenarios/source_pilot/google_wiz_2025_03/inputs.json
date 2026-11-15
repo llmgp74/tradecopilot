@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "scenario_id": "REAL-NEWS-01",
+  "split": "development",
+  "synthetic": false,
+  "decision_time": "2025-03-19T08:00:00Z",
+  "request": "Google has announced a deal to buy Wiz. What does the announcement establish, and what remains uncertain before I decide whether to buy GOOGL?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 5.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "GOOGL"
+    ],
+    "source_preferences": [
+      "filings",
+      "company_announcements"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2025-03-17T12:00:00Z"
+  },
+  "journal_before_decision": [],
+  "tool_fixtures": [
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2025-03-19T08:00:00Z",
+      "output": {
+        "summary": "Frozen source records: [{\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[],\"data_origin\":\"scenario_assumption\"}]",
+        "evidence": [
+          {
+            "id": "REALNEWS01-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "assumed_source_pilot_account",
+            "url": null,
+            "published_at": "2025-03-19T08:00:00Z",
+            "fetched_at": "2025-03-19T08:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": [],
+              "data_origin": "scenario_assumption"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2025-03-19T08:00:00Z",
+      "output": {
+        "summary": "Frozen source records: [{\"kind\":\"account\",\"currency\":\"USD\",\"equity\":100000.0,\"cash\":100000.0,\"buying_power\":100000.0,\"fractional\":false,\"positions\":[],\"data_origin\":\"scenario_assumption\"}]",
+        "evidence": [
+          {
+            "id": "REALNEWS01-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "assumed_source_pilot_account",
+            "url": null,
+            "published_at": "2025-03-19T08:00:00Z",
+            "fetched_at": "2025-03-19T08:00:00Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": [],
+              "data_origin": "scenario_assumption"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "news",
+      "arguments": {
+        "ticker": "GOOGL",
+        "limit": 10
+      },
+      "available_at": "2025-03-19T07:00:00Z",
+      "output": {
+        "summary": "Frozen source records: [{\"kind\":\"news\",\"ticker\":\"GOOGL\",\"date\":\"2025-03-18\",\"title\":\"Proposed Google-Wiz acquisition announced\",\"consideration_usd\":32000000000,\"payment_form\":\"cash\",\"consideration_subject_to_closing_adjustments\":true,\"transaction_status\":\"agreement_signed_pending_closing\",\"closing_conditions\":[\"regulatory_approvals\",\"customary_closing_conditions\"],\"planned_business\":\"Wiz joins Google Cloud after closing\",\"source_character\":\"issuer_announcement\",\"extraction_method\":\"manual_announcement_summary\",\"publication_time_precision\":\"date_only\",\"published_at_interpretation\":\"conservative_next_day_availability_proxy\"}]",
+        "evidence": [
+          {
+            "id": "REALNEWS01-ANNOUNCEMENT",
+            "tool": "get_news",
+            "args": {
+              "ticker": "GOOGL",
+              "limit": 10
+            },
+            "source": "google_wiz_20250318_release",
+            "url": "https://blog.google/company-news/inside-google/company-announcements/google-agreement-acquire-wiz/",
+            "published_at": "2025-03-19T07:00:00Z",
+            "fetched_at": "2026-11-09T21:30:29.895738+00:00",
+            "stale": false,
+            "payload": {
+              "kind": "news",
+              "ticker": "GOOGL",
+              "date": "2025-03-18",
+              "title": "Proposed Google-Wiz acquisition announced",
+              "consideration_usd": 32000000000,
+              "payment_form": "cash",
+              "consideration_subject_to_closing_adjustments": true,
+              "transaction_status": "agreement_signed_pending_closing",
+              "closing_conditions": [
+                "regulatory_approvals",
+                "customary_closing_conditions"
+              ],
+              "planned_business": "Wiz joins Google Cloud after closing",
+              "source_character": "issuer_announcement",
+              "extraction_method": "manual_announcement_summary",
+              "publication_time_precision": "date_only",
+              "published_at_interpretation": "conservative_next_day_availability_proxy"
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "GOOGL"
+      },
+      "available_at": "2025-03-19T08:00:00Z",
+      "output": {
+        "summary": "A historical quote was not collected for this development case. Do not treat the frozen announcement as a price quote.",
+        "evidence": [],
+        "error": "not_collected"
+      }
+    }
+  ]
+}

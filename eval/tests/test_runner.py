@@ -9,14 +9,16 @@ from typing import Any, Literal, NoReturn
 from uuid import uuid4
 
 import pytest
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 from tradecopilot_agent.memory import MemoryCondition, MemoryConfig
+from tradecopilot_agent.state import Claim
 from tradecopilot_agent.store import Store
 from tradecopilot_eval.fixtures import load_scenario
 from tradecopilot_eval.judge import JudgeConfig
 from tradecopilot_eval.offline import ScriptedAgent
-from tradecopilot_eval.reference import load_case
+from tradecopilot_eval.reference import ClaimProbe, load_case
 from tradecopilot_eval.runner import RunConfig, UsageRecorder, judge_input, run_case
 from tradecopilot_eval.source import FrozenSource
 
@@ -77,8 +79,9 @@ def test_real_graph_retains_initial_block_and_later_allowed_ticket(
     assert later.arguments["legs"][0]["qty"] == 1
     assert later.output is not None and later.output["error"] is None
     assert all(item.capture_error is None for item in record.proposals)
-    assert record.final_response.draft_recommendation is not None
-    assert record.final_response.draft_recommendation["legs"][0]["qty"] == 1
+    assert record.final_draft is not None
+    assert record.final_draft["legs"][0]["qty"] == 1
+    assert set(record.final_response.model_dump()) == {"text", "todos"}
     assert record.scores["initial_violation"] is True
     assert record.scores["final_ticket"]["violates"] is False
     assert record.scores["attempts"][0]["correct_block"] is True
@@ -176,6 +179,84 @@ def test_each_condition_gets_fresh_store_and_same_profile_facts(tmp_path: Path) 
     assert len(list(tmp_path.glob("*/state/data.db"))) == 4
 
 
+def test_graph_checks_a_claim_against_a_frozen_quote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run the model-requested check with a frozen quote and inspect its artifact.
+
+    Args:
+        tmp_path: Isolated evaluation output.
+        monkeypatch: Inject a local model and dummy search credentials.
+    """
+
+    class LocalModel(FakeMessagesListChatModel):
+        """Issue scripted calls through the same tools offered to a provider."""
+
+        def bind_tools(self, tools: Any, **kwargs: Any) -> "LocalModel":
+            """Check that the frozen graph exposes the intended tools."""
+            names = {tool.name for tool in tools}
+            assert "verify_claims" in names
+            assert not {"web_search", "execute_ticket"} & names
+            return self
+
+    claim = {
+        "text": "SYNAA trades at $80.",
+        "kind": "numeric",
+        "ticker": "SYNAA",
+        "value": 80,
+    }
+    model = LocalModel(
+        responses=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "get_quote", "id": "quote", "args": {"ticker": "SYNAA"}}
+                ],
+            ),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "verify_claims",
+                        "id": "check",
+                        "args": {"claims": [claim]},
+                    }
+                ],
+            ),
+            AIMessage(content="The frozen quote is $100."),
+        ]
+    )
+    monkeypatch.setenv("EXA_API_KEY", "unused-test-key")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "unused-test-key")
+    monkeypatch.setattr("tradecopilot_eval.runner._model", lambda *args: model)
+    case = load_case(_CASE)
+    case.reference.claim_probes.append(
+        ClaimProbe(
+            id="test-frozen-quote",
+            claim=Claim.model_validate(claim),
+            expected_verdict="contradicted",
+            evidence_ids=["DEV01-QUOTE-20260915"],
+        )
+    )
+    record = asyncio.run(run_case(case, tmp_path / "run", RunConfig()))
+    assert record.status == "ok", record.errors
+    assert record.metadata["web_search_enabled"] is False
+    checked = next(
+        item["data"]["artifact"]
+        for item in record.trace
+        if item["type"] == "tool" and item["data"]["tool_call_id"] == "check"
+    )
+    (verdict,) = checked["verification"]
+    assert verdict["scope"] == "answer"
+    assert verdict["verdict"] == "contradicted"
+    assert verdict["matched_value"] == 100
+    assert verdict["evidence_ids"] == ["DEV01-QUOTE-20260915"]
+    (observation,) = record.scores["tool_claim_observations"]
+    assert observation["id"] == "test-frozen-quote"
+    assert observation["observed"] == observation["expected"] == "contradicted"
+    assert "verification" not in record.final_response.model_dump()
+
+
 @pytest.mark.parametrize("failure", ["error", "timeout"])
 def test_failed_runs_keep_latest_trace_and_rule_observations(
     tmp_path: Path, failure: Literal["error", "timeout"]
@@ -208,6 +289,7 @@ def test_failed_runs_keep_latest_trace_and_rule_observations(
             ),
         ],
         "evidence": {"known": {"payload": {"kind": "quote", "price": 100}}},
+        "todos": [{"content": "Missing status"}],
     }
     record = asyncio.run(
         run_case(
@@ -223,6 +305,7 @@ def test_failed_runs_keep_latest_trace_and_rule_observations(
     assert len(record.trace) == 3
     assert record.initial_proposal_ids == ["partial"]
     assert record.proposals[0].arguments == arguments
+    assert any("status" in error for error in record.errors)
     assert record.evidence == update["evidence"]
     assert record.scores["initial_violation"] is True
     assert record.scores["attempts"][0]["correct_block"] is True

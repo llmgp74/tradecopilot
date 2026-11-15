@@ -1,6 +1,7 @@
 """Exercise the command workflow, frozen schedule, and external-call gates."""
 
 import asyncio
+import csv
 import json
 from collections import Counter
 from pathlib import Path
@@ -42,6 +43,40 @@ def test_wrong_reference_label_is_rejected() -> None:
     result = validate_cases([case])
     assert result["status"] == "failed"
     assert result["errors"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("resulting_weight_pct", 5.9),
+        ("resulting_position_value_usd", 5900),
+        ("resulting_weight_pct", float("nan")),
+    ],
+)
+def test_incorrect_numeric_reference_cannot_pass_validation(
+    field: str, value: float
+) -> None:
+    """Reject a bad amount or percentage even when the block label is correct."""
+    case = load_case(_DEV01)
+    setattr(case.reference.candidates[0].expected, field, value)
+    result = validate_cases([case])
+    assert result["status"] == "failed"
+    assert any(field in error for error in result["errors"])
+
+
+def test_scalar_numeric_reference_cannot_describe_two_positions() -> None:
+    """Require unambiguous labels rather than taking the first computed position."""
+    case = load_case(_DEV01)
+    candidate = case.reference.candidates[0]
+    quote = case.scenario.tool_fixtures[0].model_copy(deep=True)
+    quote.output.evidence[0].payload["ticker"] = "SYNZZ"
+    case.scenario.tool_fixtures.append(quote)
+    candidate.tool_arguments["legs"].append(
+        {"ticker": "SYNZZ", "side": "buy", "qty": 1}
+    )
+    result = validate_cases([case])
+    assert result["status"] == "failed"
+    assert any("needs one scored position" in error for error in result["errors"])
 
 
 def test_cli_rehearsal_report_review_and_blank_agreement(tmp_path: Path) -> None:
@@ -86,6 +121,37 @@ def test_cli_rehearsal_report_review_and_blank_agreement(tmp_path: Path) -> None
     )
     assert main(["run", "--output", str(output), "--limit", "2"]) == 2
     assert len(read_runs(output)) == 2
+
+
+def test_archived_judge_input_exports_the_original_view(tmp_path: Path) -> None:
+    """Keep v1 human review comparable to the model that saw the old input."""
+    output, review = tmp_path / "experiment", tmp_path / "review"
+    assert main(["run", "--output", str(output), "--limit", "1"]) == 0
+    (folder,) = (output / "runs").iterdir()
+    run_path, input_path = folder / "run.json", folder / "judge-input.json"
+    run, candidate = (
+        json.loads(run_path.read_text()),
+        json.loads(input_path.read_text()),
+    )
+    candidate.pop("projection_version")
+    original = {
+        "text": "Earlier answer",
+        "draft_recommendation": None,
+        "portfolio_impact": None,
+        "todos": [],
+        "verification": [{"scope": "answer", "verdict": "supported"}],
+    }
+    candidate["final_response"] = original
+    run["metadata"]["projection_version"] = "visible-response-v1"
+    run["final_response"] = original
+    run.pop("final_draft")
+    run["judge"]["prompt_version"] = "tradecopilot-judge-v1"
+    run_path.write_text(json.dumps(run))
+    input_path.write_text(json.dumps(candidate))
+    assert main(["review", "--input", str(output), "--output", str(review)]) == 0
+    with (review / "ratings.csv").open() as handle:
+        (row,) = csv.DictReader(handle)
+    assert json.loads(row["final_response_json"]) == original
 
 
 def test_cli_model_calls_require_explicit_enablement(tmp_path: Path) -> None:

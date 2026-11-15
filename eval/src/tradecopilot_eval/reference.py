@@ -16,6 +16,7 @@ from tradecopilot_agent.memory import MemoryCondition
 from tradecopilot_agent.state import Claim, EvidenceRecord
 
 from tradecopilot_eval.fixtures import Scenario, load_scenario
+from tradecopilot_eval.provenance import ProvenanceManifest, load_provenance
 
 
 class ReferenceModel(BaseModel):
@@ -79,6 +80,10 @@ class Case(ReferenceModel):
     reference_sha256: str
     input_document: bytes = b""
     reference_document: bytes = b""
+    provenance: ProvenanceManifest | None = None
+    provenance_document: bytes = b""
+    provenance_sha256: str | None = None
+    source_hashes: dict[str, str] = Field(default_factory=dict)
 
 
 def file_digest(path: Path) -> str:
@@ -86,11 +91,12 @@ def file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def load_case(directory: Path) -> Case:
+def load_case(directory: Path, *, evidence_root: Path | None = None) -> Case:
     """Load and cross-check a case, including reference evidence identifiers.
 
     Args:
         directory: Directory containing inputs.json and reference.json.
+        evidence_root: External archive root required for primary-source cases.
 
     Returns:
         Inputs, independent labels, and hashes for a run manifest.
@@ -139,6 +145,25 @@ def load_case(directory: Path) -> Case:
     for probe in reference.claim_probes:
         if not set(probe.evidence_ids) <= set(ids):
             raise ValueError(f"Unknown reference evidence in {probe.id}.")
+    provenance = None
+    provenance_document = b""
+    if not scenario.synthetic:
+        if reference.provenance_status != "primary_source_pending_review":
+            raise ValueError(
+                "Real-source references must remain primary_source_pending_review."
+            )
+        records = {
+            **source_records,
+            **{item.id: item for item in reference.reference_evidence},
+        }
+        provenance, provenance_document = load_provenance(
+            directory / "provenance.json",
+            scenario,
+            records,
+            evidence_root=evidence_root,
+        )
+    elif (directory / "provenance.json").exists():
+        raise ValueError("Synthetic cases must not declare primary-source provenance.")
     return Case(
         scenario=scenario,
         reference=reference,
@@ -146,6 +171,14 @@ def load_case(directory: Path) -> Case:
         reference_sha256=file_digest(labels),
         input_document=inputs.read_bytes(),
         reference_document=labels.read_bytes(),
+        provenance=provenance,
+        provenance_document=provenance_document,
+        provenance_sha256=hashlib.sha256(provenance_document).hexdigest()
+        if provenance_document
+        else None,
+        source_hashes={source.id: source.sha256 for source in provenance.sources}
+        if provenance
+        else {},
     )
 
 
@@ -173,11 +206,14 @@ class Suite(ReferenceModel):
         return self
 
 
-def load_suite(path: Path) -> tuple[Suite, list[Case]]:
+def load_suite(
+    path: Path, *, evidence_root: Path | None = None
+) -> tuple[Suite, list[Case]]:
     """Load a suite and reject duplicate cases or unknown comparison members.
 
     Args:
         path: Suite JSON; scenario paths resolve relative to this file.
+        evidence_root: External archive root for any primary-source cases.
 
     Returns:
         The schedule and loaded cases in declared order.
@@ -187,7 +223,10 @@ def load_suite(path: Path) -> tuple[Suite, list[Case]]:
         ValueError: Case or schedule validation fails.
     """
     suite = Suite.model_validate_json(path.read_text(encoding="utf-8"))
-    cases = [load_case(path.parent / relative) for relative in suite.scenario_paths]
+    cases = [
+        load_case(path.parent / relative, evidence_root=evidence_root)
+        for relative in suite.scenario_paths
+    ]
     ids = [case.scenario.scenario_id for case in cases]
     if len(ids) != len(set(ids)):
         raise ValueError("Suite contains duplicate scenario IDs.")

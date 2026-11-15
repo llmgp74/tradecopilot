@@ -1,6 +1,7 @@
 """Freeze case versions and schedule the proposal's repeated memory comparison."""
 
 import json
+import math
 import random
 from collections import Counter
 from pathlib import Path
@@ -11,7 +12,7 @@ from tradecopilot_agent.memory import MemoryCondition
 
 from tradecopilot_eval.judge import JudgeConfig
 from tradecopilot_eval.records import RunRecord
-from tradecopilot_eval.reference import Case, Suite, file_digest, load_suite
+from tradecopilot_eval.reference import Case, Suite, TicketCase, file_digest, load_suite
 from tradecopilot_eval.runner import RunConfig, run_case, write_json
 from tradecopilot_eval.scoring import score_ticket, verifier_probes
 
@@ -50,6 +51,29 @@ def plan_trials(suite: Suite, cases: list[Case]) -> list[Trial]:
     return screening + comparisons
 
 
+def _numeric_label_errors(candidate: TicketCase, observed: dict[str, Any]) -> list[str]:
+    errors = []
+    for field, observed_field in (
+        ("resulting_position_value_usd", "after_values_usd"),
+        ("resulting_weight_pct", "after_weights_pct"),
+    ):
+        expected = getattr(candidate.expected, field)
+        if expected is None:
+            continue
+        values = observed.get(observed_field, {})
+        if len(values) != 1:
+            errors.append(f"{field} needs one scored position")
+            continue
+        actual = next(iter(values.values()))
+        if not (
+            math.isfinite(expected)
+            and math.isfinite(actual)
+            and math.isclose(actual, expected, rel_tol=0, abs_tol=1e-9)
+        ):
+            errors.append(f"{field} mismatch: expected {expected}, calculated {actual}")
+    return errors
+
+
 def validate_cases(cases: list[Case]) -> dict[str, Any]:
     """Validate independent ticket labels and direct claim probes before a run.
 
@@ -57,7 +81,9 @@ def validate_cases(cases: list[Case]) -> dict[str, Any]:
         cases: Loaded case inputs and references.
 
     Returns:
-        Case counts, separate direct-verifier observations, and validation errors.
+        Case counts, ticket amount/weight checks, direct-verifier observations,
+        and validation errors. Scalar amount and weight labels require a single
+        scored position; a multi-position candidate must omit those labels.
         This checks software and labels, not human acceptance or model quality.
     """
     errors: list[str] = []
@@ -77,6 +103,10 @@ def validate_cases(cases: list[Case]) -> dict[str, Any]:
                 errors.append(
                     f"{case.scenario.scenario_id}/{candidate.id}: ticket label mismatch"
                 )
+            errors.extend(
+                f"{case.scenario.scenario_id}/{candidate.id}: {error}"
+                for error in _numeric_label_errors(candidate, observed)
+            )
         observations = verifier_probes(case)
         probes[case.scenario.scenario_id] = observations
         for item in observations:
@@ -114,6 +144,7 @@ async def run_suite(
     *,
     limit: int | None = None,
     allow_unreviewed: bool = False,
+    evidence_root: Path | None = None,
 ) -> list[RunRecord]:
     """Run a frozen plan and save every attempted trial, including failures.
 
@@ -124,6 +155,7 @@ async def run_suite(
         judge_config: Shared judge configuration.
         limit: Optional smoke-test cap; the manifest marks such runs as partial.
         allow_unreviewed: Explicit opt-in to model calls on draft synthetic cases.
+        evidence_root: External archive root for primary-source case provenance.
 
     Returns:
         Records for executed trials; all planned but omitted trials remain listed.
@@ -133,7 +165,7 @@ async def run_suite(
         PermissionError: Real calls or draft-case use was not enabled.
         FileExistsError: A previous output directory would be overwritten.
     """
-    suite, cases = load_suite(suite_path)
+    suite, cases = load_suite(suite_path, evidence_root=evidence_root)
     if config.mode != judge_config.mode or config.model_id != judge_config.agent_model:
         raise ValueError("Agent and judge run modes/model identifiers disagree.")
     if config.model_family != judge_config.agent_family:
@@ -170,6 +202,8 @@ async def run_suite(
                 case.scenario.scenario_id: {
                     "input_sha256": case.input_sha256,
                     "reference_sha256": case.reference_sha256,
+                    "provenance_sha256": case.provenance_sha256,
+                    "source_hashes": case.source_hashes,
                 }
                 for case in cases
             },

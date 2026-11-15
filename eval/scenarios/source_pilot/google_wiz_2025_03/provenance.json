@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "scenario_id": "REAL-NEWS-01",
+  "status": "primary_source_pending_review",
+  "sources": [
+    {
+      "id": "google_wiz_20250318_release",
+      "title": "Google issuer announcement of proposed Wiz acquisition",
+      "url": "https://blog.google/company-news/inside-google/company-announcements/google-agreement-acquire-wiz/",
+      "published_date": "2025-03-18",
+      "available_at": "2025-03-19T07:00:00Z",
+      "availability_basis": "The issuer shows March 18, 2025, without a verified first-publication timestamp. Use midnight at the start of March 19 in America/Los_Angeles as a conservative availability proxy. The body was cross-checked with SEC accession 0001652044-25-000027; its raw download returned 403.",
+      "retrieved_at": "2026-11-09T21:30:29.895738+00:00",
+      "snapshot_path": "google-wiz-20250318-release.html",
+      "sha256": "4fe6047d59af7cb4fdc29e50f4e04f6e4b8993303691f8a2a06fac7148808060",
+      "content_type": "text/html"
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "REALNEWS01-ACCOUNT",
+      "origin": "scenario_assumption",
+      "source_id": null,
+      "locator": "Hypothetical frozen portfolio fixture.",
+      "note": "Invented account for a controlled development case, not an observed customer or brokerage account.",
+      "evidence_sha256": "e712f483e1ed1fe8351ba161cf14194bd7dc9d311922933d747bbd0e5f24d487"
+    },
+    {
+      "evidence_id": "REALNEWS01-POSITIONS",
+      "origin": "scenario_assumption",
+      "source_id": null,
+      "locator": "Hypothetical frozen portfolio fixture.",
+      "note": "Invented account for a controlled development case, not an observed customer or brokerage account.",
+      "evidence_sha256": "b47761f6bf7201e980941b18b350cc62afff8c6bde34bc3afe149a02b7766fc2"
+    },
+    {
+      "evidence_id": "REALNEWS01-ANNOUNCEMENT",
+      "origin": "primary_source",
+      "source_id": "google_wiz_20250318_release",
+      "locator": "Dated announcement opening paragraph and closing-conditions paragraph; cross-checked with SEC Exhibit 99.1, accession 0001652044-25-000027.",
+      "note": "Manually normalized announcement facts. No later outcome or dynamically generated page sections enter the evidence. The publication timestamp is a conservative proxy.",
+      "evidence_sha256": "e77ce285cf5aa1208a7bddfd8864146dfc07afbecedebf553c6e5d534adcf507"
+    }
+  ]
+}

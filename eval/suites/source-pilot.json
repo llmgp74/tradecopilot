@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "suite_id": "source-development-v1",
+  "description": "Two primary-source development cases with hypothetical user context. References and timing assumptions still need independent human review.",
+  "scenario_paths": [
+    "../scenarios/source_pilot/apple_2024_q4",
+    "../scenarios/source_pilot/google_wiz_2025_03"
+  ],
+  "ablation_scenarios": [],
+  "repetitions": 1,
+  "conditions": ["none", "prose", "structured", "full"],
+  "full_condition": "full",
+  "seed": 74,
+  "provenance_status": "primary_source_pending_review"
+}

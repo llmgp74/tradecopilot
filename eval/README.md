@@ -4,9 +4,15 @@ This package runs frozen cases through the shared agent, saves original proposal
 and final responses, checks measurable rules, and sends a blind response view to
 a separate judge. It also exports human review forms and summary reports.
 
-The implementation follows [the proposal](../proposal/main.tex). The included
-data is synthetic and pending review. Scripted runs test the software; they do
-not establish agent quality, memory improvements, or judge accuracy.
+The implementation follows [the proposal](../proposal/main.tex). The ten-case
+pilot is synthetic and pending review. Two separate
+[source development cases](scenarios/source_pilot/README.md) use archived issuer
+publications with hypothetical user context. Their references also need review.
+Scripted runs do not establish agent quality, memory improvements, or judge accuracy.
+
+The [next steps](next-steps.md) describe the remaining work and its completion
+criteria. Start with the offline `reference-review` command there to prepare
+the cases and calibration examples for human review.
 
 ## Workflow
 
@@ -99,9 +105,10 @@ Real calls require `--mode model --allow-model-calls`, explicit agent and judge
 IDs and family labels, and provider credentials in the environment. The judge
 must use a different model family. Temperature is zero where the adapter
 supports it. The runner records output-token limits, timeouts, and source,
-fixture, and prompt hashes. The graph allows up to 20 agent calls; claim-extraction
-calls are additional and included in the agent usage totals. Judge usage is
-recorded separately. Judge calls retry malformed structured output once.
+fixture, and prompt hashes. The graph allows up to 20 agent model calls. The
+agent can use `verify_claims` to check facts against evidence already collected.
+This deterministic tool makes no model call. Judge usage is recorded separately.
+Judge calls retry malformed structured output once.
 
 The included cases need `--allow-unreviewed-fixtures` for a model pilot. Before
 reporting the proposal's empirical study, replace or supplement synthetic data
@@ -115,6 +122,8 @@ anchors. Provider behavior and rating quality still need a small real-model pilo
 - [Judge](judge.md): rubric, validation, retries, and calibration.
 - [Development examples](scenarios/development.md): DEV-01 and DEV-02.
 - [Ten pilot cases](scenarios/evaluation/README.md): categories and reference labels.
+- [Source development cases](scenarios/source_pilot/README.md): two official-source
+  cases, archive validation, and explicit evidence gaps.
 
 Python checks from `eval/`:
 

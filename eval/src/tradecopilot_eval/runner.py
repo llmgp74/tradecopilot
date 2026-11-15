@@ -33,7 +33,12 @@ from tradecopilot_eval.judge import (
     sanitize_text,
 )
 from tradecopilot_eval.offline import ScriptedAgent
-from tradecopilot_eval.records import RunRecord, Usage
+from tradecopilot_eval.records import (
+    PROJECTION_VERSION,
+    RunRecord,
+    Usage,
+    VisibleResponse,
+)
 from tradecopilot_eval.reference import Case
 from tradecopilot_eval.scoring import score_run
 from tradecopilot_eval.source import FrozenSource
@@ -42,8 +47,6 @@ from tradecopilot_eval.trace import (
     response_projection,
     serialize_trace,
 )
-
-PROJECTION_VERSION = "visible-response-v1"
 
 
 class RunConfig(BaseModel):
@@ -61,7 +64,7 @@ class RunConfig(BaseModel):
 
 
 class UsageRecorder(BaseCallbackHandler):
-    """Count model calls, including the shared claim extractor's model calls."""
+    """Count agent model calls and accumulate reported token usage."""
 
     def __init__(self) -> None:
         """Start an empty run-local usage accumulator."""
@@ -152,6 +155,11 @@ def judge_input(record: RunRecord, case: Case) -> JudgeInput:
             account = fixture.output.evidence[0].payload
     return JudgeInput(
         sample_id=hashlib.sha256(record.run_id.encode()).hexdigest()[:20],
+        projection_version=(
+            "visible-response-v1"
+            if isinstance(record.final_response, VisibleResponse)
+            else PROJECTION_VERSION
+        ),
         request=case.scenario.request,
         decision_time=case.scenario.decision_time.isoformat(),
         profile=case.scenario.profile.model_dump(),
@@ -256,8 +264,11 @@ async def run_case(
             },
             "synthetic": case.scenario.synthetic,
             "provenance_status": case.reference.provenance_status,
+            "provenance_sha256": case.provenance_sha256,
+            "source_hashes": case.source_hashes,
             "category": case.reference.category,
             "execution_enabled": False,
+            "web_search_enabled": False,
             "cost_basis": (
                 "supplied per-million token prices; estimate, "
                 "excludes billing adjustments"
@@ -272,6 +283,8 @@ async def run_case(
         write_json(
             output_dir / "reference.json", case.reference.model_dump(mode="json")
         )
+    if case.provenance_document:
+        (output_dir / "provenance.json").write_bytes(case.provenance_document)
     try:
         model = _model(config, case, usage)
         graph = graph_factory(
@@ -303,12 +316,14 @@ async def run_case(
     record.proposals, record.initial_proposal_ids = capture_proposals(messages)
     record.evidence = state.get("evidence", {})
     try:
+        record.final_draft = state.get("draft_recommendation")
         record.final_response = response_projection(state)
         if not record.final_response.text and record.status == "ok":
             record.status = "invalid_output"
             record.errors.append("No final assistant text was returned.")
     except ValueError as exc:
-        record.status = "invalid_output"
+        if record.status == "ok":
+            record.status = "invalid_output"
         record.errors.append(sanitize_text(str(exc)))
     record.tool_errors = [
         {

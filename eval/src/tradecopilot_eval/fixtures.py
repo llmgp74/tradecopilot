@@ -4,7 +4,14 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, TypeAdapter, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    StrictBool,
+    TypeAdapter,
+    model_validator,
+)
 from tradecopilot_agent.models import JournalEntry, Profile
 from tradecopilot_agent.state import ToolOutput
 from tradecopilot_agent.store import Store
@@ -39,10 +46,12 @@ class ToolFixture(BaseModel):
 
 
 class Scenario(BaseModel):
-    """Synthetic development inputs; reference answers belong in another file.
+    """Frozen inputs; reference answers and provenance belong in separate files.
 
     Profile and journal dates must precede or equal decision_time. The source
     checks tool-response availability before returning either text or evidence.
+    synthetic=False denotes primary-source evidence with an assumed user/account
+    context, not a real user's portfolio. load_case verifies its external archive.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -50,7 +59,7 @@ class Scenario(BaseModel):
     schema_version: Literal[1]
     scenario_id: str
     split: Literal["development", "evaluation"]
-    synthetic: Literal[True]
+    synthetic: StrictBool
     decision_time: AwareDatetime
     request: str
     profile: Profile
@@ -98,9 +107,12 @@ def load_scenario(path: Path) -> Scenario:
 
     Raises:
         OSError: The file cannot be read.
-        ValueError: JSON, shared models, or memory timestamps are invalid.
+        ValueError: Inputs are invalid or a real-source case lacks its manifest.
     """
-    return Scenario.model_validate_json(path.read_text(encoding="utf-8"))
+    scenario = Scenario.model_validate_json(path.read_text(encoding="utf-8"))
+    if not scenario.synthetic and not (path.parent / "provenance.json").is_file():
+        raise ValueError("Real-source inputs require adjacent provenance.json.")
+    return scenario
 
 
 class ScenarioStore(Store):

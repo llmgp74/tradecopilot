@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "scenario_id": "REAL-EARN-01",
+  "status": "primary_source_pending_review",
+  "sources": [
+    {
+      "id": "apple_fy2024_q4_financials",
+      "title": "Apple FY2024 Q4 consolidated financial statements",
+      "url": "https://www.apple.com/newsroom/pdfs/fy2024-q4/FY24_Q4_Consolidated_Financial_Statements.pdf",
+      "published_date": "2024-10-31",
+      "available_at": "2024-11-01T07:00:00Z",
+      "availability_basis": "Conservative next-day proxy: 2024-11-01 midnight America/Los_Angeles. The dated October 31 release links the PDF; no exact public availability time is asserted.",
+      "retrieved_at": "2026-11-09T21:30:25.088422+00:00",
+      "snapshot_path": "apple-2024-q4-financials.pdf",
+      "sha256": "af9646018330484238d357f1168ae74194fd768f4ea9921e4b2828c88309320c",
+      "content_type": "application/pdf"
+    },
+    {
+      "id": "apple_fy2024_q4_release",
+      "title": "Apple reports fourth quarter results",
+      "url": "https://www.apple.com/newsroom/2024/10/apple-reports-fourth-quarter-results/",
+      "published_date": "2024-10-31",
+      "available_at": "2024-11-01T07:00:00Z",
+      "availability_basis": "Conservative next-day proxy: 2024-11-01 midnight America/Los_Angeles. The dated October 31 release links the PDF; no exact public availability time is asserted.",
+      "retrieved_at": "2026-11-09T21:30:27.986493+00:00",
+      "snapshot_path": "apple-2024-q4-release.html",
+      "sha256": "a05f9a5297802ef55e6ec1a044803933292c5454d320d5a64f1cda32bd37cd67",
+      "content_type": "text/html;charset=utf-8"
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "REAL-EARN-01-ASSUMED-ACCOUNT",
+      "origin": "scenario_assumption",
+      "source_id": null,
+      "locator": "Invented evaluation account and positions",
+      "note": "Scenario assumption, not a broker record. published_at is the assumed context time; fetched_at records local case construction. The profile and its updated_at are also scenario assumptions.",
+      "evidence_sha256": "3b51a1a0a14ec5e07dc3c06b46096a3a275ec557e13082d46be101dccad73528"
+    },
+    {
+      "evidence_id": "REAL-EARN-01-ASSUMED-POSITIONS",
+      "origin": "scenario_assumption",
+      "source_id": null,
+      "locator": "Invented evaluation account and positions",
+      "note": "Scenario assumption, not a broker record. published_at is the assumed context time; fetched_at records local case construction. The profile and its updated_at are also scenario assumptions.",
+      "evidence_sha256": "d944db4a4f8fbef6be2f95b4fe1990e0f2f9a0923e7db2b1668d34d261944136"
+    },
+    {
+      "evidence_id": "REAL-EARN-01-RELEASE",
+      "origin": "primary_source",
+      "source_id": "apple_fy2024_q4_release",
+      "locator": "Article date, opening paragraph, and Consolidated Financial Statements PDF link",
+      "note": "Only the dated article content and its financial-statement link are used. Current navigation, contact details, and recommended articles are excluded. published_at is the next-day availability proxy, not an observed release time.",
+      "evidence_sha256": "82a23a599abc3cb4cdd00278a0ab8dced1286578d16e356dacf0bdc857f74865"
+    },
+    {
+      "evidence_id": "REAL-EARN-01-QUARTERLY-GAAP",
+      "origin": "primary_source",
+      "source_id": "apple_fy2024_q4_financials",
+      "locator": "PDF page 1, Condensed consolidated statements of operations, Three Months Ended columns; Total net sales, Net income, Operating income, Provision for income taxes rows",
+      "note": "Manual table transcription in USD millions, checked against the rendered page. The twelve-month columns are excluded. published_at is the next-day availability proxy. Independent human review remains pending.",
+      "evidence_sha256": "5a9852f0e7d3112ec85051776bde8ddb69a27eb6ab0880666ca9f56f79910055"
+    },
+    {
+      "evidence_id": "REAL-EARN-01-TAX-RECONCILIATION",
+      "origin": "primary_source",
+      "source_id": "apple_fy2024_q4_financials",
+      "locator": "PDF page 4, Reconciliation of non-GAAP to GAAP results of operations, Three Months Ended columns, tax and net income rows; footnotes (a) and (b)",
+      "note": "Manual table transcription in USD millions with a paraphrase of the tax-adjustment explanation. The later 10-K referenced by the footnote is not included. published_at is the next-day availability proxy. Independent human review remains pending.",
+      "evidence_sha256": "8ae7f48617de42bfbb257e625c9098834dafd98f6f55013f729433363f5489f9"
+    }
+  ]
+}

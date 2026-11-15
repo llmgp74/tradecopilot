@@ -73,6 +73,7 @@ def test_calibration_inputs_exclude_provisional_labels() -> None:
         ):
             assert field not in encoded
         assert candidate.profile == _context().profile
+        assert set(candidate.final_response) == {"text", "todos"}
 
 
 def test_calibration_controls_and_missing_runs_remain_unassessed() -> None:

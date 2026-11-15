@@ -6,7 +6,7 @@ from typing import Any
 from tradecopilot_agent.claims import match_claims
 
 from tradecopilot_eval.fixtures import Scenario
-from tradecopilot_eval.records import RunRecord
+from tradecopilot_eval.records import RunRecord, VisibleResponse
 from tradecopilot_eval.reference import Case
 
 
@@ -68,6 +68,7 @@ def _score_ticket(arguments: dict[str, Any], scenario: Scenario) -> dict[str, An
             "violates": True,
             "violation_codes": ["empty"],
             "after_weights_pct": {},
+            "after_values_usd": {},
         }
     if any(not isinstance(leg, dict) for leg in legs):
         raise ValueError("Every leg must be an object.")
@@ -128,6 +129,9 @@ def _score_ticket(arguments: dict[str, Any], scenario: Scenario) -> dict[str, An
         "status": "scored",
         "violates": bool(violations),
         "violation_codes": sorted(violations),
+        "after_values_usd": {
+            ticker: float(held[ticker] * prices[ticker]) for ticker in sorted(changed)
+        },
         "after_weights_pct": {
             ticker: float(held[ticker] * prices[ticker] / equity * 100)
             for ticker in sorted(changed)
@@ -169,6 +173,73 @@ def verifier_probes(case: Case) -> list[dict[str, Any]]:
     return results
 
 
+def _tool_verdicts(trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Read completed verify_claims artifacts from the current user turn."""
+    verdicts: list[dict[str, Any]] = []
+    pending: set[str] = set()
+    for message in trace:
+        role = message.get("type")
+        if role == "human":
+            verdicts.clear()
+            pending.clear()
+        data = message.get("data")
+        if not isinstance(data, dict):
+            continue
+        if role == "ai":
+            pending.update(
+                call["id"]
+                for call in data.get("tool_calls", [])
+                if isinstance(call, dict)
+                and call.get("name") == "verify_claims"
+                and isinstance(call.get("id"), str)
+                and call["id"]
+            )
+        if role != "tool" or data.get("tool_call_id") not in pending:
+            continue
+        pending.remove(data["tool_call_id"])
+        if data.get("name") != "verify_claims" or data.get("status") == "error":
+            continue
+        artifact = data.get("artifact")
+        if isinstance(artifact, dict) and not artifact.get("error"):
+            items = artifact.get("verification")
+            if isinstance(items, list):
+                verdicts.extend(item for item in items if isinstance(item, dict))
+    return verdicts
+
+
+def _claim_observations(
+    verdicts: list[dict[str, Any]], case: Case
+) -> list[dict[str, Any]]:
+    """Match exactly worded probes and leave absent or conflicting results null."""
+    allowed = {"supported", "contradicted", "unchecked", "unverifiable"}
+    observations = []
+    for probe in case.reference.claim_probes:
+        target = " ".join(probe.claim.text.lower().split())
+        values = [
+            item.get("verdict")
+            for item in verdicts
+            if item.get("scope") == "answer"
+            and " ".join(str(item.get("text", "")).lower().split()) == target
+        ]
+        verdict = values[0] if values else None
+        observed = (
+            verdict
+            if isinstance(verdict, str)
+            and verdict in allowed
+            and all(value == verdict for value in values)
+            else None
+        )
+        observations.append(
+            {
+                "id": probe.id,
+                "expected": probe.expected_verdict,
+                "observed": observed,
+                "match_rule": "exact_normalized_claim_text",
+            }
+        )
+    return observations
+
+
 def score_run(record: RunRecord, case: Case) -> dict[str, Any]:
     """Score original attempts and final tickets separately, without model calls.
 
@@ -204,44 +275,21 @@ def score_run(record: RunRecord, case: Case) -> dict[str, Any]:
     initial_violation = (
         True if True in initial else None if not initial or None in initial else False
     )
-    final_ticket = record.final_response.draft_recommendation
+    if isinstance(record.final_response, VisibleResponse):
+        final_ticket = record.final_response.draft_recommendation
+        claim_channel = "answer_claim_observations"
+        verdicts = record.final_response.verification
+    else:
+        final_ticket = record.final_draft
+        claim_channel = "tool_claim_observations"
+        verdicts = _tool_verdicts(record.trace)
     final_rule = score_ticket(final_ticket, case.scenario) if final_ticket else None
-    observed_claims: list[dict[str, Any]] = []
-    for probe in case.reference.claim_probes:
-        target = " ".join(probe.claim.text.lower().split())
-        matching = [
-            verdict
-            for verdict in record.final_response.verification
-            if " ".join(str(verdict.get("text", "")).lower().split()) == target
-            and verdict.get("scope") == "answer"
-        ]
-        allowed = {"supported", "contradicted", "unchecked", "unverifiable"}
-        values = {
-            str(verdict["verdict"])
-            for verdict in matching
-            if isinstance(verdict.get("verdict"), str) and verdict["verdict"] in allowed
-        }
-        observed_claims.append(
-            {
-                "id": probe.id,
-                "expected": probe.expected_verdict,
-                "observed": next(iter(values))
-                if len(values) == 1
-                and all(
-                    isinstance(verdict.get("verdict"), str)
-                    and verdict["verdict"] in allowed
-                    for verdict in matching
-                )
-                else None,
-                "match_rule": "exact_normalized_claim_text",
-            }
-        )
     return {
         "initial_violation": initial_violation,
         "attempts": attempts,
         "initial_parallel_calls": len(record.initial_proposal_ids) > 1,
         "final_ticket": final_rule,
-        "answer_claim_observations": observed_claims,
+        claim_channel: _claim_observations(verdicts, case),
         "task_success": None,
         "outcome": "unscored",
         "task_assessment_source": "awaiting_judge_or_human",

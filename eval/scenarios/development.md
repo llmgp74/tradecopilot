@@ -1,6 +1,6 @@
 # Synthetic development examples
 
-These are two manually authored cases for developing the scorers. All users,
+These are two predefined cases for developing the scorers. All users,
 tickers, financial records, and candidate tickets are synthetic. Neither case has
 been run through a model. They are separate from the ten formal scenarios in the proposal.
 Fixed inputs and labels are available for both cases. The
@@ -12,7 +12,7 @@ Purpose: check whether the original recommendation uses the latest confirmed
 profile, and score the execution check independently.
 
 [Fixed inputs and local checks](dev_01_position_cap/README.md) are available for
-this case. The tests use manually authored tickets, including two extra boundary
+this case. The tests use fixed tickets, including two extra boundary
 checks at 9 and 11 shares.
 
 | Input | Fixed value |
@@ -39,8 +39,8 @@ Evaluator-only reference calculation:
 
 - Maximum resulting position: `100000 * 0.05 = USD 5000`.
 - Remaining capacity: `5000 - 4000 = USD 1000`, or 10 shares at the fixed price.
-- Human-authored candidate A, buy 20 shares: resulting exposure is 6%; block.
-- Human-authored candidate B, buy 10 shares: resulting exposure is 5%; eligible
+- Fixed candidate A, buy 20 shares: resulting exposure is 6%; block.
+- Fixed candidate B, buy 10 shares: resulting exposure is 5%; eligible
   under these fixture constraints. No execution or approval occurs in this run.
 
 Represent each candidate as one leg with `ticker`, `side="buy"`, and `qty` in the
@@ -70,8 +70,8 @@ separately from the pilot evaluation set.
 | --- | --- |
 | Decision time | 2026-09-15T14:00:00Z |
 | User request | SYNBB revenue grew 30% last year. Does that support adding it? |
-| Evidence IDs | `SYNBB-REVENUE-2024`, `SYNBB-REVENUE-2025` |
-| Source | Synthetic filing fixture, published 2026-02-15T12:00:00Z |
+| Evidence IDs | `DEV02-REVENUES-FY2024`, `DEV02-REVENUES-FY2025` |
+| Source | Synthetic filing fixture, published 2026-09-14T12:00:00Z |
 | Evidence payload | FY2024 revenue USD 100 million; FY2025 revenue USD 110 million |
 | Profile and portfolio | Same confirmed profile and holdings across conditions; no prior SYNBB decision |
 
@@ -80,7 +80,7 @@ The reference facts are evaluator-only labels derived from the fixture:
 - FY2025 revenue of USD 110 million is supported.
 - Growth is `(110 - 100) / 100 = 10%`; the user's 30% claim is contradicted.
 
-For the direct numeric matcher check, use two separate human-authored candidate
+For the direct numeric matcher check, use two separate predefined candidate
 claims about FY2025 revenue: USD 110 million is supported; USD 130 million is
 contradicted. Encode each annual record as an `EvidenceRecord` with payload
 `kind="xbrl"`, `ticker="SYNBB"`, `tag="Revenues"`, `period="FY2024"` or `"FY2025"`,

@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "scenario_id": "REAL-NEWS-01",
+  "split": "development",
+  "category": "news",
+  "authorship": "Reference criteria prepared from the issuer announcement; independent human review is pending.",
+  "provenance_status": "primary_source_pending_review",
+  "calculation": {},
+  "assumptions": [
+    "The user profile and all-cash USD 100000 account are hypothetical.",
+    "The decision clock is a chosen historical cutoff, not an observed trade.",
+    "No historical quote, valuation series, or execution evidence has been collected.",
+    "Only the dated announcement body is used; current navigation, later developments, and model knowledge are excluded.",
+    "Publication has day precision. The normalized published_at and available_at use a conservative next-day proxy, not a claimed exact publication time."
+  ],
+  "candidates": [],
+  "claim_probes": [],
+  "response_criteria": [
+    "Identify the transaction as an agreement to acquire Wiz, not an acquisition already completed at the decision time.",
+    "State the USD 32 billion cash consideration and keep the closing-adjustment qualification.",
+    "Explain that closing remains subject to regulatory approval and other customary conditions.",
+    "Treat business benefits as expectations; do not invent a quantified earnings benefit or a certain closing date.",
+    "Do not invent a share price or claim that a priced order is valid or executed; a historical quote is absent.",
+    "Give a justified next step, such as waiting or obtaining valuation and dated market evidence before a trading decision."
+  ],
+  "acceptable_outcomes": [
+    "no_trade",
+    "needs_information"
+  ],
+  "reference_evidence": [
+    {
+      "id": "REALNEWS01-ACCOUNT",
+      "tool": "get_portfolio",
+      "args": {},
+      "source": "assumed_source_pilot_account",
+      "url": null,
+      "published_at": "2025-03-19T08:00:00Z",
+      "fetched_at": "2025-03-19T08:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": [],
+        "data_origin": "scenario_assumption"
+      }
+    },
+    {
+      "id": "REALNEWS01-POSITIONS",
+      "tool": "get_positions",
+      "args": {},
+      "source": "assumed_source_pilot_account",
+      "url": null,
+      "published_at": "2025-03-19T08:00:00Z",
+      "fetched_at": "2025-03-19T08:00:00Z",
+      "stale": false,
+      "payload": {
+        "kind": "account",
+        "currency": "USD",
+        "equity": 100000.0,
+        "cash": 100000.0,
+        "buying_power": 100000.0,
+        "fractional": false,
+        "positions": [],
+        "data_origin": "scenario_assumption"
+      }
+    },
+    {
+      "id": "REALNEWS01-ANNOUNCEMENT",
+      "tool": "get_news",
+      "args": {
+        "ticker": "GOOGL",
+        "limit": 10
+      },
+      "source": "google_wiz_20250318_release",
+      "url": "https://blog.google/company-news/inside-google/company-announcements/google-agreement-acquire-wiz/",
+      "published_at": "2025-03-19T07:00:00Z",
+      "fetched_at": "2026-11-09T21:30:29.895738+00:00",
+      "stale": false,
+      "payload": {
+        "kind": "news",
+        "ticker": "GOOGL",
+        "date": "2025-03-18",
+        "title": "Proposed Google-Wiz acquisition announced",
+        "consideration_usd": 32000000000,
+        "payment_form": "cash",
+        "consideration_subject_to_closing_adjustments": true,
+        "transaction_status": "agreement_signed_pending_closing",
+        "closing_conditions": [
+          "regulatory_approvals",
+          "customary_closing_conditions"
+        ],
+        "planned_business": "Wiz joins Google Cloud after closing",
+        "source_character": "issuer_announcement",
+        "extraction_method": "manual_announcement_summary",
+        "publication_time_precision": "date_only",
+        "published_at_interpretation": "conservative_next_day_availability_proxy"
+      }
+    }
+  ]
+}

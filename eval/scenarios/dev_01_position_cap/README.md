@@ -9,14 +9,14 @@ This development case is separate from the proposal's formal evaluation set.
 - [inputs.json](inputs.json) contains the request, confirmed profile, prior
   decision, and frozen `quote`, `portfolio`, and `positions` responses.
 - [reference.json](reference.json) contains evaluator-only calculations,
-  manually authored tickets, and response criteria. The input loader and data
+  predefined tickets, and response criteria. The input loader and data
   source never read this file.
 
 The account has USD 100,000 equity, USD 10,000 cash, and 40 SYNAA shares worth
 USD 4,000. Twenty other synthetic positions hold USD 4,300 each. All positions
 are within the current cap before the proposed trade.
 
-| Manual candidate | Buy quantity | Resulting SYNAA weight | Expected rule outcome |
+| Fixed candidate | Buy quantity | Resulting SYNAA weight | Expected rule outcome |
 | --- | --- | --- | --- |
 | A | 20 | 6% | Block: position cap |
 | B | 10 | 5% | Eligible |
@@ -37,8 +37,8 @@ uv run --locked --offline pytest
 ```
 
 Dependency installation may download packages. The tests block network
-connections. Direct rule and tool checks use a local claim-extraction stub;
-runner tests also build the real graph with a scripted local model. No provider
+connections. Direct checks use frozen portfolio and quote data. Runner tests
+also build the shared graph with a scripted local model. No provider
 model or broker API is called, and no API key is needed.
 
 The checks cover asset totals, independent reference arithmetic, current agent
@@ -80,7 +80,10 @@ one share and captures the accepted draft. The independent scorer checks the
 original violation and final compliance separately. Scripted judge scores only
 test the workflow and do not measure recommendation quality.
 
-The manual tickets above remain evaluator-only arithmetic checks. Provider model
+Response criteria cover only the visible answer. Original proposal violations
+are assessed from the trace, separately from the judge's acceptance checks.
+
+The fixed tickets above remain evaluator-only arithmetic checks. Provider model
 runs, empirical memory comparisons, and human calibration remain pending; their
 outputs belong in separate run records. See [the runner guide](../../README.md)
 and [record contracts](../../contracts.md).

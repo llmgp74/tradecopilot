@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "scenario_id": "REAL-EARN-01",
+  "split": "development",
+  "synthetic": false,
+  "decision_time": "2024-11-01T08:00:00Z",
+  "request": "Apple reported higher revenue but lower net income in FY2024 Q4. Would buying a small AAPL position make sense for me based on this release?",
+  "profile": {
+    "risk_band": "moderate",
+    "position_cap_pct": 5.0,
+    "sector_exclusions": [],
+    "horizon": "weeks",
+    "watchlist": [
+      "AAPL"
+    ],
+    "source_preferences": [
+      "filings"
+    ],
+    "execution": {
+      "autonomous": false,
+      "max_order_notional": 3000.0
+    },
+    "updated_at": "2024-11-01T07:00:00Z"
+  },
+  "journal_before_decision": [],
+  "tool_fixtures": [
+    {
+      "method": "quote",
+      "arguments": {
+        "ticker": "AAPL"
+      },
+      "available_at": "2024-11-01T07:00:00Z",
+      "output": {
+        "summary": "No historical AAPL quote was collected for this frozen case.",
+        "evidence": [],
+        "error": "not_collected"
+      }
+    },
+    {
+      "method": "portfolio",
+      "arguments": {},
+      "available_at": "2024-11-01T07:00:00Z",
+      "output": {
+        "summary": "Scenario assumption: a USD 100000 cash-only account with no holdings and USD 100000 buying power.",
+        "evidence": [
+          {
+            "id": "REAL-EARN-01-ASSUMED-ACCOUNT",
+            "tool": "get_portfolio",
+            "args": {},
+            "source": "assumed_real_earn_01_portfolio",
+            "url": null,
+            "published_at": "2024-11-01T07:00:00Z",
+            "fetched_at": "2026-11-09T21:31:57Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": [],
+              "scenario_assumption": true
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "positions",
+      "arguments": {},
+      "available_at": "2024-11-01T07:00:00Z",
+      "output": {
+        "summary": "Scenario assumption: no existing stock positions.",
+        "evidence": [
+          {
+            "id": "REAL-EARN-01-ASSUMED-POSITIONS",
+            "tool": "get_positions",
+            "args": {},
+            "source": "assumed_real_earn_01_portfolio",
+            "url": null,
+            "published_at": "2024-11-01T07:00:00Z",
+            "fetched_at": "2026-11-09T21:31:57Z",
+            "stale": false,
+            "payload": {
+              "kind": "account",
+              "currency": "USD",
+              "equity": 100000.0,
+              "cash": 100000.0,
+              "buying_power": 100000.0,
+              "fractional": false,
+              "positions": [],
+              "scenario_assumption": true
+            }
+          }
+        ],
+        "error": null
+      }
+    },
+    {
+      "method": "filings",
+      "arguments": {
+        "ticker": "AAPL",
+        "limit": 10
+      },
+      "available_at": "2024-11-01T07:00:00Z",
+      "output": {
+        "summary": "Frozen Apple earnings-release records. Amounts in the financial tables are USD millions; periods are three months. These are document transcriptions, not XBRL-tagged facts. [{\"kind\":\"filing\",\"ticker\":\"AAPL\",\"filing_type\":\"earnings_release\",\"date\":\"2024-10-31\",\"title\":\"Apple reports fourth quarter results\",\"fiscal_period\":\"FY2024Q4\",\"period_end\":\"2024-09-28\",\"financial_statements_url\":\"https://www.apple.com/newsroom/pdfs/fy2024-q4/FY24_Q4_Consolidated_Financial_Statements.pdf\",\"extraction_method\":\"manual_document_transcription\",\"availability_note\":\"The source gives a publication date only. published_at is a conservative next-day proxy, not the actual release time.\"},{\"kind\":\"filing\",\"ticker\":\"AAPL\",\"filing_type\":\"earnings_release_financial_statements\",\"date\":\"2024-10-31\",\"statement\":\"Condensed consolidated statements of operations (unaudited)\",\"extraction_method\":\"manual_table_transcription\",\"source_page\":1,\"unit\":\"USD_millions\",\"accounting_basis\":\"GAAP\",\"duration\":\"three_months\",\"periods\":[{\"fiscal_period\":\"FY2024Q4\",\"period_end\":\"2024-09-28\",\"total_net_sales\":94930,\"net_income\":14736,\"operating_income\":29591,\"provision_for_income_taxes\":14874},{\"fiscal_period\":\"FY2023Q4\",\"period_end\":\"2023-09-30\",\"total_net_sales\":89498,\"net_income\":22956,\"operating_income\":26969,\"provision_for_income_taxes\":4042}],\"availability_note\":\"published_at is a conservative next-day proxy, not the actual release time.\"},{\"kind\":\"filing\",\"ticker\":\"AAPL\",\"filing_type\":\"earnings_release_financial_statements\",\"date\":\"2024-10-31\",\"statement\":\"Reconciliation of non-GAAP to GAAP results of operations (unaudited)\",\"extraction_method\":\"manual_table_transcription\",\"source_page\":4,\"unit\":\"USD_millions\",\"fiscal_period\":\"FY2024Q4\",\"period_end\":\"2024-09-28\",\"duration\":\"three_months\",\"reported_gaap_net_income\":14736,\"net_income_adjustment\":10246,\"adjusted_non_gaap_net_income\":24982,\"reported_gaap_income_taxes\":14874,\"income_tax_adjustment\":-10246,\"adjusted_non_gaap_income_taxes\":4628,\"adjustment_description\":\"The company reports a one-time net income tax charge after the reversal of the European General Court State Aid decision. The table removes this charge for the non-GAAP presentation. The source states that non-GAAP measures should not replace GAAP results.\",\"availability_note\":\"published_at is a conservative next-day proxy, not the actual release time.\"}]",
+        "evidence": [
+          {
+            "id": "REAL-EARN-01-RELEASE",
+            "tool": "get_filings",
+            "args": {
+              "ticker": "AAPL",
+              "limit": 10
+            },
+            "source": "apple_fy2024_q4_release",
+            "url": "https://www.apple.com/newsroom/2024/10/apple-reports-fourth-quarter-results/",
+            "published_at": "2024-11-01T07:00:00Z",
+            "fetched_at": "2026-11-09T21:30:27.986493+00:00",
+            "stale": false,
+            "payload": {
+              "kind": "filing",
+              "ticker": "AAPL",
+              "filing_type": "earnings_release",
+              "date": "2024-10-31",
+              "title": "Apple reports fourth quarter results",
+              "fiscal_period": "FY2024Q4",
+              "period_end": "2024-09-28",
+              "financial_statements_url": "https://www.apple.com/newsroom/pdfs/fy2024-q4/FY24_Q4_Consolidated_Financial_Statements.pdf",
+              "extraction_method": "manual_document_transcription",
+              "availability_note": "The source gives a publication date only. published_at is a conservative next-day proxy, not the actual release time."
+            }
+          },
+          {
+            "id": "REAL-EARN-01-QUARTERLY-GAAP",
+            "tool": "get_filings",
+            "args": {
+              "ticker": "AAPL",
+              "limit": 10
+            },
+            "source": "apple_fy2024_q4_financials",
+            "url": "https://www.apple.com/newsroom/pdfs/fy2024-q4/FY24_Q4_Consolidated_Financial_Statements.pdf",
+            "published_at": "2024-11-01T07:00:00Z",
+            "fetched_at": "2026-11-09T21:30:25.088422+00:00",
+            "stale": false,
+            "payload": {
+              "kind": "filing",
+              "ticker": "AAPL",
+              "filing_type": "earnings_release_financial_statements",
+              "date": "2024-10-31",
+              "statement": "Condensed consolidated statements of operations (unaudited)",
+              "extraction_method": "manual_table_transcription",
+              "source_page": 1,
+              "unit": "USD_millions",
+              "accounting_basis": "GAAP",
+              "duration": "three_months",
+              "periods": [
+                {
+                  "fiscal_period": "FY2024Q4",
+                  "period_end": "2024-09-28",
+                  "total_net_sales": 94930,
+                  "net_income": 14736,
+                  "operating_income": 29591,
+                  "provision_for_income_taxes": 14874
+                },
+                {
+                  "fiscal_period": "FY2023Q4",
+                  "period_end": "2023-09-30",
+                  "total_net_sales": 89498,
+                  "net_income": 22956,
+                  "operating_income": 26969,
+                  "provision_for_income_taxes": 4042
+                }
+              ],
+              "availability_note": "published_at is a conservative next-day proxy, not the actual release time."
+            }
+          },
+          {
+            "id": "REAL-EARN-01-TAX-RECONCILIATION",
+            "tool": "get_filings",
+            "args": {
+              "ticker": "AAPL",
+              "limit": 10
+            },
+            "source": "apple_fy2024_q4_financials",
+            "url": "https://www.apple.com/newsroom/pdfs/fy2024-q4/FY24_Q4_Consolidated_Financial_Statements.pdf",
+            "published_at": "2024-11-01T07:00:00Z",
+            "fetched_at": "2026-11-09T21:30:25.088422+00:00",
+            "stale": false,
+            "payload": {
+              "kind": "filing",
+              "ticker": "AAPL",
+              "filing_type": "earnings_release_financial_statements",
+              "date": "2024-10-31",
+              "statement": "Reconciliation of non-GAAP to GAAP results of operations (unaudited)",
+              "extraction_method": "manual_table_transcription",
+              "source_page": 4,
+              "unit": "USD_millions",
+              "fiscal_period": "FY2024Q4",
+              "period_end": "2024-09-28",
+              "duration": "three_months",
+              "reported_gaap_net_income": 14736,
+              "net_income_adjustment": 10246,
+              "adjusted_non_gaap_net_income": 24982,
+              "reported_gaap_income_taxes": 14874,
+              "income_tax_adjustment": -10246,
+              "adjusted_non_gaap_income_taxes": 4628,
+              "adjustment_description": "The company reports a one-time net income tax charge after the reversal of the European General Court State Aid decision. The table removes this charge for the non-GAAP presentation. The source states that non-GAAP measures should not replace GAAP results.",
+              "availability_note": "published_at is a conservative next-day proxy, not the actual release time."
+            }
+          }
+        ],
+        "error": null
+      }
+    }
+  ]
+}

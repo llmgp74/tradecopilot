@@ -33,6 +33,8 @@ graph = build_agent(
 - `model`: a `provider:model` string or a constructed `BaseChatModel` that supports
   tool binding. Omission falls back to `AGENT_MODEL`. Injecting a local model
   avoids provider construction.
+- `web_search`: optional provider supplied by the live server. The evaluation
+  runner leaves it unset so frozen trials cannot retrieve later web results.
 - `decision_time`: optional timezone-aware timestamp for journal retrieval. The
   historical window ends at this instant and starts 90 days earlier. Without
   it, `as_of` uses the end of that UTC date; with neither argument, live retrieval
@@ -77,9 +79,11 @@ is supplied; send the new user message rather than duplicating stored history.
 
 State includes `messages`, `verification`, `todos`, `draft_recommendation`, and
 `portfolio_impact`, plus loop internals such as `evidence` and `pending_ticket`.
-The user-visible projection is the last assistant answer and those four visible
-state fields. They reset at a new user turn, not an approval resume. A failure
-before initialization can leave fields absent; the runner records missing output.
+For recommendation quality, the evaluator takes the final answer text and the
+plan items shown in [chat](../ui/src/components/chat/assistant-parts.tsx).
+Expandable tool cards and reasoning are outside this scoring view. The evaluator
+keeps the accepted draft for position checks and tool artifacts for diagnostics.
+A new user turn resets the graph's turn fields. An approval resume keeps them.
 
 Each verification verdict carries `scope` (`answer`) and a verdict such as
 `supported`, `contradicted`, `unchecked`, or `unverifiable`. Verdicts come only

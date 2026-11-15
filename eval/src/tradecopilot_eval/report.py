@@ -16,6 +16,7 @@ _PAIR_METADATA = (
     "reference_sha256",
     "code_sha256",
     "agent_prompt_sha256",
+    "projection_version",
     "settings",
 )
 _COMPARISON_CONDITIONS = ("none", "prose", "structured")
@@ -121,16 +122,10 @@ def _judge_usage(record: RunRecord, key: str) -> float | None:
     return sum(value for value in values if value is not None)
 
 
-def _summary(records: list[RunRecord]) -> dict[str, Any]:
-    attempts = [
-        item for record in records for item in _items(record.scores.get("attempts"))
-    ]
-    invalid = [item for item in attempts if item.get("violates") is True]
-    valid = [item for item in attempts if item.get("violates") is False]
+def _verification(records: list[RunRecord], score_key: str) -> dict[str, Any]:
+    """Summarize one source of verdicts with its own denominator."""
     claims = [
-        item
-        for record in records
-        for item in _items(record.scores.get("answer_claim_observations"))
+        item for record in records for item in _items(record.scores.get(score_key))
     ]
     matched: list[bool | None] = []
     false_claims: list[bool | None] = []
@@ -143,6 +138,20 @@ def _summary(records: list[RunRecord]) -> dict[str, Any]:
             false_claims.append(value)
         if expected == "supported":
             true_claims.append(value)
+    return {
+        "match_rule": "exact_normalized_claim_text",
+        "matches_reference": _rate(matched),
+        "false_claim_detected": _rate(false_claims),
+        "true_claim_false_alarm": _rate(true_claims),
+    }
+
+
+def _summary(records: list[RunRecord]) -> dict[str, Any]:
+    attempts = [
+        item for record in records for item in _items(record.scores.get("attempts"))
+    ]
+    invalid = [item for item in attempts if item.get("violates") is True]
+    valid = [item for item in attempts if item.get("violates") is False]
     judge_statuses = Counter(
         str(record.judge.get("status", "unscored")) if record.judge else "unscored"
         for record in records
@@ -200,12 +209,8 @@ def _summary(records: list[RunRecord]) -> dict[str, Any]:
                 ).items()
             )
         ),
-        "verification": {
-            "match_rule": "exact_normalized_claim_text",
-            "matches_reference": _rate(matched),
-            "false_claim_detected": _rate(false_claims),
-            "true_claim_false_alarm": _rate(true_claims),
-        },
+        "verification": _verification(records, "answer_claim_observations"),
+        "tool_verification": _verification(records, "tool_claim_observations"),
         "quality": {
             dimension: _statistics([_quality(record, dimension) for record in records])
             for dimension in DIMENSIONS
@@ -246,6 +251,7 @@ def _grouped(
             record.model_id,
             record.phase,
             record.condition,
+            str(record.metadata.get("projection_version") or "unrecorded"),
         )
         if scenario:
             key += (record.scenario_id,)
@@ -253,10 +259,14 @@ def _grouped(
     rows = []
     for key, members in sorted(groups.items()):
         row = dict(
-            zip(("mode", "model_id", "phase", "condition"), key[:4], strict=True)
+            zip(
+                ("mode", "model_id", "phase", "condition", "projection_version"),
+                key[:5],
+                strict=True,
+            )
         )
         if scenario:
-            row["scenario_id"] = key[4]
+            row["scenario_id"] = key[5]
         rows.append({**row, **_summary(members)})
     return rows
 
@@ -377,7 +387,8 @@ def build_report(records: list[RunRecord]) -> dict[str, Any]:
             "Rates show observed, total, and missing counts; "
             "missing values are not zero.",
             "Correct/false-block denominators are labeled invalid/valid attempts.",
-            "No exact claim match may mean the answer corrected or omitted that claim.",
+            "Tool verdicts cover only claims submitted to verify_claims. A verdict "
+            "does not establish what the answer said.",
             "Quality excludes scripted judge controls and failed agent runs.",
             "Standard deviations are sample deviations and need two observations.",
             "Paired differences are condition minus full; no significance is inferred.",
@@ -458,10 +469,13 @@ def _markdown(report: dict[str, Any]) -> str:
             ["", "Plan coverage is unknown because no plan.json was supplied."]
         )
     groups = report["by_condition"]
-    labels = ["Mode", "Model", "Phase", "Condition"]
+    labels = ["Mode", "Model", "Phase", "Condition", "Answer format"]
 
     def prefix(row: dict[str, Any]) -> list[str]:
-        return [str(row[key]) for key in ("mode", "model_id", "phase", "condition")]
+        return [
+            str(row[key])
+            for key in ("mode", "model_id", "phase", "condition", "projection_version")
+        ]
 
     _table(
         lines,
@@ -492,30 +506,36 @@ def _markdown(report: dict[str, Any]) -> str:
             for row in groups
         ],
     )
-    _table(
-        lines,
-        "Verification observations",
-        [
-            *labels,
-            "Matched references",
-            "False claims detected",
-            "True-claim false alarms",
-        ],
-        [
+    for key, title in (
+        ("tool_verification", "Agent verify_claims tool results"),
+        ("verification", "Archived answer annotations"),
+    ):
+        if not any(row[key]["matches_reference"]["total"] for row in groups):
+            continue
+        _table(
+            lines,
+            title,
             [
-                *prefix(row),
-                *[
-                    _format_rate(row["verification"][key])
-                    for key in (
-                        "matches_reference",
-                        "false_claim_detected",
-                        "true_claim_false_alarm",
-                    )
-                ],
-            ]
-            for row in groups
-        ],
-    )
+                *labels,
+                "Matched references",
+                "False claims detected",
+                "True-claim false alarms",
+            ],
+            [
+                [
+                    *prefix(row),
+                    *[
+                        _format_rate(row[key][metric])
+                        for metric in (
+                            "matches_reference",
+                            "false_claim_detected",
+                            "true_claim_false_alarm",
+                        )
+                    ],
+                ]
+                for row in groups
+            ],
+        )
     _table(
         lines,
         "Operational measurements",
@@ -666,7 +686,7 @@ def write_report(records: list[RunRecord], output_dir: Path) -> None:
         encoding="utf-8",
     )
     (output_dir / "report.md").write_text(_markdown(report), encoding="utf-8")
-    fields = [
+    run_fields = [
         "run_id",
         "scenario_id",
         "mode",
@@ -675,9 +695,8 @@ def write_report(records: list[RunRecord], output_dir: Path) -> None:
         "condition",
         "repetition",
         "status",
-        "judge_status",
-        "initial_violation",
-        "task_success",
+    ]
+    usage_fields = [
         "input_tokens",
         "output_tokens",
         "total_tokens",
@@ -685,17 +704,28 @@ def write_report(records: list[RunRecord], output_dir: Path) -> None:
         "elapsed_seconds",
     ]
     with (output_dir / "runs.csv").open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=[
+                *run_fields,
+                "projection_version",
+                "judge_status",
+                "initial_violation",
+                "task_success",
+                *usage_fields,
+            ],
+        )
         writer.writeheader()
         for record in records:
             writer.writerow(
                 {
-                    **{key: getattr(record, key) for key in fields[:8]},
+                    **{key: getattr(record, key) for key in run_fields},
+                    "projection_version": record.metadata.get("projection_version"),
                     "judge_status": (record.judge or {}).get("status", "unscored"),
                     "initial_violation": _boolean(
                         record.scores.get("initial_violation")
                     ),
                     "task_success": _task_success(record),
-                    **{key: getattr(record.usage, key) for key in fields[11:]},
+                    **{key: getattr(record.usage, key) for key in usage_fields},
                 }
             )

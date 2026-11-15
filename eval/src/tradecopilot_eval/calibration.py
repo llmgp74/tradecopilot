@@ -2,7 +2,7 @@
 
 import hashlib
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, StrictInt, model_validator
 
@@ -14,6 +14,7 @@ from tradecopilot_eval.judge import (
     JudgeResult,
     Outcome,
 )
+from tradecopilot_eval.records import PROJECTION_VERSION, ChatAnswer, VisibleResponse
 
 
 class CalibrationCandidate(BaseModel):
@@ -21,7 +22,7 @@ class CalibrationCandidate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     id: str
-    final_response: dict[str, Any]
+    final_response: ChatAnswer | VisibleResponse
 
 
 class CalibrationExpectation(BaseModel):
@@ -85,7 +86,7 @@ def load_calibration(path: Path) -> CalibrationSet:
 
 
 def _sample_id(suite: CalibrationSet, candidate_id: str) -> str:
-    value = f"calibration:{suite.scenario_id}:{candidate_id}"
+    value = f"calibration:{PROJECTION_VERSION}:{suite.scenario_id}:{candidate_id}"
     return hashlib.sha256(value.encode()).hexdigest()[:24]
 
 
@@ -110,7 +111,10 @@ def build_calibration_inputs(
         data.update(
             {
                 "sample_id": _sample_id(suite, candidate.id),
-                "final_response": candidate.final_response,
+                "projection_version": PROJECTION_VERSION,
+                "final_response": candidate.final_response.model_dump(
+                    include={"text", "todos"}
+                ),
             }
         )
         inputs[candidate.id] = JudgeInput.model_validate(data)

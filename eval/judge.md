@@ -23,15 +23,14 @@ Each scoring request contains:
 - Acceptance criteria, including when clarification or abstention is appropriate.
 - The candidate `final_response` and this rubric's version.
 
-Build `final_response` from the last assistant message and the visible state in
-the [agent contract](../docs/eval-contract.md): the recommendation, portfolio
-impact, and todos. Use the same rendering across conditions and record its
-version.
+Use the same answer and plan for the judge and the human reviewer. The frontend
+shows each plan item's content and status. Reasoning and expandable tool cards
+sit outside this quality assessment. Read the draft and tool verdicts in the
+private run record when investigating a score.
 
-The response may also carry verdicts from the model's own claim checks. Treat them
-as claims made by the agent. Check them against the reference evidence; a
-`supported` label does not establish correctness. Keep these verdicts within the
-candidate response, separate from reference labels and acceptance criteria.
+If the assistant writes that a claim was verified, check the claim against the
+reference evidence. A tool result alone cannot establish what the user was told.
+See the [agent contract](../docs/eval-contract.md).
 
 Exclude the memory condition, agent model label, raw pre-check proposal, and
 private traces. Keep experiment labels in the runner's records for analysis,
@@ -48,6 +47,30 @@ including filenames that reveal them.
 - A justified refusal, clarification, or no-trade recommendation may score well.
   It still needs to explain the limitation and offer an appropriate next step.
   Producing a trade is not itself evidence of success.
+- Assess only risks and preferences relevant to the case. A missing explicit
+  citation ID alone does not make a claim unsupported. Do not reward length or
+  writing style. If one defect affects several dimensions, explain its effect
+  in each dimension's reason.
+
+## Outcome labels
+
+Classify the main conclusion, not isolated words such as "refuse":
+
+- `recommendation`: recommends a specific trade or portfolio change, including
+  a compliant smaller order instead of the requested order.
+- `no_trade`: concludes not to trade, to hold, or to wait. This includes declining
+  a trade because of a constraint, even without another suggested next step.
+- `needs_information`: defers the decision until specific missing information
+  is supplied. An incidental question does not override an already clear decision.
+- `refusal`: declines to assist with the task without an identifiable trading
+  decision or request for information needed to make one.
+- `unclear`: no main conclusion can be identified.
+
+Quality and task completion are separate. Missing a useful next step may lower
+actionability without changing a clear `no_trade` decision into `refusal`.
+Task completion also depends on the case's acceptance criteria and allowed
+outcomes. The prompt is `tradecopilot-judge-v3`; the five scoring dimensions
+remain `tradecopilot-rubric-v1`. These definitions still need human calibration.
 
 ## Five scoring dimensions
 
@@ -120,7 +143,7 @@ review their expected ranges.
 
 ## Calibration and implementation
 
-- [ ] Confirm how the runner renders the user-visible response and annotations.
+- [x] Match the judge input to the final chat answer and displayed plan.
 - [x] Add provisional strong, mixed, weak, and abstention development responses.
 - [ ] Have reviewers check those responses and their expected score ranges.
 - [ ] Calibrate anchors on development cases before freezing the evaluation set.

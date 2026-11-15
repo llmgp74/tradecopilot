@@ -6,7 +6,7 @@ from typing import Any, NoReturn
 
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from tradecopilot_eval.records import Proposal, RunRecord, VisibleResponse
+from tradecopilot_eval.records import ChatAnswer, Proposal, RunRecord, VisibleResponse
 from tradecopilot_eval.reference import load_case
 from tradecopilot_eval.scoring import score_run, score_ticket, verifier_probes
 from tradecopilot_eval.trace import (
@@ -157,28 +157,41 @@ def test_visible_response_excludes_private_state_and_prior_turn_text() -> None:
             HumanMessage(content="New request."),
             AIMessage(content="Internal tool reasoning.", tool_calls=[_call("p")]),
             AIMessage(
-                content=[{"type": "text", "text": "Current answer."}, "Second part."]
+                content=[
+                    {"type": "text", "text": "Current answer."},
+                    {"type": "reasoning", "text": "Private deliberation."},
+                    "Second part.",
+                ]
             ),
         ],
         "draft_recommendation": _arguments(1),
         "portfolio_impact": {"net_notional": 100},
         "verification": [{"text": "Claim.", "verdict": "unchecked"}],
-        "todos": [{"content": "Review evidence.", "status": "completed"}],
+        "todos": [{"content": "Review evidence.", "status": "completed", "private": 5}],
         "profile": {"private": True},
         "condition": "full",
         "reference": {"gold": True},
         "evidence": {"internal": {}},
     }
     visible = response_projection(state)
-    assert visible.text == "Current answer.\nSecond part."
-    assert set(visible.model_dump()) == {
-        "text",
-        "draft_recommendation",
-        "portfolio_impact",
-        "verification",
-        "todos",
+    assert visible.model_dump() == {
+        "text": "Current answer.Second part.",
+        "todos": [{"content": "Review evidence.", "status": "completed"}],
     }
     assert response_projection({"messages": state["messages"][:2]}).text == ""
+    state["messages"].append(AIMessage(content="Checking...", tool_calls=[_call("q")]))
+    assert response_projection(state).text == ""
+
+
+@pytest.mark.parametrize(
+    "bad_plan", [{"content": "step"}, [None], [{"status": "pending"}]]
+)
+def test_chat_projection_rejects_malformed_plan(bad_plan: Any) -> None:
+    """Malformed state must become an invalid-output error that the runner records."""
+    with pytest.raises(ValueError):
+        response_projection(
+            {"messages": [AIMessage(content="Answer")], "todos": bad_plan}
+        )
 
 
 def test_ticket_scoring_uses_independent_arithmetic_and_not_reference_labels(
@@ -399,8 +412,62 @@ def test_final_ticket_and_claim_observations_are_distinct_from_initial_attempts(
     probes = verifier_probes(false_claim_case)
     assert any(item["false_claim_detected"] is True for item in probes)
     assert any(item["true_claim_false_alarm"] is False for item in probes)
-    observation = score_run(_record(), false_claim_case)
-    assert observation["answer_claim_observations"]
+    observation = score_run(_record(final_response=ChatAnswer()), false_claim_case)
+    assert observation["tool_claim_observations"]
     assert all(
-        item["observed"] is None for item in observation["answer_claim_observations"]
+        item["observed"] is None for item in observation["tool_claim_observations"]
     )
+
+
+@pytest.mark.parametrize("repeat", [False, True])
+def test_tool_verdicts_match_only_completed_checks_in_this_turn(repeat: bool) -> None:
+    """Ignore old, unrelated and failed checks. Conflicting rechecks stay unknown.
+
+    Args:
+        repeat: Issue a second completed check with a conflicting verdict.
+    """
+    case = load_case(_EVAL / "scenarios" / "dev_02_false_growth")
+    probe = case.reference.claim_probes[0]
+
+    def call(call_id: str) -> AIMessage:
+        return AIMessage(
+            content="",
+            tool_calls=[{"name": "verify_claims", "id": call_id, "args": {}}],
+        )
+
+    def result(call_id: str, verdict: str, **fields: Any) -> ToolMessage:
+        return ToolMessage(
+            content="tool summary",
+            tool_call_id=call_id,
+            name="verify_claims",
+            artifact={
+                "verification": [
+                    {"scope": "answer", "text": probe.claim.text, "verdict": verdict}
+                ],
+                **fields,
+            },
+        )
+
+    messages: list[BaseMessage] = [
+        HumanMessage(content="Previous turn"),
+        call("old"),
+        result("old", "contradicted"),
+        HumanMessage(content="Current turn"),
+        result("orphan", "contradicted"),
+        call("failed"),
+        result("failed", "contradicted", error="tool_failed"),
+        call("good"),
+        result("good", "supported"),
+    ]
+    if repeat:
+        messages.extend([call("recheck"), result("recheck", "contradicted")])
+    record = _record(
+        final_response=ChatAnswer(text="I do not have enough information."),
+        trace=serialize_trace(messages),
+    )
+    scores = score_run(record, case)
+    observations = scores["tool_claim_observations"]
+    assert observations[0]["observed"] == (None if repeat else "supported")
+    assert observations[1]["observed"] is None
+    assert "answer_claim_observations" not in scores
+    assert scores["task_success"] is None
