@@ -17,7 +17,7 @@ from langchain_core.tools import BaseTool
 from langgraph.types import interrupt
 
 from tradecopilot_agent.claims import match_claims
-from tradecopilot_agent.constraints import check_ticket
+from tradecopilot_agent.constraints import check_ticket, session_open
 from tradecopilot_agent.data import DataSource, MarketClock
 from tradecopilot_agent.memory import MemoryStore
 from tradecopilot_agent.state import (
@@ -338,15 +338,19 @@ class TradingTools:
             profile.get("sector_exclusions", []),
         )
         clock = await self._market_clock()
+        now = datetime.now(tz=UTC)
+        session = (
+            None if clock is None else session_open(now, clock.is_open, clock.next_open)
+        )
         violations = check_ticket(
             normalized,
             profile,
             account,
             prices,
             sectors,
-            datetime.now(tz=UTC),
+            now,
             live=self.as_of is None,
-            market_open=clock.is_open if clock else None,
+            market_open=session,
             next_open=clock.next_open if clock else None,
         )
         if violations:
@@ -452,15 +456,19 @@ class TradingTools:
             [leg["ticker"] for leg in legs], profile.get("sector_exclusions", [])
         )
         clock = await self._market_clock()
+        now = datetime.now(tz=UTC)
+        session = (
+            None if clock is None else session_open(now, clock.is_open, clock.next_open)
+        )
         violations = check_ticket(
             legs,
             profile,
             account,
             prices,
             sectors,
-            datetime.now(tz=UTC),
+            now,
             live=self.as_of is None,
-            market_open=clock.is_open if clock else None,
+            market_open=session,
             next_open=clock.next_open if clock else None,
         )
         if violations:

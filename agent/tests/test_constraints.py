@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from tradecopilot_agent.constraints import check_ticket
+from tradecopilot_agent.constraints import check_ticket, session_open
 
 NOW = datetime(2026, 11, 5, 15, 0, tzinfo=UTC)
 _NEW_YORK = ZoneInfo("America/New_York")
@@ -64,6 +64,34 @@ def test_market_hours_cover_the_extended_session(
     )
 
     assert ("market_closed" in _codes(violations)) is not expected_open
+
+
+@pytest.mark.parametrize(
+    ("day", "hour", "minute", "is_open", "next_open", "expected"),
+    [
+        (17, 8, 0, False, "2026-11-17T09:30:00-05:00", True),
+        (17, 8, 0, False, "2026-11-18T09:30:00-05:00", False),
+        (17, 3, 0, False, "2026-11-17T09:30:00-05:00", False),
+        (17, 10, 0, True, None, True),
+        (17, 17, 0, False, "2026-11-18T09:30:00-05:00", True),
+        (17, 20, 30, False, "2026-11-18T09:30:00-05:00", False),
+        (21, 10, 0, False, "2026-11-23T09:30:00-05:00", False),
+        (17, 8, 0, False, None, False),
+        (17, 8, 0, False, "not-a-time", False),
+    ],
+)
+def test_session_open_combines_clock_and_extended_window(
+    day: int,
+    hour: int,
+    minute: int,
+    is_open: bool,
+    next_open: str | None,
+    expected: bool,
+) -> None:
+    """The regular clock leaves pre-market and after-hours open."""
+    now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
+
+    assert session_open(now, is_open, next_open) is expected
 
 
 def test_the_broker_clock_overrides_the_local_window() -> None:

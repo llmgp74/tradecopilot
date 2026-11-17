@@ -26,6 +26,42 @@ def _ordered(legs: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
     return [*sells, *buys]
 
 
+def session_open(now: datetime, is_open: bool, next_open: str | None) -> bool:
+    """Resolve the effective session state from the broker clock.
+
+    Alpaca reports the regular session only, so a closed clock still leaves
+    pre-market and after-hours open. Before the regular open, the day must be a
+    trading day, which shows up as ``next_open`` falling on the same New York
+    date. Holidays after the regular close are indistinguishable from a normal
+    after-hours day and are left to the broker to reject.
+
+    Args:
+        now: Wall clock in any time zone.
+        is_open: The broker's regular-session state.
+        next_open: RFC 3339 time of the next regular open, when supplied.
+
+    Returns:
+        True when orders may be placed now.
+    """
+    if is_open:
+        return True
+    local = now.astimezone(_NEW_YORK)
+    if local.weekday() >= 5:
+        return False
+    minutes = local.hour * 60 + local.minute
+    if not 4 * 60 <= minutes < 20 * 60:
+        return False
+    if minutes < 9 * 60 + 30:
+        if not next_open:
+            return False
+        try:
+            upcoming = datetime.fromisoformat(next_open)
+        except ValueError:
+            return False
+        return upcoming.astimezone(_NEW_YORK).date() == local.date()
+    return True
+
+
 def _market_open(now: datetime) -> bool:
     """Whether the extended-hours session is open.
 
