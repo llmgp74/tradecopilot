@@ -59,7 +59,8 @@ fn bootstrap_inner(app: &AppHandle, state: &AgentState) -> Result<(), String> {
         return Ok(());
     }
 
-    match runtime::status(&runtime_dir, env!("CARGO_PKG_VERSION")) {
+    let digest = runtime::requirements_digest(&resources);
+    match runtime::status(&runtime_dir, env!("CARGO_PKG_VERSION"), &digest) {
         runtime::Status::Installed => spawn(app, state, &runtime_dir, &resources),
         runtime::Status::Missing | runtime::Status::Broken => {
             let app_handle = app.clone();
