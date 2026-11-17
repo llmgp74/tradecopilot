@@ -175,8 +175,7 @@ def _leg_notional(leg: dict[str, Any]) -> float:
 def _blocked(violations: list[dict[str, Any]]) -> ToolOutput:
     lines = [f"{item['code']}: {item['message']}" for item in violations]
     return ToolOutput(
-        summary="Ticket blocked by constraints. Adjust and try again.\n"
-        + "\n".join(lines),
+        summary="Ticket blocked by constraints.\n" + "\n".join(lines),
         error="blocked",
     )
 
