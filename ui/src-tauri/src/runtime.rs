@@ -91,6 +91,17 @@ pub fn hide_console(command: &mut Command) {
     let _ = command;
 }
 
+/// True when the venv was built from the managed Python under `python/`.
+fn venv_is_managed(runtime: &Path) -> bool {
+    let config = fs::read_to_string(runtime.join("venv").join("pyvenv.cfg")).unwrap_or_default();
+    let managed = runtime.join("python");
+    config.lines().any(|line| {
+        line.split_once('=').is_some_and(|(key, value)| {
+            key.trim() == "home" && Path::new(value.trim()).starts_with(&managed)
+        })
+    })
+}
+
 /// Classifies the runtime directory. A different app version or requirement
 /// digest marks the runtime as broken so setup reinstalls the dependencies.
 pub fn status(runtime: &Path, app_version: &str, requirements: &str) -> Status {
@@ -107,6 +118,9 @@ pub fn status(runtime: &Path, app_version: &str, requirements: &str) -> Status {
         return Status::Broken;
     }
     if !venv_python(runtime).is_file() {
+        return Status::Broken;
+    }
+    if !venv_is_managed(runtime) {
         return Status::Broken;
     }
     Status::Installed
@@ -252,6 +266,12 @@ pub fn install_steps(
     )?;
 
     let venv = runtime.join("venv");
+    // A venv built from a system interpreter such as Conda defeats the
+    // managed runtime, so rebuild it with the downloaded Python.
+    if venv.is_dir() && !venv_is_managed(runtime) {
+        fs::remove_dir_all(&venv)
+            .map_err(|error| format!("Cannot clear {}: {error}", venv.display()))?;
+    }
     let venv_text = venv.to_string_lossy().to_string();
     // --allow-existing lets Retry repair a venv left by a failed setup.
     run_uv(
@@ -301,6 +321,9 @@ fn run_uv(
         .args(args)
         .env("UV_CACHE_DIR", runtime.join("cache"))
         .env("UV_PYTHON_INSTALL_DIR", runtime.join("python"))
+        // Without this uv prefers an interpreter already on PATH, such as a
+        // Conda Python, over the managed download.
+        .env("UV_MANAGED_PYTHON", "1")
         .env("UV_NO_CONFIG", "1")
         .env_remove("PYTHONPATH")
         .env_remove("VIRTUAL_ENV")
@@ -447,11 +470,36 @@ mod tests {
     }
 
     #[test]
+    fn venv_is_managed_tracks_the_python_home() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!venv_is_managed(dir.path()));
+
+        let venv = dir.path().join("venv");
+        fs::create_dir_all(&venv).unwrap();
+        fs::write(venv.join("pyvenv.cfg"), "home = /opt/anaconda3/bin\n").unwrap();
+        assert!(!venv_is_managed(dir.path()));
+
+        let home = dir.path().join("python").join("cpython-3.13").join("bin");
+        fs::write(
+            venv.join("pyvenv.cfg"),
+            format!("home = {}\n", home.display()),
+        )
+        .unwrap();
+        assert!(venv_is_managed(dir.path()));
+    }
+
+    #[test]
     fn marker_is_written_with_the_app_version() {
         let dir = tempfile::tempdir().unwrap();
         let python = venv_python(dir.path());
         fs::create_dir_all(python.parent().unwrap()).unwrap();
         fs::write(&python, b"").unwrap();
+        let home = dir.path().join("python").join("cpython-3.13").join("bin");
+        fs::write(
+            dir.path().join("venv").join("pyvenv.cfg"),
+            format!("home = {}\n", home.display()),
+        )
+        .unwrap();
         write_marker(dir.path(), "0.1.0", "deps-a").unwrap();
         assert_eq!(status(dir.path(), "0.1.0", "deps-a"), Status::Installed);
         assert_eq!(status(dir.path(), "0.2.0", "deps-a"), Status::Broken);
