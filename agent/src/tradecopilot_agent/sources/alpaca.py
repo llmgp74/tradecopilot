@@ -1,8 +1,9 @@
-"""Alpaca paper account, market data, and order placement."""
+"""Alpaca account, market data, and order placement."""
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -19,6 +20,25 @@ from tradecopilot_agent.state import ToolOutput
 
 DATA_URL = "https://data.alpaca.markets"
 STALE_AFTER_SECONDS = 15 * 60
+_NEW_YORK = ZoneInfo("America/New_York")
+_REGULAR_OPEN_MINUTES = 9 * 60 + 30
+_REGULAR_CLOSE_MINUTES = 16 * 60
+
+
+def _in_regular_hours(now: datetime) -> bool:
+    """Whether the regular session is running, 09:30-16:00 New York time.
+
+    Args:
+        now: Wall clock in any time zone.
+
+    Returns:
+        True on weekdays inside the regular session.
+    """
+    local = now.astimezone(_NEW_YORK)
+    if local.weekday() >= 5:
+        return False
+    minutes = local.hour * 60 + local.minute
+    return _REGULAR_OPEN_MINUTES <= minutes < _REGULAR_CLOSE_MINUTES
 
 
 class AlpacaSource:
@@ -173,14 +193,28 @@ class AlpacaSource:
             next_open=next_open if isinstance(next_open, str) else None,
         )
 
-    async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:
-        """Place one market order on the paper account."""
+    async def place_leg(
+        self,
+        leg: dict[str, Any],
+        client_order_id: str,
+        now: datetime | None = None,
+    ) -> ToolOutput:
+        """Place one order on the configured Alpaca account.
+
+        Outside the regular session Alpaca accepts only limit orders flagged
+        for extended hours, so the ticket's entry price becomes the limit.
+
+        Args:
+            leg: Ticket leg with ticker, side, qty, and entry_price.
+            client_order_id: Idempotency key for the order.
+            now: Wall clock, injected by tests.
+
+        Returns:
+            The order result.
+        """
         current = self.settings()
-        if "paper-api" not in current.alpaca_base_url:
-            return ToolOutput(
-                summary="Live trading is disabled.", error="live_disabled"
-            )
-        body = {
+        moment = now if now is not None else datetime.now(tz=UTC)
+        body: dict[str, Any] = {
             "symbol": leg["ticker"],
             "qty": str(leg["qty"]),
             "side": leg["side"],
@@ -188,6 +222,11 @@ class AlpacaSource:
             "time_in_force": "day",
             "client_order_id": client_order_id,
         }
+        entry_price = leg.get("entry_price")
+        if not _in_regular_hours(moment) and isinstance(entry_price, int | float):
+            body["type"] = "limit"
+            body["limit_price"] = f"{float(entry_price):.2f}"
+            body["extended_hours"] = True
         try:
             data = await post_json(
                 f"{trading_base_url(current.alpaca_base_url)}/v2/orders",

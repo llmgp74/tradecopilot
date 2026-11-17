@@ -1,6 +1,8 @@
 """Provider adapters, exercised with recorded responses and no network."""
 
 import asyncio
+import json
+from datetime import UTC, datetime
 
 import httpx
 from tradecopilot_agent.models import AppSettings
@@ -170,6 +172,44 @@ def test_alpaca_clock_is_none_when_rejected() -> None:
     source = AlpacaSource(lambda: _settings(), client=_client(handler))
 
     assert asyncio.run(source.clock()) is None
+
+
+def test_alpaca_places_a_limit_order_in_extended_hours() -> None:
+    """Outside the regular session the order is a limit flagged for extended hours."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"status": "accepted"})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    leg = {"ticker": "SPY", "side": "buy", "qty": 1, "entry_price": 612.34}
+    output = asyncio.run(
+        source.place_leg(leg, "order-1", now=datetime(2026, 11, 17, 12, 0, tzinfo=UTC))
+    )
+
+    assert output.error is None
+    assert seen["type"] == "limit"
+    assert seen["limit_price"] == "612.34"
+    assert seen["extended_hours"] is True
+
+
+def test_alpaca_places_a_market_order_in_regular_hours() -> None:
+    """The regular session keeps market orders."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"status": "accepted"})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    leg = {"ticker": "SPY", "side": "buy", "qty": 1, "entry_price": 612.34}
+    asyncio.run(
+        source.place_leg(leg, "order-2", now=datetime(2026, 11, 17, 15, 0, tzinfo=UTC))
+    )
+
+    assert seen["type"] == "market"
+    assert "extended_hours" not in seen
 
 
 def test_alpaca_bars_requests_a_date_range() -> None:
