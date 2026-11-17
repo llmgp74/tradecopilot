@@ -222,6 +222,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/profile/suggestions/{key}/dismiss:
+    post:
+      summary: Dismiss Suggestion
+      description: "Remember that the user declined a profile suggestion."
+      operationId: dismiss_suggestion_api_profile_suggestions__key__dismiss_post
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      responses:
+        '204':
+          description: Successful Response
   /api/journal:
     get:
       summary: List Journal
@@ -625,6 +640,11 @@ components:
         notional:
           type: number
           title: Notional
+        entry_price:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry Price
         fill_price:
           anyOf:
           - type: number
@@ -707,14 +727,27 @@ components:
           type: string
           title: Benchmark
         benchmark_return_pct:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Benchmark Return Pct
         alpha_pct:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Alpha Pct
         computed_at:
           type: string
           title: Computed At
+        observed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Observed At
+        partial:
+          type: boolean
+          title: Partial
+          default: false
         legs:
           items:
             $ref: '#/components/schemas/LegOutcome'
@@ -728,8 +761,6 @@ components:
       - horizon
       - return_pct
       - benchmark
-      - benchmark_return_pct
-      - alpha_pct
       - computed_at
       title: JournalOutcome
       description: Lazily computed decision outcome.
@@ -745,8 +776,15 @@ components:
           type: number
           title: Return Pct
         alpha_pct:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Alpha Pct
+        observed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Observed At
         counterfactual:
           type: boolean
           title: Counterfactual
@@ -755,7 +793,6 @@ components:
       - ticker
       - entry_price
       - return_pct
-      - alpha_pct
       - counterfactual
       title: LegOutcome
       description: One leg of a computed decision outcome.
@@ -887,11 +924,52 @@ components:
         updated_at:
           type: string
           title: Updated At
+        suggestions:
+          items:
+            $ref: '#/components/schemas/Suggestion'
+          type: array
+          title: Suggestions
       type: object
       required:
       - updated_at
       title: Profile
       description: Durable user profile.
+    Suggestion:
+      properties:
+        key:
+          type: string
+          title: Key
+        kind:
+          type: string
+          enum:
+          - cap
+          - horizon
+          - sector
+          title: Kind
+        title:
+          type: string
+          title: Title
+        rationale:
+          type: string
+          title: Rationale
+        patch:
+          type: object
+          additionalProperties: true
+          title: Patch
+        decision_ids:
+          items:
+            type: string
+          type: array
+          title: Decision Ids
+      type: object
+      required:
+      - key
+      - kind
+      - title
+      - rationale
+      - patch
+      title: Suggestion
+      description: A profile change proposed from repeated rejection reasons.
     ProfilePatch:
       properties:
         risk_band:

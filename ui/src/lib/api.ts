@@ -99,9 +99,19 @@ export interface Profile {
   source_preferences: string[];
   execution: ExecutionSettings;
   updated_at: string;
+  suggestions: Suggestion[];
 }
 
-export type ProfilePatch = Partial<Omit<Profile, "updated_at">>;
+export type ProfilePatch = Partial<Omit<Profile, "updated_at" | "suggestions">>;
+
+export interface Suggestion {
+  key: string;
+  kind: "cap" | "horizon" | "sector";
+  title: string;
+  rationale: string;
+  patch: ProfilePatch;
+  decision_ids: string[];
+}
 
 export type JournalStatus =
   | "proposed"
@@ -122,6 +132,7 @@ export interface JournalLeg {
   side: Side;
   qty: number;
   notional: number;
+  entry_price: number | null;
   fill_price: number | null;
   fill_at: string | null;
   status: JournalStatus;
@@ -131,7 +142,8 @@ export interface LegOutcome {
   ticker: string;
   entry_price: number;
   return_pct: number;
-  alpha_pct: number;
+  alpha_pct: number | null;
+  observed_at: string | null;
   counterfactual: boolean;
 }
 
@@ -142,9 +154,11 @@ export interface JournalOutcome {
   horizon: Horizon;
   return_pct: number;
   benchmark: string;
-  benchmark_return_pct: number;
-  alpha_pct: number;
+  benchmark_return_pct: number | null;
+  alpha_pct: number | null;
   computed_at: string;
+  observed_at: string | null;
+  partial: boolean;
   legs: LegOutcome[];
 }
 
@@ -305,6 +319,17 @@ export function patchProfile(patch: ProfilePatch): Promise<Profile> {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
+  });
+}
+
+/**
+ * Remembers that the user declined a profile suggestion.
+ *
+ * @param key - Stable suggestion key.
+ */
+export async function dismissSuggestion(key: string): Promise<void> {
+  await apiRequest<null>(`/api/profile/suggestions/${encodeURIComponent(key)}/dismiss`, {
+    method: "POST",
   });
 }
 

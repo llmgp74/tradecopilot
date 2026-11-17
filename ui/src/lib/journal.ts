@@ -44,5 +44,9 @@ export function outcomeLabel(outcome: JournalOutcome | null): string {
     return "Pending";
   }
   const prefix = outcome.counterfactual ? "Counterfactual " : "";
-  return `${prefix}${formatSignedPct(outcome.alpha_pct)} alpha`;
+  const suffix = outcome.partial ? " (partial)" : "";
+  if (outcome.alpha_pct !== null) {
+    return `${prefix}${formatSignedPct(outcome.alpha_pct)} alpha${suffix}`;
+  }
+  return `${prefix}${formatSignedPct(outcome.return_pct)} return${suffix}`;
 }

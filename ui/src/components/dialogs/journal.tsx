@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listJournal, type JournalEntry, type JournalStatus } from "@/lib/api";
+import { formatSignedPct } from "@/lib/format";
 import { journalQuery, outcomeLabel, type JournalFilters } from "@/lib/journal";
 import type { DialogProps } from "./portfolio";
 
@@ -225,8 +226,17 @@ export function JournalDialog({ open, onOpenChange }: DialogProps) {
                       </p>
                     ) : null}
                     <p className="text-muted-foreground">
-                      Horizon: {entry.horizon} · Action: {entry.user_action ?? "pending"}
+                      Horizon: {entry.horizon} | Action: {entry.user_action ?? "pending"}
                     </p>
+                    {entry.outcome ? (
+                      <p className="text-muted-foreground">
+                        Observed: {entry.outcome.observed_at ?? "unknown"} | Return:{" "}
+                        {formatSignedPct(entry.outcome.return_pct)}
+                        {entry.outcome.alpha_pct !== null
+                          ? ` | Alpha: ${formatSignedPct(entry.outcome.alpha_pct)}`
+                          : ""}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

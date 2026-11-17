@@ -126,7 +126,10 @@ def test_candidate_proposal_and_constraint_result(
     if expected["eligible"]:
         assert output.error is None
         assert output.proposal is not None
-        assert output.proposal["legs"] == arguments["legs"]
+        order_fields = ("ticker", "side", "qty")
+        assert [
+            {key: leg[key] for key in order_fields} for leg in output.proposal["legs"]
+        ] == [{key: leg[key] for key in order_fields} for leg in arguments["legs"]]
         assert output.portfolio_impact is not None
         impact = output.portfolio_impact
         assert impact["before_pct"]["SYNAA"] == pytest.approx(4.0)

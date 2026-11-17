@@ -3,7 +3,7 @@
 import os
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
@@ -35,7 +35,9 @@ from tradecopilot_agent.models import (
     ThreadList,
     ThreadSummary,
 )
+from tradecopilot_agent.outcomes import attach_outcomes
 from tradecopilot_agent.portfolio import PortfolioUnavailable, fetch_portfolio
+from tradecopilot_agent.promotion import derive_suggestions
 from tradecopilot_agent.server.ai_sdk.convert import to_ui_messages
 from tradecopilot_agent.server.streaming import (
     STREAM_HEADERS,
@@ -317,12 +319,12 @@ def create_app(
 
     @app.get("/api/profile", response_model=Profile)
     async def get_profile() -> Profile:
-        """Return the user profile.
+        """Return the user profile and its suggestions.
 
         Returns:
             The full profile.
         """
-        return Profile.model_validate(app.state.store.get_profile())
+        return _profile_payload(app)
 
     @app.patch("/api/profile", response_model=Profile)
     async def patch_profile(body: ProfilePatch) -> Profile:
@@ -339,7 +341,21 @@ def create_app(
             for key, value in body.model_dump(exclude_unset=True).items()
             if value is not None
         }
-        return Profile.model_validate(app.state.store.patch_profile(changes))
+        app.state.store.patch_profile(changes)
+        return _profile_payload(app)
+
+    @app.post("/api/profile/suggestions/{key}/dismiss", status_code=204)
+    async def dismiss_suggestion(key: str) -> Response:
+        """Remember that the user declined a profile suggestion.
+
+        Args:
+            key: Stable suggestion key from the profile response.
+
+        Returns:
+            An empty response.
+        """
+        app.state.store.dismiss_suggestion(key)
+        return Response(status_code=204)
 
     @app.get("/api/journal", response_model=JournalList)
     async def list_journal(
@@ -371,6 +387,7 @@ def create_app(
             from_date=from_date,
             to_date=to_date,
         )
+        rows = attach_outcomes(rows, app.state.store)
         return JournalList(
             items=[JournalEntry.model_validate(row) for row in rows],
             page_no=page_no,
@@ -417,6 +434,26 @@ def _thread_summary(record: ThreadRecord) -> ThreadSummary:
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
+
+
+def _profile_payload(app: FastAPI) -> Profile:
+    """Read the profile and attach the suggestions derived from the journal.
+
+    Args:
+        app: Application whose state holds the store.
+
+    Returns:
+        The profile with current suggestions.
+    """
+    profile = app.state.store.get_profile()
+    rows, _ = app.state.store.list_journal(page_no=1, page_size=10_000)
+    suggestions = derive_suggestions(
+        rows,
+        profile,
+        app.state.store.dismissed_suggestion_keys(),
+        datetime.now(tz=UTC),
+    )
+    return Profile.model_validate({**profile, "suggestions": suggestions})
 
 
 def _get_graph(app: FastAPI) -> Any:

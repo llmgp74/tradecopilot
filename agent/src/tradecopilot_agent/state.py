@@ -78,6 +78,7 @@ class OrderLeg(BaseModel):
     ticker: str
     side: Side
     qty: float
+    entry_price: float | None = None
 
 
 class OrderTicket(BaseModel):
