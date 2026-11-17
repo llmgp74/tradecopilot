@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from tradecopilot_agent.data import DataSource
+from tradecopilot_agent.data import DataSource, MarketClock
 from tradecopilot_agent.state import ToolOutput
 
 from tradecopilot_eval.fixtures import ToolFixture
@@ -222,3 +222,11 @@ class FrozenSource(DataSource):
         return _failure(
             "execution_disabled", "Order execution is disabled for frozen fixtures."
         )
+
+    async def clock(self) -> MarketClock | None:
+        """Report no session state; fixtures replay offline.
+
+        Returns:
+            None, so the ticket check falls back to the local session window.
+        """
+        return None

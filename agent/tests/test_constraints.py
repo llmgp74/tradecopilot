@@ -66,6 +66,44 @@ def test_market_hours_cover_the_extended_session(
     assert ("market_closed" in _codes(violations)) is not expected_open
 
 
+def test_the_broker_clock_overrides_the_local_window() -> None:
+    """A closed local window still passes when the broker says it is open."""
+    now = datetime(2026, 11, 5, 3, 0, tzinfo=_NEW_YORK)
+
+    violations = check_ticket(
+        [{"ticker": "AAPL", "side": "buy", "qty": 1}],
+        _profile(),
+        _account(),
+        prices={"AAPL": 100.0},
+        sectors={"AAPL": "Technology"},
+        now=now,
+        live=True,
+        market_open=True,
+    )
+
+    assert "market_closed" not in _codes(violations)
+
+
+def test_a_closed_market_reports_the_next_open() -> None:
+    """The broker's next_open is quoted in the violation message."""
+    next_open = "2026-11-17T09:30:00-05:00"
+
+    violations = check_ticket(
+        [{"ticker": "AAPL", "side": "buy", "qty": 1}],
+        _profile(),
+        _account(),
+        prices={"AAPL": 100.0},
+        sectors={"AAPL": "Technology"},
+        now=datetime(2026, 11, 7, 12, 0, tzinfo=_NEW_YORK),
+        live=True,
+        market_open=False,
+        next_open=next_open,
+    )
+
+    closed = [v for v in violations if v["code"] == "market_closed"]
+    assert closed[0]["message"] == f"The market is closed. It opens at {next_open}."
+
+
 def test_a_buy_funded_by_a_sell_passes() -> None:
     """Sell proceeds count before the buy is checked."""
     legs = [

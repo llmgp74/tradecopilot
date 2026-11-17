@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from tradecopilot_agent.data import MarketClock
 from tradecopilot_agent.models import AppSettings
 from tradecopilot_agent.portfolio import (
     PortfolioUnavailable,
@@ -153,6 +154,23 @@ class AlpacaSource:
                 f"buying power {snapshot.account.buying_power}"
             ),
             evidence=[record(tool, {}, "alpaca", payload)],
+        )
+
+    async def clock(self) -> MarketClock | None:
+        """Return Alpaca's session state, or None when it is unavailable."""
+        base = trading_base_url(self.settings().alpaca_base_url)
+        try:
+            data = await fetch_json(
+                f"{base}/v2/clock", headers=self._headers(), client=self.client
+            )
+        except (httpx.HTTPError, ValueError):
+            return None
+        if not isinstance(data, dict) or not isinstance(data.get("is_open"), bool):
+            return None
+        next_open = data.get("next_open")
+        return MarketClock(
+            is_open=data["is_open"],
+            next_open=next_open if isinstance(next_open, str) else None,
         )
 
     async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:

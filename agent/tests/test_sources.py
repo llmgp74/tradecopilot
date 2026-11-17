@@ -144,6 +144,34 @@ def test_evidence_ids_are_stable() -> None:
     assert first.evidence[0].id == second.evidence[0].id
 
 
+def test_alpaca_clock_reports_the_session() -> None:
+    """The clock call reads is_open and next_open from the trading host."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v2/clock"
+        return httpx.Response(
+            200, json={"is_open": False, "next_open": "2026-11-18T09:30:00-05:00"}
+        )
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    clock = asyncio.run(source.clock())
+
+    assert clock is not None
+    assert clock.is_open is False
+    assert clock.next_open == "2026-11-18T09:30:00-05:00"
+
+
+def test_alpaca_clock_is_none_when_rejected() -> None:
+    """An unauthenticated clock call falls back to the local window."""
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"message": "unauthorized."})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+
+    assert asyncio.run(source.clock()) is None
+
+
 def test_alpaca_bars_requests_a_date_range() -> None:
     """Alpaca needs an explicit window to return bars."""
     seen: dict = {}

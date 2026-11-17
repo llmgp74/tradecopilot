@@ -52,6 +52,8 @@ def check_ticket(
     now: datetime,
     *,
     live: bool = False,
+    market_open: bool | None = None,
+    next_open: str | None = None,
 ) -> list[dict[str, Any]]:
     """Check a ticket against the profile and account.
 
@@ -67,6 +69,9 @@ def check_ticket(
         now: Wall clock, used only when ``live`` is true.
         live: Whether the app is talking to a live broker. Evaluation runs pass
             false and skip the market-hours rule.
+        market_open: The broker's session state. When None the local extended
+            window decides.
+        next_open: RFC 3339 time of the next session open, shown when closed.
 
     Returns:
         Violations, each with a code, message, leg index, and value. An empty
@@ -94,8 +99,12 @@ def check_ticket(
     exclusions = set(profile.get("sector_exclusions", []))
     cap_pct = float(profile.get("position_cap_pct", 100))
 
-    if live and legs and not _market_open(now):
-        violations.append(_violation("market_closed", "The market is closed.", 0))
+    open_now = _market_open(now) if market_open is None else market_open
+    if live and legs and not open_now:
+        message = "The market is closed."
+        if next_open:
+            message = f"The market is closed. It opens at {next_open}."
+        violations.append(_violation("market_closed", message, 0, next_open))
 
     for index, leg in _ordered(legs):
         ticker = str(leg.get("ticker", "")).upper()
