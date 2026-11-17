@@ -28,7 +28,14 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { getProfile, patchProfile, type Profile, type ProfilePatch } from "@/lib/api";
+import {
+  dismissSuggestion,
+  getProfile,
+  patchProfile,
+  type Profile,
+  type ProfilePatch,
+  type Suggestion,
+} from "@/lib/api";
 import { profileChanges, requiresConfirmation } from "@/lib/profile";
 import { useResource } from "@/lib/use-resource";
 import type { DialogProps } from "./portfolio";
@@ -275,13 +282,113 @@ function ProfileForm({ profile }: { profile: Profile }) {
 }
 
 /**
+ * Renders profile changes derived from repeated rejection reasons.
+ *
+ * A hard-constraint change goes through the confirmation dialog. A horizon
+ * change applies directly. Nothing changes without the user's click.
+ *
+ * @param props - Suggestions and a reload callback.
+ * @returns The card list, or nothing when there are no suggestions.
+ */
+export function SuggestionCards({
+  suggestions,
+  onChanged,
+}: {
+  suggestions: Suggestion[];
+  onChanged: () => void;
+}) {
+  const [pending, setPending] = useState<Suggestion | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const apply = async (suggestion: Suggestion) => {
+    setSaving(true);
+    try {
+      await patchProfile(suggestion.patch);
+      toast.success("Profile updated.");
+      onChanged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Update failed.");
+    } finally {
+      setSaving(false);
+      setPending(null);
+    }
+  };
+
+  const accept = (suggestion: Suggestion) => {
+    if (suggestion.kind === "horizon") {
+      void apply(suggestion);
+      return;
+    }
+    setPending(suggestion);
+  };
+
+  const dismiss = async (suggestion: Suggestion) => {
+    try {
+      await dismissSuggestion(suggestion.key);
+      onChanged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Dismissal failed.");
+    }
+  };
+
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      {suggestions.map((suggestion) => (
+        <div key={suggestion.key} className="rounded-lg border px-3 py-2 text-xs">
+          <p className="font-medium">{suggestion.title}</p>
+          <p className="text-muted-foreground">{suggestion.rationale}</p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" onClick={() => accept(suggestion)} disabled={saving}>
+              Accept
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void dismiss(suggestion)}
+              disabled={saving}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      ))}
+
+      <AlertDialog
+        open={pending !== null}
+        onOpenChange={(open) => !open && setPending(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change a hard constraint?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This changes what the agent is allowed to do. The next order uses the new
+              values.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => pending && void apply(pending)}>
+              Save changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/**
  * Profile destination dialog.
  *
  * @param props - Open state.
  * @returns The dialog.
  */
 export function ProfileDialog({ open, onOpenChange }: DialogProps) {
-  const { data, error, loading } = useResource(() => getProfile(), open);
+  const { data, error, loading, reload } = useResource(() => getProfile(), open);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -294,7 +401,12 @@ export function ProfileDialog({ open, onOpenChange }: DialogProps) {
         </DialogHeader>
         {loading ? <Skeleton className="h-72 w-full" /> : null}
         {error ? <p className="text-sm text-muted-foreground">{error}</p> : null}
-        {data ? <ProfileForm key={data.updated_at} profile={data} /> : null}
+        {data ? (
+          <>
+            <SuggestionCards suggestions={data.suggestions} onChanged={reload} />
+            <ProfileForm key={data.updated_at} profile={data} />
+          </>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

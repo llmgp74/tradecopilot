@@ -10,6 +10,7 @@ export const baseProfile: Profile = {
   source_preferences: ["sec_edgar", "finnhub"],
   execution: { autonomous: false, max_order_notional: 1000 },
   updated_at: "2026-11-01T00:00:00Z",
+  suggestions: [],
 };
 
 /** Settings fixture with non-empty values so diff tests can clear fields. */
