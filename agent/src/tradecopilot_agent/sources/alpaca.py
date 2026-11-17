@@ -170,11 +170,19 @@ class AlpacaSource:
             ],
         }
         environment = "Paper account" if snapshot.paper else "Live account"
+        holdings = (
+            "; ".join(
+                f"{position.ticker} {position.qty} shares worth {position.market_value}"
+                for position in snapshot.positions
+            )
+            or "none"
+        )
         return ToolOutput(
             summary=(
                 f"{environment}. Equity {snapshot.account.equity}, "
                 f"cash {snapshot.account.cash}, "
-                f"buying power {snapshot.account.buying_power}"
+                f"buying power {snapshot.account.buying_power}. "
+                f"Positions: {holdings}."
             ),
             evidence=[record(tool, {}, "alpaca", payload)],
         )

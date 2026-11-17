@@ -232,7 +232,7 @@ def test_alpaca_bars_requests_a_date_range() -> None:
 
 def test_account_summary_states_the_environment(monkeypatch) -> None:
     """A live account is named in the tool summary the model reads."""
-    from tradecopilot_agent.models import Account, DayPnl, Portfolio
+    from tradecopilot_agent.models import Account, DayPnl, Portfolio, Position
 
     snapshot = Portfolio(
         as_of="2026-11-17T00:00:00Z",
@@ -242,10 +242,23 @@ def test_account_summary_states_the_environment(monkeypatch) -> None:
             equity=10.0,
             cash=10.0,
             buying_power=20.0,
-            long_market_value=0.0,
+            long_market_value=311.0,
         ),
         day=DayPnl(pnl=0.0, pnl_pct=0.0),
-        positions=[],
+        positions=[
+            Position(
+                ticker="NVDA",
+                side="long",
+                sector="Technology",
+                qty=1.0,
+                avg_entry_price=300.0,
+                current_price=311.0,
+                market_value=311.0,
+                unrealized_pl=11.0,
+                unrealized_pl_pct=3.67,
+                weight_pct=5.0,
+            )
+        ],
         equity_curve=[],
     )
 
@@ -258,4 +271,5 @@ def test_account_summary_states_the_environment(monkeypatch) -> None:
     output = asyncio.run(source.portfolio())
 
     assert output.summary.startswith("Live account.")
+    assert "Positions: NVDA 1.0 shares worth 311.0." in output.summary
     assert output.evidence[0].payload["paper"] is False
