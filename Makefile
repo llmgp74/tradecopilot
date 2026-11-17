@@ -12,6 +12,6 @@ macos:
 # Builds the NSIS installer, replaces the per-user install, and opens it.
 windows:
 	npm --prefix ui run tauri build
-	-powershell -NoProfile -Command 'Get-Process TradeCopilot -ErrorAction SilentlyContinue | Stop-Process -Force'
+	-powershell -NoProfile -Command 'Get-Process tradecopilot-ui -ErrorAction SilentlyContinue | Stop-Process -Force'
 	powershell -NoProfile -Command '$$setup = Get-ChildItem "ui/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1; Start-Process -FilePath $$setup.FullName -ArgumentList "/S" -Wait'
-	powershell -NoProfile -Command 'Start-Process (Join-Path $$env:LOCALAPPDATA "TradeCopilot/TradeCopilot.exe")'
+	powershell -NoProfile -Command 'Start-Process (Join-Path $$env:LOCALAPPDATA "TradeCopilot/tradecopilot-ui.exe")'
