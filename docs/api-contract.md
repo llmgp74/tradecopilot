@@ -111,7 +111,17 @@ not produced for the turn.
   "watchlist": ["NVDA", "MSFT"],
   "source_preferences": ["sec_edgar", "finnhub"],
   "execution": {"autonomous": false, "max_order_notional": 2000.0},
-  "updated_at": "2026-11-05T02:00:00Z"
+  "updated_at": "2026-11-05T02:00:00Z",
+  "suggestions": [
+    {
+      "key": "cap_8",
+      "kind": "cap",
+      "title": "Lower the position cap to 8%",
+      "rationale": "2 recent rejections. Latest: \"Too large for my account\"",
+      "patch": {"position_cap_pct": 8.0},
+      "decision_ids": ["t_7f3a...", "t_91bc..."]
+    }
+  ]
 }
 ```
 
@@ -119,15 +129,35 @@ not produced for the turn.
 | --- | --- | --- |
 | `risk_band` | enum | `conservative`, `moderate`, `aggressive` |
 | `position_cap_pct` | number | 0 to 100, percent of account equity |
-| `sector_exclusions` | string[] | GICS sector names |
+| `sector_exclusions` | string[] | provider sector names, such as `Technology` or `Healthcare` |
 | `horizon` | enum | `intraday`, `days`, `weeks`, `months` |
 | `watchlist` | string[] | uppercase tickers |
 | `source_preferences` | string[] | ordered source ids; may be empty |
 | `execution.autonomous` | boolean | allows orders without approval when true |
 | `execution.max_order_notional` | number | 0 or greater, USD |
 | `updated_at` | timestamp | server-managed |
+| `suggestions` | Suggestion[] | server-derived, read-only |
 
-`updated_at` is read-only and ignored on write.
+`updated_at` is read-only and ignored on write. `suggestions` is computed on every
+profile read; sending it is ignored.
+
+A suggestion is a proposed profile change derived from repeated rejection reasons in
+the last 90 days. All suggestions require an explicit user action: `PATCH` with the
+suggestion's `patch` accepts it, and the dismiss route declines it. The server never
+applies a suggestion on its own.
+
+| Suggestion field | Notes |
+| --- | --- |
+| `key` | Stable id, such as `cap_8`, `horizon_months`, or `sector_healthcare` |
+| `kind` | `cap`, `horizon`, or `sector` |
+| `title` | One-line change description |
+| `rationale` | Count and latest matching rejection reason |
+| `patch` | A `PATCH /api/profile` body that applies the change |
+| `decision_ids` | Rejections that produced the suggestion, newest first |
+
+A suggestion is suppressed when the profile already satisfies it, when the user has
+dismissed its key, or when the profile was edited at or after the latest matching
+rejection.
 
 ### 2.4 Settings
 
@@ -478,9 +508,11 @@ be empty for `1D` outside trading hours.
 
 ### 3.6 GET /api/profile
 
-Returns the Profile object defined in section 2.3.
+Returns the Profile object defined in section 2.3, including the suggestions derived
+from the decision journal.
 
-Response 200: Profile. No other status is expected.
+Response 200: Profile. No other status is expected. The suggestion derivation is local
+and makes no external request.
 
 ### 3.7 PATCH /api/profile
 
@@ -503,7 +535,8 @@ there is no nested merge.
 
 #### Response 200
 
-The full updated Profile.
+The full updated Profile with its suggestions recomputed. An accepted suggestion is
+absent from the response because the profile now satisfies it.
 
 #### Validation
 
@@ -541,6 +574,7 @@ Lists decision journal entries, newest first.
           "side": "sell",
           "qty": 10.0,
           "notional": 1950.0,
+          "entry_price": 195.0,
           "fill_price": 195.0,
           "fill_at": "2026-11-04T14:02:40Z",
           "status": "filled"
@@ -550,6 +584,7 @@ Lists decision journal entries, newest first.
           "side": "buy",
           "qty": 5.0,
           "notional": 1200.0,
+          "entry_price": 240.0,
           "fill_price": 240.0,
           "fill_at": "2026-11-04T14:02:41Z",
           "status": "filled"
@@ -570,7 +605,9 @@ Lists decision journal entries, newest first.
         "benchmark": "SPY",
         "benchmark_return_pct": 1.1,
         "alpha_pct": 2.1,
-        "computed_at": "2026-11-05T03:00:12Z"
+        "computed_at": "2026-11-05T03:00:12Z",
+        "observed_at": "2026-12-02",
+        "partial": false
       }
     }
   ],
@@ -592,24 +629,50 @@ The newest event per decision is returned. `total` counts decisions, not event r
 
 Outcome rules:
 
-- Computed lazily on read from daily bars up to now.
-- `entry_price` is the fill price, or the decision-time quote when not executed.
-- `horizon` is the horizon stated in the recommendation.
-- Returns are compared with `benchmark` (SPY) over the same window.
-- Rejected proposals get a counterfactual outcome with `counterfactual: true`.
-- `outcome` is null when the horizon has not elapsed or bars are missing.
+- Computed lazily on read from the local price observations the app recorded during
+  normal use. A journal read makes no broker request.
+- `entry_price` on a leg is the quote recorded when the ticket was proposed. The
+  outcome uses `fill_price` when the leg filled.
+- `horizon` is the horizon stated in the recommendation. The end date is the entry
+  date plus the horizon length: `intraday` 1 day, `days` 5, `weeks` 28, `months` 90.
+- The exit price is the latest observation dated on or after the entry date and on or
+  before the end date, no more than 5 calendar days before it. This is the latest
+  observed price, not a certified close. `observed_at` carries the date used.
+- Returns are compared with `benchmark` (SPY) over the same window. `alpha_pct` is
+  null when a SPY observation is unavailable for that window; the return still shows.
+- A rejected or unfilled decision gets a counterfactual outcome with
+  `counterfactual: true`.
+- A leg without an exit observation is omitted from the aggregate and `partial` is
+  true. `outcome` is null when the horizon has not elapsed or no leg has an exit
+  observation.
+- The `from` and `to` filters and the list order use the decision time
+  (`created_at`). Memory retrieval and the promotion window use the event time.
 
 #### Errors
 
 422 for invalid query values.
 
-### 3.9 GET /api/settings
+### 3.9 POST /api/profile/suggestions/{key}/dismiss
+
+Records that the user declined a profile suggestion. The user is the only actor that
+can change the profile.
+
+#### Path
+
+`key` is the `key` from a suggestion returned by `GET /api/profile`, URL-encoded if
+needed.
+
+#### Response 204
+
+Empty body. Repeated calls for the same key are idempotent.
+
+### 3.10 GET /api/settings
 
 Returns the effective settings defined in section 2.4.
 
 Response 200: Settings. Always 200. The response carries `Cache-Control: no-store`.
 
-### 3.10 PATCH /api/settings
+### 3.11 PATCH /api/settings
 
 Partially updates the stored settings.
 
