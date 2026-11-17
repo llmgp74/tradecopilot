@@ -79,6 +79,18 @@ pub fn uv_binary(runtime: &Path) -> PathBuf {
     }
 }
 
+/// Stops Windows from opening a console window for a child process.
+pub fn hide_console(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        command.creation_flags(0x0800_0000);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
 /// Classifies the runtime directory.
 pub fn status(runtime: &Path, app_version: &str) -> Status {
     let Ok(text) = fs::read_to_string(marker_path(runtime)) else {
@@ -159,11 +171,10 @@ pub fn download_and_install_uv(runtime: &Path) -> Result<(), String> {
     fs::create_dir_all(&extract)
         .map_err(|error| format!("Cannot create {}: {error}", extract.display()))?;
 
-    let status = Command::new("tar")
-        .arg("-xf")
-        .arg(&archive)
-        .arg("-C")
-        .arg(&extract)
+    let mut command = Command::new("tar");
+    command.arg("-xf").arg(&archive).arg("-C").arg(&extract);
+    hide_console(&mut command);
+    let status = command
         .status()
         .map_err(|error| format!("Could not start tar: {error}"))?;
     if !status.success() {
@@ -265,7 +276,8 @@ fn run_uv(
     emit: &mut dyn FnMut(&str, &str),
     uv_child: &Arc<Mutex<Option<Child>>>,
 ) -> Result<(), String> {
-    let mut child = Command::new(uv_binary(runtime))
+    let mut command = Command::new(uv_binary(runtime));
+    command
         .args(args)
         .env("UV_CACHE_DIR", runtime.join("cache"))
         .env("UV_PYTHON_INSTALL_DIR", runtime.join("python"))
@@ -273,7 +285,9 @@ fn run_uv(
         .env_remove("PYTHONPATH")
         .env_remove("VIRTUAL_ENV")
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    hide_console(&mut command);
+    let mut child = command
         .spawn()
         .map_err(|error| format!("Could not start uv: {error}"))?;
 
