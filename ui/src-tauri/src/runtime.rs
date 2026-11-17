@@ -29,6 +29,11 @@ const UV_ARCHIVE: &str = "uv-x86_64-pc-windows-msvc.zip";
 #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 const UV_SHA256: &str = "0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021";
 
+#[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+const UV_ARCHIVE: &str = "uv-aarch64-pc-windows-msvc.zip";
+#[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+const UV_SHA256: &str = "505d9e65e7692bac3ddf98c66754aa26c5050c409c184af30a881a0a72cc85e3";
+
 /// State of the managed runtime directory.
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -354,7 +359,8 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
     all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
+    all(target_os = "windows", target_arch = "x86_64"),
+    all(target_os = "windows", target_arch = "aarch64")
 ))]
 pub fn uv_release() -> Option<UvRelease> {
     Some(UvRelease {
@@ -368,7 +374,8 @@ pub fn uv_release() -> Option<UvRelease> {
 #[cfg(not(any(
     all(target_os = "macos", target_arch = "aarch64"),
     all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
+    all(target_os = "windows", target_arch = "x86_64"),
+    all(target_os = "windows", target_arch = "aarch64")
 )))]
 pub fn uv_release() -> Option<UvRelease> {
     None
@@ -432,7 +439,8 @@ mod tests {
         if cfg!(any(
             all(target_os = "macos", target_arch = "aarch64"),
             all(target_os = "macos", target_arch = "x86_64"),
-            all(target_os = "windows", target_arch = "x86_64")
+            all(target_os = "windows", target_arch = "x86_64"),
+            all(target_os = "windows", target_arch = "aarch64")
         )) {
             assert!(uv_release().is_some());
         }
