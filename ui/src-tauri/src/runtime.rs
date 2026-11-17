@@ -79,8 +79,21 @@ pub fn uv_binary(runtime: &Path) -> PathBuf {
     }
 }
 
-/// Classifies the runtime directory.
-pub fn status(runtime: &Path, app_version: &str) -> Status {
+/// Stops Windows from opening a console window for a child process.
+pub fn hide_console(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        command.creation_flags(0x0800_0000);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
+/// Classifies the runtime directory. A different app version or requirement
+/// digest marks the runtime as broken so setup reinstalls the dependencies.
+pub fn status(runtime: &Path, app_version: &str, requirements: &str) -> Status {
     let Ok(text) = fs::read_to_string(marker_path(runtime)) else {
         return Status::Missing;
     };
@@ -88,6 +101,9 @@ pub fn status(runtime: &Path, app_version: &str) -> Status {
         return Status::Broken;
     };
     if marker.get("version").and_then(|value| value.as_str()) != Some(app_version) {
+        return Status::Broken;
+    }
+    if marker.get("requirements").and_then(|value| value.as_str()) != Some(requirements) {
         return Status::Broken;
     }
     if !venv_python(runtime).is_file() {
@@ -104,11 +120,23 @@ pub fn archive_url(release: &UvRelease) -> String {
     )
 }
 
+/// Hashes the exported requirements so a dependency change reinstalls them.
+pub fn requirements_digest(resources: &Path) -> String {
+    match fs::read(resources.join("requirements.lock.txt")) {
+        Ok(bytes) => sha256_hex(&bytes),
+        Err(_) => String::new(),
+    }
+}
+
 /// Writes the marker that marks a completed setup.
-pub fn write_marker(runtime: &Path, app_version: &str) -> Result<(), String> {
+pub fn write_marker(runtime: &Path, app_version: &str, requirements: &str) -> Result<(), String> {
     fs::create_dir_all(runtime)
         .map_err(|error| format!("Cannot create {}: {error}", runtime.display()))?;
-    let body = serde_json::json!({"version": app_version, "python": "3.13"});
+    let body = serde_json::json!({
+        "version": app_version,
+        "python": "3.13",
+        "requirements": requirements,
+    });
     fs::write(marker_path(runtime), body.to_string())
         .map_err(|error| format!("Cannot write the runtime marker: {error}"))
 }
@@ -159,11 +187,10 @@ pub fn download_and_install_uv(runtime: &Path) -> Result<(), String> {
     fs::create_dir_all(&extract)
         .map_err(|error| format!("Cannot create {}: {error}", extract.display()))?;
 
-    let status = Command::new("tar")
-        .arg("-xf")
-        .arg(&archive)
-        .arg("-C")
-        .arg(&extract)
+    let mut command = Command::new("tar");
+    command.arg("-xf").arg(&archive).arg("-C").arg(&extract);
+    hide_console(&mut command);
+    let status = command
         .status()
         .map_err(|error| format!("Could not start tar: {error}"))?;
     if !status.success() {
@@ -254,7 +281,11 @@ pub fn install_steps(
         uv_child,
     )?;
 
-    write_marker(runtime, env!("CARGO_PKG_VERSION"))
+    write_marker(
+        runtime,
+        env!("CARGO_PKG_VERSION"),
+        &requirements_digest(resources),
+    )
 }
 
 /// Runs one uv command and forwards both output streams line by line.
@@ -265,7 +296,8 @@ fn run_uv(
     emit: &mut dyn FnMut(&str, &str),
     uv_child: &Arc<Mutex<Option<Child>>>,
 ) -> Result<(), String> {
-    let mut child = Command::new(uv_binary(runtime))
+    let mut command = Command::new(uv_binary(runtime));
+    command
         .args(args)
         .env("UV_CACHE_DIR", runtime.join("cache"))
         .env("UV_PYTHON_INSTALL_DIR", runtime.join("python"))
@@ -273,7 +305,9 @@ fn run_uv(
         .env_remove("PYTHONPATH")
         .env_remove("VIRTUAL_ENV")
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    hide_console(&mut command);
+    let mut child = command
         .spawn()
         .map_err(|error| format!("Could not start uv: {error}"))?;
 
@@ -390,7 +424,7 @@ mod tests {
     #[test]
     fn missing_marker_reports_missing() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(status(dir.path(), "0.1.0"), Status::Missing);
+        assert_eq!(status(dir.path(), "0.1.0", ""), Status::Missing);
     }
 
     #[test]
@@ -398,10 +432,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::write(
             marker_path(dir.path()),
-            r#"{"version":"0.1.0","python":"3.13"}"#,
+            r#"{"version":"0.1.0","python":"3.13","requirements":""}"#,
         )
         .unwrap();
-        assert_eq!(status(dir.path(), "0.1.0"), Status::Broken);
+        assert_eq!(status(dir.path(), "0.1.0", ""), Status::Broken);
     }
 
     #[test]
@@ -418,9 +452,10 @@ mod tests {
         let python = venv_python(dir.path());
         fs::create_dir_all(python.parent().unwrap()).unwrap();
         fs::write(&python, b"").unwrap();
-        write_marker(dir.path(), "0.1.0").unwrap();
-        assert_eq!(status(dir.path(), "0.1.0"), Status::Installed);
-        assert_eq!(status(dir.path(), "0.2.0"), Status::Broken);
+        write_marker(dir.path(), "0.1.0", "deps-a").unwrap();
+        assert_eq!(status(dir.path(), "0.1.0", "deps-a"), Status::Installed);
+        assert_eq!(status(dir.path(), "0.2.0", "deps-a"), Status::Broken);
+        assert_eq!(status(dir.path(), "0.1.0", "deps-b"), Status::Broken);
     }
 
     #[test]

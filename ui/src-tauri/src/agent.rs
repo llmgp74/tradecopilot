@@ -113,12 +113,7 @@ pub fn spawn(
         command.env(key, value);
     }
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-
-        command.creation_flags(0x0800_0000);
-    }
+    runtime::hide_console(&mut command);
 
     let mut child = command
         .spawn()
