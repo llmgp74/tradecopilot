@@ -102,8 +102,12 @@ def render_memory(
             f"{leg.get('side')} {leg.get('qty')} {leg.get('ticker')}"
             for leg in entry.get("legs", [])
         )
+        # Older rows predate the environment flag, so they read as unknown.
+        paper = entry.get("paper")
+        environment = "paper" if paper is True else "live" if paper is False else "env?"
         line = (
-            f"- {entry.get('id')} {str(entry.get('created_at', ''))[:10]} "
+            f"- {environment} {entry.get('id')} "
+            f"{str(entry.get('created_at', ''))[:10]} "
             f"{entry.get('status')} {legs}: {entry.get('thesis', '')}"
         )
         if entry.get("rejection_reason"):

@@ -156,6 +156,7 @@ class AlpacaSource:
             return ToolOutput(summary=f"Alpaca account failed: {exc}", error="http")
         payload = {
             "kind": "account",
+            "paper": snapshot.paper,
             "equity": snapshot.account.equity,
             "cash": snapshot.account.cash,
             "buying_power": snapshot.account.buying_power,
@@ -168,9 +169,11 @@ class AlpacaSource:
                 for position in snapshot.positions
             ],
         }
+        environment = "Paper account" if snapshot.paper else "Live account"
         return ToolOutput(
             summary=(
-                f"Equity {snapshot.account.equity}, cash {snapshot.account.cash}, "
+                f"{environment}. Equity {snapshot.account.equity}, "
+                f"cash {snapshot.account.cash}, "
                 f"buying power {snapshot.account.buying_power}"
             ),
             evidence=[record(tool, {}, "alpaca", payload)],

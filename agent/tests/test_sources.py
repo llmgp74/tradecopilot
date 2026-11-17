@@ -228,3 +228,34 @@ def test_alpaca_bars_requests_a_date_range() -> None:
 
     assert "start" in seen and "end" in seen
     assert output.summary == "1 bars for SPY"
+
+
+def test_account_summary_states_the_environment(monkeypatch) -> None:
+    """A live account is named in the tool summary the model reads."""
+    from tradecopilot_agent.models import Account, DayPnl, Portfolio
+
+    snapshot = Portfolio(
+        as_of="2026-11-17T00:00:00Z",
+        paper=False,
+        account=Account(
+            currency="USD",
+            equity=10.0,
+            cash=10.0,
+            buying_power=20.0,
+            long_market_value=0.0,
+        ),
+        day=DayPnl(pnl=0.0, pnl_pct=0.0),
+        positions=[],
+        equity_curve=[],
+    )
+
+    async def fake_fetch(_settings, _range):
+        return snapshot
+
+    monkeypatch.setattr("tradecopilot_agent.sources.alpaca.fetch_portfolio", fake_fetch)
+    source = AlpacaSource(lambda: _settings())
+
+    output = asyncio.run(source.portfolio())
+
+    assert output.summary.startswith("Live account.")
+    assert output.evidence[0].payload["paper"] is False

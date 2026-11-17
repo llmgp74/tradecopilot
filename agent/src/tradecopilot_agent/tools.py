@@ -380,6 +380,7 @@ class TradingTools:
             **ticket.model_dump(),
             "portfolio_impact": impact,
             "evidence_ids": evidence_ids,
+            "paper": account.get("paper"),
         }
         self.store.append_journal(
             {
@@ -402,6 +403,7 @@ class TradingTools:
                 "status": "proposed",
                 "user_action": None,
                 "rejection_reason": None,
+                "paper": account.get("paper"),
             }
         )
         return ToolOutput(
@@ -579,6 +581,7 @@ class TradingTools:
                 "status": status,
                 "user_action": user_action,
                 "rejection_reason": reason,
+                "paper": pending.get("paper"),
             }
         )
 

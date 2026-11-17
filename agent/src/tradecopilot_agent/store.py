@@ -608,5 +608,6 @@ def _journal_row(payload: dict[str, Any]) -> dict[str, Any]:
         "status": str(payload.get("status", "proposed")),
         "user_action": payload.get("user_action"),
         "rejection_reason": payload.get("rejection_reason"),
+        "paper": payload.get("paper"),
         "outcome": payload.get("outcome"),
     }
