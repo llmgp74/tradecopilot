@@ -317,6 +317,10 @@ class TradingTools:
             }
             for leg in legs
         ]
+        if any(not leg["ticker"] for leg in normalized):
+            return ToolOutput(
+                summary="Every leg needs a ticker, for example NVDA.", error="invalid"
+            )
         if any(leg["side"] not in {"buy", "sell"} for leg in normalized):
             return ToolOutput(
                 summary="Every leg needs side buy or sell.", error="invalid"
