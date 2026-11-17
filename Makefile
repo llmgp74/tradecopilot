@@ -1,4 +1,4 @@
-.PHONY: macos windows windows-x64
+.PHONY: macos windows-arm64 windows-x64
 
 # Stages the agent source, builds the frontend, compiles the Tauri shell, and
 # bundles TradeCopilot.app, then replaces the installed copy and opens it.
