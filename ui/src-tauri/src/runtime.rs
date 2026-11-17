@@ -170,12 +170,14 @@ pub fn download_and_install_uv(runtime: &Path) -> Result<(), String> {
         return Err("Could not extract the uv archive.".to_string());
     }
 
+    // The macOS tarball nests the binary in a release directory; the Windows
+    // zip stores it at the archive root.
     let extracted = fs::read_dir(&extract)
         .map_err(|error| format!("Cannot read {}: {error}", extract.display()))?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .find(|path| path.is_dir())
-        .ok_or_else(|| "The uv archive contained no directory.".to_string())?;
+        .unwrap_or_else(|| extract.clone());
     let source = extracted.join(if cfg!(windows) { "uv.exe" } else { "uv" });
     fs::copy(&source, &binary).map_err(|error| {
         format!(
