@@ -188,6 +188,30 @@ function toDisplayPart(
 }
 
 /**
+ * Drops a reasoning part whose text repeats one already rendered.
+ *
+ * A resumed stream can re-deliver a step's thoughts, which otherwise show up
+ * as an identical block twice.
+ *
+ * @param parts - Display parts in wire order.
+ * @returns The parts without repeated reasoning.
+ */
+function dropRepeatedReasoning(parts: DisplayPart[]): DisplayPart[] {
+  const seen = new Set<string>();
+  return parts.filter((part) => {
+    if (part.kind !== "reasoning") {
+      return true;
+    }
+    const text = part.text.trim();
+    if (!text || seen.has(text)) {
+      return false;
+    }
+    seen.add(text);
+    return true;
+  });
+}
+
+/**
  * Reduces live and rehydrated messages to one display shape.
  *
  * Later copies of the same tool call are folded into the first card, so an
@@ -223,7 +247,7 @@ export function normalizeMessages(messages: UIMessage[]): DisplayMessage[] {
     return {
       id: message.id,
       role: message.role,
-      parts,
+      parts: dropRepeatedReasoning(parts),
       todos,
     };
   });
