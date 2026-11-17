@@ -129,8 +129,16 @@ export default function App() {
   };
 
   const activeThread = threads.find((item) => item.thread_id === conversation.threadId);
-  const dialogChange = (name: DialogName) => (open: boolean) =>
+  const dialogChange = (name: DialogName) => (open: boolean) => {
     setDialog(open ? name : null);
+    if (!open && name === "settings") {
+      // The setup banner reads health fetched at startup, so refresh it after
+      // a model is saved.
+      void getHealth()
+        .then(setHealth)
+        .catch(() => {});
+    }
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
