@@ -168,6 +168,12 @@ export function Chat({
     if (!text && message.files.length === 0) {
       return;
     }
+    // A blob URL means the browser could not read the file; sending it would
+    // drop the image without telling anyone.
+    if (message.files.some((file) => file.url?.startsWith("blob:"))) {
+      toast.error("Could not read the attached image. Try again.");
+      return;
+    }
     setLiveTodos(null);
     sendMessage({ text, files: message.files });
   };
