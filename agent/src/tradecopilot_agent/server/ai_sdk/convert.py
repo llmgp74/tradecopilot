@@ -29,17 +29,33 @@ _TOOL_PREFIX = "tool-"
 def to_human_message(message: UIMessage) -> HumanMessage:
     """Convert one UI user message to a human message.
 
+    Image file parts become ``image_url`` content blocks so a vision model
+    receives the attachment alongside the text.
+
     Args:
         message: An AI SDK UI message with role `user`.
 
     Returns:
-        A `HumanMessage` with the user's text and the UI message id.
+        A `HumanMessage` with the user's text, images, and the UI message id.
     """
     parts = message.get("parts")
-    text = _text_from_parts(parts if isinstance(parts, list) else [])
+    part_list = parts if isinstance(parts, list) else []
+    text = _text_from_parts(part_list)
+    images = _image_urls(part_list)
+    content: str | list[str | dict[Any, Any]]
+    if images:
+        blocks: list[str | dict[Any, Any]] = []
+        if text:
+            blocks.append({"type": "text", "text": text})
+        blocks.extend(
+            {"type": "image_url", "image_url": {"url": url}} for url in images
+        )
+        content = blocks
+    else:
+        content = text
     raw_id = message.get("id")
     return HumanMessage(
-        content=text,
+        content=content,
         id=raw_id if isinstance(raw_id, str) else None,
     )
 
@@ -127,6 +143,34 @@ def _assistant_messages(message: UIMessage, parts: list[UIPart]) -> list[BaseMes
         id=raw_id if isinstance(raw_id, str) else None,
     )
     return [assistant, *tool_results]
+
+
+def _image_urls(parts: list[UIPart]) -> list[str]:
+    """Return data or http URLs for the image file parts.
+
+    Blob URLs belong to the browser and cannot be fetched here, so they are
+    dropped instead of failing the turn.
+
+    Args:
+        parts: The UI message parts.
+
+    Returns:
+        Image URLs in part order.
+    """
+    urls: list[str] = []
+    for part in parts:
+        if part.get("type") != "file":
+            continue
+        url = part.get("url")
+        media_type = part.get("mediaType")
+        if (
+            isinstance(url, str)
+            and url.startswith(("data:", "http"))
+            and isinstance(media_type, str)
+            and media_type.startswith("image/")
+        ):
+            urls.append(url)
+    return urls
 
 
 def _text_from_parts(parts: list[UIPart]) -> str:
