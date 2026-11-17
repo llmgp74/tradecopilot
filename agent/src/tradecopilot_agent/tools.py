@@ -17,8 +17,8 @@ from langchain_core.tools import BaseTool
 from langgraph.types import interrupt
 
 from tradecopilot_agent.claims import match_claims
-from tradecopilot_agent.constraints import check_ticket
-from tradecopilot_agent.data import DataSource
+from tradecopilot_agent.constraints import check_ticket, session_open
+from tradecopilot_agent.data import DataSource, MarketClock
 from tradecopilot_agent.memory import MemoryStore
 from tradecopilot_agent.state import (
     Claim,
@@ -175,8 +175,7 @@ def _leg_notional(leg: dict[str, Any]) -> float:
 def _blocked(violations: list[dict[str, Any]]) -> ToolOutput:
     lines = [f"{item['code']}: {item['message']}" for item in violations]
     return ToolOutput(
-        summary="Ticket blocked by constraints. Adjust and try again.\n"
-        + "\n".join(lines),
+        summary="Ticket blocked by constraints.\n" + "\n".join(lines),
         error="blocked",
     )
 
@@ -209,6 +208,12 @@ class TradingTools:
         if not capability or capability in self.capabilities():
             return None
         return _unavailable(capability)
+
+    async def _market_clock(self) -> MarketClock | None:
+        """Return the broker session for a live run, None during evaluation."""
+        if self.as_of is not None:
+            return None
+        return await self.source.clock()
 
     async def quote(self, ticker: str) -> ToolOutput:
         """Fetch a quote."""
@@ -312,6 +317,10 @@ class TradingTools:
             }
             for leg in legs
         ]
+        if any(not leg["ticker"] for leg in normalized):
+            return ToolOutput(
+                summary="Every leg needs a ticker, for example NVDA.", error="invalid"
+            )
         if any(leg["side"] not in {"buy", "sell"} for leg in normalized):
             return ToolOutput(
                 summary="Every leg needs side buy or sell.", error="invalid"
@@ -332,14 +341,21 @@ class TradingTools:
             [leg["ticker"] for leg in normalized],
             profile.get("sector_exclusions", []),
         )
+        clock = await self._market_clock()
+        now = datetime.now(tz=UTC)
+        session = (
+            None if clock is None else session_open(now, clock.is_open, clock.next_open)
+        )
         violations = check_ticket(
             normalized,
             profile,
             account,
             prices,
             sectors,
-            datetime.now(tz=UTC),
+            now,
             live=self.as_of is None,
+            market_open=session,
+            next_open=clock.next_open if clock else None,
         )
         if violations:
             return _blocked(violations)
@@ -372,6 +388,7 @@ class TradingTools:
             **ticket.model_dump(),
             "portfolio_impact": impact,
             "evidence_ids": evidence_ids,
+            "paper": account.get("paper"),
         }
         self.store.append_journal(
             {
@@ -394,6 +411,7 @@ class TradingTools:
                 "status": "proposed",
                 "user_action": None,
                 "rejection_reason": None,
+                "paper": account.get("paper"),
             }
         )
         return ToolOutput(
@@ -441,14 +459,21 @@ class TradingTools:
         sectors = await self._sectors(
             [leg["ticker"] for leg in legs], profile.get("sector_exclusions", [])
         )
+        clock = await self._market_clock()
+        now = datetime.now(tz=UTC)
+        session = (
+            None if clock is None else session_open(now, clock.is_open, clock.next_open)
+        )
         violations = check_ticket(
             legs,
             profile,
             account,
             prices,
             sectors,
-            datetime.now(tz=UTC),
+            now,
             live=self.as_of is None,
+            market_open=session,
+            next_open=clock.next_open if clock else None,
         )
         if violations:
             return _blocked(violations)
@@ -568,6 +593,7 @@ class TradingTools:
                 "status": status,
                 "user_action": user_action,
                 "rejection_reason": reason,
+                "paper": pending.get("paper"),
             }
         )
 

@@ -1,10 +1,13 @@
 """The deterministic order ticket check."""
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
-from tradecopilot_agent.constraints import check_ticket
+import pytest
+from tradecopilot_agent.constraints import check_ticket, session_open
 
 NOW = datetime(2026, 11, 5, 15, 0, tzinfo=UTC)
+_NEW_YORK = ZoneInfo("America/New_York")
 
 
 def _profile(**overrides: object) -> dict:
@@ -30,6 +33,103 @@ def _account(**overrides: object) -> dict:
 
 def _codes(violations: list[dict]) -> set[str]:
     return {violation["code"] for violation in violations}
+
+
+@pytest.mark.parametrize(
+    ("day", "hour", "minute", "expected_open"),
+    [
+        (5, 3, 59, False),
+        (5, 4, 0, True),
+        (5, 9, 30, True),
+        (5, 16, 0, True),
+        (5, 19, 59, True),
+        (5, 20, 0, False),
+        (7, 12, 0, False),
+    ],
+)
+def test_market_hours_cover_the_extended_session(
+    day: int, hour: int, minute: int, expected_open: bool
+) -> None:
+    """Pre-market and after-hours are open; the weekend stays closed."""
+    now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
+
+    violations = check_ticket(
+        [{"ticker": "AAPL", "side": "buy", "qty": 1}],
+        _profile(),
+        _account(),
+        prices={"AAPL": 100.0},
+        sectors={"AAPL": "Technology"},
+        now=now,
+        live=True,
+    )
+
+    assert ("market_closed" in _codes(violations)) is not expected_open
+
+
+@pytest.mark.parametrize(
+    ("day", "hour", "minute", "is_open", "next_open", "expected"),
+    [
+        (17, 8, 0, False, "2026-11-17T09:30:00-05:00", True),
+        (17, 8, 0, False, "2026-11-18T09:30:00-05:00", False),
+        (17, 3, 0, False, "2026-11-17T09:30:00-05:00", False),
+        (17, 10, 0, True, None, True),
+        (17, 17, 0, False, "2026-11-18T09:30:00-05:00", True),
+        (17, 20, 30, False, "2026-11-18T09:30:00-05:00", False),
+        (21, 10, 0, False, "2026-11-23T09:30:00-05:00", False),
+        (17, 8, 0, False, None, False),
+        (17, 8, 0, False, "not-a-time", False),
+    ],
+)
+def test_session_open_combines_clock_and_extended_window(
+    day: int,
+    hour: int,
+    minute: int,
+    is_open: bool,
+    next_open: str | None,
+    expected: bool,
+) -> None:
+    """The regular clock leaves pre-market and after-hours open."""
+    now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
+
+    assert session_open(now, is_open, next_open) is expected
+
+
+def test_the_broker_clock_overrides_the_local_window() -> None:
+    """A closed local window still passes when the broker says it is open."""
+    now = datetime(2026, 11, 5, 3, 0, tzinfo=_NEW_YORK)
+
+    violations = check_ticket(
+        [{"ticker": "AAPL", "side": "buy", "qty": 1}],
+        _profile(),
+        _account(),
+        prices={"AAPL": 100.0},
+        sectors={"AAPL": "Technology"},
+        now=now,
+        live=True,
+        market_open=True,
+    )
+
+    assert "market_closed" not in _codes(violations)
+
+
+def test_a_closed_market_reports_the_next_open() -> None:
+    """The broker's next_open is quoted in the violation message."""
+    next_open = "2026-11-17T09:30:00-05:00"
+
+    violations = check_ticket(
+        [{"ticker": "AAPL", "side": "buy", "qty": 1}],
+        _profile(),
+        _account(),
+        prices={"AAPL": 100.0},
+        sectors={"AAPL": "Technology"},
+        now=datetime(2026, 11, 7, 12, 0, tzinfo=_NEW_YORK),
+        live=True,
+        market_open=False,
+        next_open=next_open,
+    )
+
+    closed = [v for v in violations if v["code"] == "market_closed"]
+    assert closed[0]["message"] == f"The market is closed. It opens at {next_open}."
 
 
 def test_a_buy_funded_by_a_sell_passes() -> None:

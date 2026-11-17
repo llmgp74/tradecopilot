@@ -1,6 +1,8 @@
 """Provider adapters, exercised with recorded responses and no network."""
 
 import asyncio
+import json
+from datetime import UTC, datetime
 
 import httpx
 from tradecopilot_agent.models import AppSettings
@@ -144,6 +146,72 @@ def test_evidence_ids_are_stable() -> None:
     assert first.evidence[0].id == second.evidence[0].id
 
 
+def test_alpaca_clock_reports_the_session() -> None:
+    """The clock call reads is_open and next_open from the trading host."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v2/clock"
+        return httpx.Response(
+            200, json={"is_open": False, "next_open": "2026-11-18T09:30:00-05:00"}
+        )
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    clock = asyncio.run(source.clock())
+
+    assert clock is not None
+    assert clock.is_open is False
+    assert clock.next_open == "2026-11-18T09:30:00-05:00"
+
+
+def test_alpaca_clock_is_none_when_rejected() -> None:
+    """An unauthenticated clock call falls back to the local window."""
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"message": "unauthorized."})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+
+    assert asyncio.run(source.clock()) is None
+
+
+def test_alpaca_places_a_limit_order_in_extended_hours() -> None:
+    """Outside the regular session the order is a limit flagged for extended hours."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"status": "accepted"})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    leg = {"ticker": "SPY", "side": "buy", "qty": 1, "entry_price": 612.34}
+    output = asyncio.run(
+        source.place_leg(leg, "order-1", now=datetime(2026, 11, 17, 12, 0, tzinfo=UTC))
+    )
+
+    assert output.error is None
+    assert seen["type"] == "limit"
+    assert seen["limit_price"] == "612.34"
+    assert seen["extended_hours"] is True
+
+
+def test_alpaca_places_a_market_order_in_regular_hours() -> None:
+    """The regular session keeps market orders."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"status": "accepted"})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    leg = {"ticker": "SPY", "side": "buy", "qty": 1, "entry_price": 612.34}
+    asyncio.run(
+        source.place_leg(leg, "order-2", now=datetime(2026, 11, 17, 15, 0, tzinfo=UTC))
+    )
+
+    assert seen["type"] == "market"
+    assert "extended_hours" not in seen
+
+
 def test_alpaca_bars_requests_a_date_range() -> None:
     """Alpaca needs an explicit window to return bars."""
     seen: dict = {}
@@ -160,3 +228,48 @@ def test_alpaca_bars_requests_a_date_range() -> None:
 
     assert "start" in seen and "end" in seen
     assert output.summary == "1 bars for SPY"
+
+
+def test_account_summary_states_the_environment(monkeypatch) -> None:
+    """A live account is named in the tool summary the model reads."""
+    from tradecopilot_agent.models import Account, DayPnl, Portfolio, Position
+
+    snapshot = Portfolio(
+        as_of="2026-11-17T00:00:00Z",
+        paper=False,
+        account=Account(
+            currency="USD",
+            equity=10.0,
+            cash=10.0,
+            buying_power=20.0,
+            long_market_value=311.0,
+        ),
+        day=DayPnl(pnl=0.0, pnl_pct=0.0),
+        positions=[
+            Position(
+                ticker="NVDA",
+                side="long",
+                sector="Technology",
+                qty=1.0,
+                avg_entry_price=300.0,
+                current_price=311.0,
+                market_value=311.0,
+                unrealized_pl=11.0,
+                unrealized_pl_pct=3.67,
+                weight_pct=5.0,
+            )
+        ],
+        equity_curve=[],
+    )
+
+    async def fake_fetch(_settings, _range):
+        return snapshot
+
+    monkeypatch.setattr("tradecopilot_agent.sources.alpaca.fetch_portfolio", fake_fetch)
+    source = AlpacaSource(lambda: _settings())
+
+    output = asyncio.run(source.portfolio())
+
+    assert output.summary.startswith("Live account.")
+    assert "Positions: NVDA 1.0 shares worth 311.0." in output.summary
+    assert output.evidence[0].payload["paper"] is False

@@ -265,6 +265,45 @@ def test_to_human_message_uses_ui_id() -> None:
     assert message.content == "hello"
 
 
+def test_to_human_message_carries_images() -> None:
+    """Image file parts become content blocks for a vision model."""
+    message = to_human_message(
+        {
+            "id": "u1",
+            "role": "user",
+            "parts": [
+                {"type": "text", "text": "what is this chart?"},
+                {
+                    "type": "file",
+                    "mediaType": "image/png",
+                    "url": "data:image/png;base64,AAA",
+                },
+            ],
+        }
+    )
+
+    assert message.content == [
+        {"type": "text", "text": "what is this chart?"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}},
+    ]
+
+
+def test_blob_image_urls_are_dropped() -> None:
+    """Blob URLs cannot be fetched by the server, so they are skipped."""
+    message = to_human_message(
+        {
+            "id": "u1",
+            "role": "user",
+            "parts": [
+                {"type": "text", "text": "hello"},
+                {"type": "file", "mediaType": "image/png", "url": "blob:abc"},
+            ],
+        }
+    )
+
+    assert message.content == "hello"
+
+
 def test_to_langchain_messages_rebuilds_tool_history() -> None:
     """Assistant tool parts become an AI message and a tool message."""
     messages = to_langchain_messages(

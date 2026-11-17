@@ -14,13 +14,21 @@ import { Message, MessageContent } from "@/components/ai-elements/message";
 import { AssistantParts } from "./assistant-parts";
 import {
   PromptInput,
+  PromptInputActionAddAttachments,
+  PromptInputActionMenu,
+  PromptInputActionMenuContent,
+  PromptInputActionMenuTrigger,
   PromptInputBody,
   PromptInputFooter,
+  PromptInputHeader,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
+  usePromptInputAttachments,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
+import { XIcon } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { apiUrl } from "@/lib/api-base";
 import { chatRequest } from "@/lib/chat-request";
@@ -52,6 +60,39 @@ const STARTER_PROMPTS = [
   "Is NVDA worth adding before earnings?",
   "Rebalance within my position cap",
 ];
+
+/**
+ * Shows the images waiting to be sent, each removable before submit.
+ *
+ * @returns The preview row, or nothing when no image is attached.
+ */
+function ComposerAttachments() {
+  const attachments = usePromptInputAttachments();
+  if (attachments.files.length === 0) {
+    return null;
+  }
+  return (
+    <PromptInputHeader className="flex flex-wrap gap-2 px-3 pt-3">
+      {attachments.files.map((file) => (
+        <div key={file.id} className="relative size-16 overflow-hidden rounded-md border">
+          <img
+            src={file.url}
+            alt={file.filename ?? "Attached image"}
+            className="size-full object-cover"
+          />
+          <button
+            type="button"
+            aria-label={`Remove ${file.filename ?? "image"}`}
+            className="absolute right-1 top-1 rounded-full bg-background/80 p-0.5"
+            onClick={() => attachments.remove(file.id)}
+          >
+            <XIcon className="size-3" />
+          </button>
+        </div>
+      ))}
+    </PromptInputHeader>
+  );
+}
 
 /**
  * Renders the conversation, the composer, and the empty state.
@@ -123,7 +164,18 @@ export function Chat({
   };
 
   const handleSubmit = (message: PromptInputMessage) => {
-    sendText(message.text);
+    const text = message.text.trim();
+    if (!text && message.files.length === 0) {
+      return;
+    }
+    // A blob URL means the browser could not read the file; sending it would
+    // drop the image without telling anyone.
+    if (message.files.some((file) => file.url?.startsWith("blob:"))) {
+      toast.error("Could not read the attached image. Try again.");
+      return;
+    }
+    setLiveTodos(null);
+    sendMessage({ text, files: message.files });
   };
 
   return (
@@ -223,12 +275,27 @@ export function Chat({
       ) : null}
 
       <div className="mx-auto w-full max-w-[min(720px,100%-3rem)] px-0 pb-4">
-        <PromptInput onSubmit={handleSubmit}>
+        <PromptInput
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          maxFiles={4}
+          maxFileSize={5 * 1024 * 1024}
+          onError={(error) => toast.error(error.message)}
+          onSubmit={handleSubmit}
+        >
+          <ComposerAttachments />
           <PromptInputBody>
             <PromptInputTextarea placeholder="Ask TradeCopilot..." />
           </PromptInputBody>
           <PromptInputFooter>
-            <PromptInputTools />
+            <PromptInputTools>
+              <PromptInputActionMenu>
+                <PromptInputActionMenuTrigger aria-label="Add image" />
+                <PromptInputActionMenuContent>
+                  <PromptInputActionAddAttachments label="Add image" />
+                </PromptInputActionMenuContent>
+              </PromptInputActionMenu>
+            </PromptInputTools>
             <PromptInputSubmit status={status} onStop={stop} />
           </PromptInputFooter>
         </PromptInput>

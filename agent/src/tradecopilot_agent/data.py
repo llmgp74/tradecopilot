@@ -1,8 +1,25 @@
 """The data source contract every tool binds to."""
 
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from tradecopilot_agent.state import ToolOutput
+
+
+@dataclass(frozen=True)
+class MarketClock:
+    """The broker's view of the current trading session.
+
+    Attributes:
+        is_open: Whether the session accepts orders now, including pre-market
+            and after-hours.
+        next_open: RFC 3339 time of the next session open, when the broker
+            supplies one.
+    """
+
+    is_open: bool
+    next_open: str | None
+
 
 CAPABILITIES = frozenset(
     {"alpaca", "order_execution", "edgar", "fmp", "finnhub", "fred"}
@@ -62,4 +79,8 @@ class DataSource(Protocol):
 
     async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:
         """Place one order leg."""
+        ...
+
+    async def clock(self) -> MarketClock | None:
+        """Return the broker's session state, or None when unavailable."""
         ...

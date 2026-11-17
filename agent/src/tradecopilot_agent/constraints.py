@@ -26,12 +26,57 @@ def _ordered(legs: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
     return [*sells, *buys]
 
 
-def _market_open(now: datetime) -> bool:
+def session_open(now: datetime, is_open: bool, next_open: str | None) -> bool:
+    """Resolve the effective session state from the broker clock.
+
+    Alpaca reports the regular session only, so a closed clock still leaves
+    pre-market and after-hours open. Before the regular open, the day must be a
+    trading day, which shows up as ``next_open`` falling on the same New York
+    date. Holidays after the regular close are indistinguishable from a normal
+    after-hours day and are left to the broker to reject.
+
+    Args:
+        now: Wall clock in any time zone.
+        is_open: The broker's regular-session state.
+        next_open: RFC 3339 time of the next regular open, when supplied.
+
+    Returns:
+        True when orders may be placed now.
+    """
+    if is_open:
+        return True
     local = now.astimezone(_NEW_YORK)
     if local.weekday() >= 5:
         return False
     minutes = local.hour * 60 + local.minute
-    return 9 * 60 + 30 <= minutes < 16 * 60
+    if not 4 * 60 <= minutes < 20 * 60:
+        return False
+    if minutes < 9 * 60 + 30:
+        if not next_open:
+            return False
+        try:
+            upcoming = datetime.fromisoformat(next_open)
+        except ValueError:
+            return False
+        return upcoming.astimezone(_NEW_YORK).date() == local.date()
+    return True
+
+
+def _market_open(now: datetime) -> bool:
+    """Whether the extended-hours session is open.
+
+    Args:
+        now: Wall clock in any time zone.
+
+    Returns:
+        True on weekdays from 04:00 up to, not including, 20:00 New York
+        time, the window Alpaca accepts for pre-market and after-hours orders.
+    """
+    local = now.astimezone(_NEW_YORK)
+    if local.weekday() >= 5:
+        return False
+    minutes = local.hour * 60 + local.minute
+    return 4 * 60 <= minutes < 20 * 60
 
 
 def check_ticket(
@@ -43,6 +88,8 @@ def check_ticket(
     now: datetime,
     *,
     live: bool = False,
+    market_open: bool | None = None,
+    next_open: str | None = None,
 ) -> list[dict[str, Any]]:
     """Check a ticket against the profile and account.
 
@@ -58,6 +105,9 @@ def check_ticket(
         now: Wall clock, used only when ``live`` is true.
         live: Whether the app is talking to a live broker. Evaluation runs pass
             false and skip the market-hours rule.
+        market_open: The broker's session state. When None the local extended
+            window decides.
+        next_open: RFC 3339 time of the next session open, shown when closed.
 
     Returns:
         Violations, each with a code, message, leg index, and value. An empty
@@ -85,8 +135,12 @@ def check_ticket(
     exclusions = set(profile.get("sector_exclusions", []))
     cap_pct = float(profile.get("position_cap_pct", 100))
 
-    if live and legs and not _market_open(now):
-        violations.append(_violation("market_closed", "The market is closed.", 0))
+    open_now = _market_open(now) if market_open is None else market_open
+    if live and legs and not open_now:
+        message = "The market is closed."
+        if next_open:
+            message = f"The market is closed. It opens at {next_open}."
+        violations.append(_violation("market_closed", message, 0, next_open))
 
     for index, leg in _ordered(legs):
         ticker = str(leg.get("ticker", "")).upper()

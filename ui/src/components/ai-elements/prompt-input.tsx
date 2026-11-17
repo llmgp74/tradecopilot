@@ -421,16 +421,14 @@ export const PromptInputActionAddAttachments = ({
 }: PromptInputActionAddAttachmentsProps) => {
   const attachments = usePromptInputAttachments();
 
-  const handleSelect = useCallback(
-    (e: Event) => {
-      e.preventDefault();
-      attachments.openFileDialog();
-    },
-    [attachments]
-  );
+  // Base UI menu items call onClick; Radix items call onSelect. Wire both so
+  // the picker opens whichever menu primitive the app uses.
+  const handlePick = useCallback(() => {
+    attachments.openFileDialog();
+  }, [attachments]);
 
   return (
-    <DropdownMenuItem {...props} onSelect={handleSelect}>
+    <DropdownMenuItem {...props} onClick={handlePick} onSelect={handlePick}>
       <ImageIcon className="mr-2 size-4" /> {label}
     </DropdownMenuItem>
   );
@@ -450,9 +448,9 @@ export const PromptInputActionAddScreenshot = ({
   const attachments = usePromptInputAttachments();
 
   const handleSelect = useCallback(
-    async (event: Event) => {
+    async (event?: Event) => {
       onSelect?.(event);
-      if (event.defaultPrevented) {
+      if (event?.defaultPrevented) {
         return;
       }
 
@@ -475,7 +473,7 @@ export const PromptInputActionAddScreenshot = ({
   );
 
   return (
-    <DropdownMenuItem {...props} onSelect={handleSelect}>
+    <DropdownMenuItem {...props} onClick={handleSelect} onSelect={handleSelect}>
       <Monitor className="mr-2 size-4" />
       {label}
     </DropdownMenuItem>

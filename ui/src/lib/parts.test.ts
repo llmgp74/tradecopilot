@@ -182,3 +182,48 @@ it("reads todos from the last assistant message and ignores verification", () =>
   expect(messages[1].todos?.[0].content).toBe("p");
   expect(messages[1].parts).toEqual([]);
 });
+
+it("merges adjacent reasoning and drops the repeats", () => {
+  const [message] = normalizeMessages([
+    {
+      id: "a",
+      role: "assistant",
+      parts: [
+        { type: "reasoning", text: "Check the quote.", state: "done" },
+        { type: "reasoning", text: "Check the quote.", state: "done" },
+        { type: "reasoning", text: "Then size the order.", state: "done" },
+        {
+          type: "dynamic-tool",
+          toolName: "get_quote",
+          toolCallId: "c1",
+          state: "output-available",
+          input: {},
+          output: "195",
+        } as never,
+      ],
+    },
+  ]);
+
+  const reasoning = message.parts.filter((part) => part.kind === "reasoning");
+  expect(reasoning).toHaveLength(2);
+  expect(reasoning[0]).toMatchObject({ text: "Check the quote." });
+  expect(reasoning[1]).toMatchObject({ text: "Then size the order." });
+
+  const messages = normalizeMessages([
+    {
+      id: "a",
+      role: "assistant",
+      parts: [{ type: "reasoning", text: "Check the quote.", state: "done" }],
+    },
+    {
+      id: "b",
+      role: "assistant",
+      parts: [
+        { type: "reasoning", text: "Check the quote.", state: "done" },
+        { type: "reasoning", text: "Confirm the fill.", state: "done" },
+      ],
+    },
+  ]);
+  expect(messages[1].parts).toHaveLength(1);
+  expect(messages[1].parts[0]).toMatchObject({ text: "Confirm the fill." });
+});

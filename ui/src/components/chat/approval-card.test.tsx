@@ -51,3 +51,52 @@ it("shows the execution result instead of buttons when present", () => {
   expect(screen.getByText("Ticket executed")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /approve ticket/i })).toBeNull();
 });
+
+it("keeps the ticket and shows fills after execution", () => {
+  const output = JSON.stringify({
+    ticket_id: "t1",
+    status: "filled",
+    legs: [
+      {
+        ticker: "NVDA",
+        side: "buy",
+        qty: 8,
+        status: "filled",
+        fill_price: 190.5,
+      },
+    ],
+  });
+
+  render(
+    <ApprovalCard
+      view={{
+        ...view,
+        approval: { ...view.approval!, approved: true },
+        result: { output },
+      }}
+      onRespond={() => {}}
+    />,
+  );
+
+  expect(screen.getByText("Executed")).toBeInTheDocument();
+  expect(screen.getAllByText("NVDA").length).toBeGreaterThan(0);
+  expect(screen.getByText("Filled at $190.50")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /approve ticket/i })).toBeNull();
+});
+
+it("shows the reason after a rejection and disables the actions", () => {
+  render(
+    <ApprovalCard
+      view={{
+        ...view,
+        approval: { ...view.approval!, approved: false, reason: "Too early" },
+      }}
+      onRespond={() => {}}
+    />,
+  );
+
+  expect(screen.getByText("Ticket rejected")).toBeInTheDocument();
+  expect(screen.getByText(/too early/i)).toBeInTheDocument();
+  expect(screen.getAllByText("NVDA").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button")).toBeNull();
+});

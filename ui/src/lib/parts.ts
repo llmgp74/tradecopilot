@@ -188,6 +188,31 @@ function toDisplayPart(
 }
 
 /**
+ * Drops a reasoning part whose text repeats one already rendered.
+ *
+ * A resumed agent run re-executes its earlier model calls, so the same
+ * thoughts arrive again in a new message with new part ids. The repeats are
+ * exact, and the thread only needs one copy.
+ *
+ * @param parts - Display parts in wire order.
+ * @param seen - Reasoning text already rendered in the conversation.
+ * @returns The parts without repeated reasoning.
+ */
+function dropRepeatedReasoning(parts: DisplayPart[], seen: Set<string>): DisplayPart[] {
+  return parts.filter((part) => {
+    if (part.kind !== "reasoning") {
+      return true;
+    }
+    const text = part.text.trim();
+    if (!text || seen.has(text)) {
+      return false;
+    }
+    seen.add(text);
+    return true;
+  });
+}
+
+/**
  * Reduces live and rehydrated messages to one display shape.
  *
  * Later copies of the same tool call are folded into the first card, so an
@@ -198,6 +223,7 @@ function toDisplayPart(
  */
 export function normalizeMessages(messages: UIMessage[]): DisplayMessage[] {
   const firstToolParts = new Map<string, ToolPartView>();
+  const seenReasoning = new Set<string>();
   return messages.map((message) => {
     const parts: DisplayPart[] = [];
     let todos: TodoItem[] | null = null;
@@ -223,7 +249,7 @@ export function normalizeMessages(messages: UIMessage[]): DisplayMessage[] {
     return {
       id: message.id,
       role: message.role,
-      parts,
+      parts: dropRepeatedReasoning(parts, seenReasoning),
       todos,
     };
   });

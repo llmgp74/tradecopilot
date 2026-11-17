@@ -120,7 +120,7 @@ def _process_event(
     approval_descriptor: ApprovalDescriptor | None,
 ) -> Iterator[UIMessageChunk]:
     if mode == "messages":
-        yield from _process_message_event(data, state)
+        yield from _process_message_event(data, state, history_message_ids)
     elif mode == "values":
         yield from _process_values_event(
             data, state, history_message_ids, approval_descriptor
@@ -130,12 +130,17 @@ def _process_event(
 
 
 def _process_message_event(
-    data: Any, state: LangGraphEventState
+    data: Any, state: LangGraphEventState, history_message_ids: Set[str]
 ) -> Iterator[UIMessageChunk]:
     if not isinstance(data, (tuple, list)) or len(data) != 2:
         return
     message, metadata = data
     if not isinstance(message, BaseMessage):
+        return
+    # A resumed run replays the messages already checkpointed before this
+    # request; they were rendered by the previous response.
+    raw_id = getattr(message, "id", None)
+    if isinstance(raw_id, str) and raw_id in history_message_ids:
         return
     meta = metadata if isinstance(metadata, dict) else {}
     yield from _step_parts(state, meta)

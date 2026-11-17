@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from tradecopilot_agent.data import MarketClock
 from tradecopilot_agent.models import AppSettings
 from tradecopilot_agent.sources.alpaca import AlpacaSource
 from tradecopilot_agent.sources.edgar import EdgarSource
@@ -86,3 +87,7 @@ class LiveSource:
     async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:
         """Place one order leg through Alpaca."""
         return await self.alpaca.place_leg(leg, client_order_id)
+
+    async def clock(self) -> MarketClock | None:
+        """Return Alpaca's session state."""
+        return await self.alpaca.clock()

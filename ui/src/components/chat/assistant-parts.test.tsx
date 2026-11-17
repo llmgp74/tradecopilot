@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { expect, it } from "vitest";
 import { AssistantParts } from "./assistant-parts";
 import type { DisplayMessage } from "@/lib/parts";
@@ -146,4 +147,24 @@ it("does not render an approval card for an already executed ticket", () => {
 
   expect(screen.queryByText("Ticket requires your approval")).toBeNull();
   expect(screen.queryByRole("button", { name: /approve ticket/i })).toBeNull();
+});
+
+it("reveals the reasoning text when the trigger is clicked", async () => {
+  render(
+    <AssistantParts
+      onApproval={() => {}}
+      message={{
+        id: "a",
+        role: "assistant",
+        todos: null,
+        parts: [
+          { kind: "reasoning", text: "Checking the price first", streaming: false },
+        ],
+      }}
+    />,
+  );
+
+  await userEvent.click(screen.getByText(/thought for a few seconds/i));
+
+  expect(await screen.findByText("Checking the price first")).toBeInTheDocument();
 });

@@ -276,3 +276,38 @@ def test_a_failed_price_write_does_not_raise() -> None:
     message = ToolMessage(content="x", tool_call_id="c1", artifact=output.model_dump())
 
     assert _with_updates(message, None, Broken()) is not None
+
+
+def test_full_memory_marks_the_trading_environment() -> None:
+    """Each decision line names paper, live, or an unknown environment."""
+    entries = [
+        {
+            "id": "d1",
+            "created_at": "2026-10-01T10:00:00Z",
+            "status": "executed",
+            "thesis": "live buy",
+            "legs": [],
+            "paper": False,
+        },
+        {
+            "id": "d2",
+            "created_at": "2026-10-02T10:00:00Z",
+            "status": "executed",
+            "thesis": "paper buy",
+            "legs": [],
+            "paper": True,
+        },
+        {
+            "id": "d3",
+            "created_at": "2026-10-03T10:00:00Z",
+            "status": "executed",
+            "thesis": "old row",
+            "legs": [],
+        },
+    ]
+
+    block = render_memory("full", {"risk_band": "moderate"}, entries)
+
+    assert "- live d1" in block
+    assert "- paper d2" in block
+    assert "env?" in block

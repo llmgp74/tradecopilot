@@ -155,6 +155,19 @@ def test_a_proposal_orders_sells_first(tmp_path: Path) -> None:
     assert [leg["side"] for leg in output.proposal["legs"]] == ["sell", "buy"]
 
 
+def test_a_leg_without_a_ticker_is_rejected(tmp_path: Path) -> None:
+    """A wrong argument name cannot become an empty-ticker quote."""
+    tools, _ = _tools(tmp_path, FakeSource())
+
+    output = asyncio.run(
+        tools.propose([{"symbol": "SPY", "side": "buy", "qty": 1}], "buy", "weeks")
+    )
+
+    assert output.error == "invalid"
+    assert "ticker" in output.summary
+    assert output.proposal is None
+
+
 def test_a_blocked_ticket_is_not_stored(tmp_path: Path) -> None:
     """The position cap blocks the ticket and writes no journal event."""
     tools, store = _tools(tmp_path, FakeSource())
