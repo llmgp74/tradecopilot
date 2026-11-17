@@ -27,11 +27,20 @@ def _ordered(legs: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
 
 
 def _market_open(now: datetime) -> bool:
+    """Whether the extended-hours session is open.
+
+    Args:
+        now: Wall clock in any time zone.
+
+    Returns:
+        True on weekdays from 04:00 up to, not including, 20:00 New York
+        time, the window Alpaca accepts for pre-market and after-hours orders.
+    """
     local = now.astimezone(_NEW_YORK)
     if local.weekday() >= 5:
         return False
     minutes = local.hour * 60 + local.minute
-    return 9 * 60 + 30 <= minutes < 16 * 60
+    return 4 * 60 <= minutes < 20 * 60
 
 
 def check_ticket(

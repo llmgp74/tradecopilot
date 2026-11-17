@@ -1,10 +1,13 @@
 """The deterministic order ticket check."""
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
+import pytest
 from tradecopilot_agent.constraints import check_ticket
 
 NOW = datetime(2026, 11, 5, 15, 0, tzinfo=UTC)
+_NEW_YORK = ZoneInfo("America/New_York")
 
 
 def _profile(**overrides: object) -> dict:
@@ -30,6 +33,37 @@ def _account(**overrides: object) -> dict:
 
 def _codes(violations: list[dict]) -> set[str]:
     return {violation["code"] for violation in violations}
+
+
+@pytest.mark.parametrize(
+    ("day", "hour", "minute", "expected_open"),
+    [
+        (5, 3, 59, False),
+        (5, 4, 0, True),
+        (5, 9, 30, True),
+        (5, 16, 0, True),
+        (5, 19, 59, True),
+        (5, 20, 0, False),
+        (7, 12, 0, False),
+    ],
+)
+def test_market_hours_cover_the_extended_session(
+    day: int, hour: int, minute: int, expected_open: bool
+) -> None:
+    """Pre-market and after-hours are open; the weekend stays closed."""
+    now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
+
+    violations = check_ticket(
+        [{"ticker": "AAPL", "side": "buy", "qty": 1}],
+        _profile(),
+        _account(),
+        prices={"AAPL": 100.0},
+        sectors={"AAPL": "Technology"},
+        now=now,
+        live=True,
+    )
+
+    assert ("market_closed" in _codes(violations)) is not expected_open
 
 
 def test_a_buy_funded_by_a_sell_passes() -> None:
