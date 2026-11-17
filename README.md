@@ -75,14 +75,18 @@ built frontend at `/`.
 
 ## Build the desktop app
 
+After cloning, install the frontend dependencies once with `npm --prefix ui ci`.
+Then, from the repository root:
+
 ```bash
-cd ui
-npm ci
-npm run tauri build
+make macos     # macOS
+make windows   # Windows
 ```
 
-The build stages the agent source and exported requirements into the Tauri
-resources, then bundles the frontend. The first launch downloads uv, CPython
-3.13 and the locked dependencies into `~/.tradecopilot/runtime`, so it needs
-network access. Later launches start the managed runtime and the agent
-directly.
+Each target stages the agent source and exported requirements into the Tauri
+resources, builds the frontend, compiles the shell, then installs and opens the
+app. Windows needs GNU make, from Git Bash or MSYS2.
+
+The first launch downloads uv, CPython 3.13 and the locked dependencies into
+`~/.tradecopilot/runtime`, so it needs network access. Later launches start the
+managed runtime and the agent directly.
