@@ -154,6 +154,24 @@ def web_output(query: str, results: list[WebResult]) -> ToolOutput:
     return ToolOutput(summary=summary, evidence=evidence)
 
 
+def _leg_notional(leg: dict[str, Any]) -> float:
+    """Return a leg's value, recovering it from quantity and entry price.
+
+    Args:
+        leg: Ticket or result leg. Pending ticket legs carry no ``notional``.
+
+    Returns:
+        The notional in dollars, or ``0`` when it cannot be derived.
+    """
+    notional = float(leg.get("notional") or 0)
+    if notional > 0:
+        return notional
+    entry_price = leg.get("entry_price")
+    if isinstance(entry_price, int | float):
+        return float(leg.get("qty", 0)) * float(entry_price)
+    return 0.0
+
+
 def _blocked(violations: list[dict[str, Any]]) -> ToolOutput:
     lines = [f"{item['code']}: {item['message']}" for item in violations]
     return ToolOutput(
@@ -337,6 +355,7 @@ class TradingTools:
                     ticker=str(leg["ticker"]),
                     side="buy" if leg["side"] == "buy" else "sell",
                     qty=float(leg["qty"]),
+                    entry_price=prices[leg["ticker"]],
                 )
                 for leg in ordered
             ],
@@ -362,6 +381,7 @@ class TradingTools:
                     {
                         **leg,
                         "notional": leg["qty"] * prices[leg["ticker"]],
+                        "entry_price": prices[leg["ticker"]],
                         "fill_price": None,
                         "fill_at": None,
                         "status": "proposed",
@@ -522,16 +542,20 @@ class TradingTools:
         user_action: str | None,
         reason: str | None,
     ) -> None:
+        event_at = now_iso()
+        decision_at = str(pending.get("created_at") or event_at)
         self.store.append_journal(
             {
                 "decision_id": pending.get("id"),
-                "created_at": now_iso(),
+                "created_at": decision_at,
+                "updated_at": event_at,
                 "legs": [
                     {
                         "ticker": leg.get("ticker"),
                         "side": leg.get("side"),
                         "qty": float(leg.get("qty", 0)),
-                        "notional": float(leg.get("notional", 0)),
+                        "notional": _leg_notional(leg),
+                        "entry_price": leg.get("entry_price"),
                         "fill_price": leg.get("fill_price"),
                         "fill_at": leg.get("fill_at"),
                         "status": leg.get("status", status),

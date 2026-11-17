@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 from tradecopilot_agent.store import Store
@@ -137,3 +138,66 @@ def test_journal_persists_payload_json(tmp_path: Path) -> None:
     decoded = json.loads(payload)
     assert decoded["decision_id"] == "d1"
     assert decoded["legs"][0]["qty"] == 10.0
+
+
+def test_price_observation_upserts_one_row_per_day(tmp_path: Path) -> None:
+    """A later observation on the same day replaces the earlier one."""
+    store = _store(tmp_path)
+    store.observe_prices([("NVDA", "2026-11-10", 100.0)])
+    store.observe_prices([("NVDA", "2026-11-10", 102.5)])
+
+    rows = store.observations_between({"NVDA"}, date(2026, 11, 1), date(2026, 11, 30))
+
+    assert rows == [{"ticker": "NVDA", "date": "2026-11-10", "price": 102.5}]
+
+
+def test_observations_filter_tickers_and_dates(tmp_path: Path) -> None:
+    """Only the requested tickers inside the date range are returned."""
+    store = _store(tmp_path)
+    store.observe_prices(
+        [
+            ("NVDA", "2026-11-01", 100.0),
+            ("SPY", "2026-11-01", 500.0),
+            ("NVDA", "2026-12-01", 110.0),
+        ]
+    )
+
+    rows = store.observations_between({"NVDA"}, date(2026, 11, 1), date(2026, 11, 30))
+
+    assert [row["date"] for row in rows] == ["2026-11-01"]
+
+
+def test_dismissals_are_idempotent(tmp_path: Path) -> None:
+    """Dismissing the same suggestion twice keeps one key."""
+    store = _store(tmp_path)
+    store.dismiss_suggestion("cap_8")
+    store.dismiss_suggestion("cap_8")
+
+    assert store.dismissed_suggestion_keys() == {"cap_8"}
+
+
+def test_snapshots_default_updated_at_and_expose_it(tmp_path: Path) -> None:
+    """A snapshot without an event time falls back to the decision time."""
+    store = _store(tmp_path)
+    store.append_journal(_event("d1", created_at="2026-11-01T10:00:00+00:00"))
+
+    row = store.list_journal(page_no=1, page_size=10)[0][0]
+
+    assert row["created_at"] == "2026-11-01T10:00:00+00:00"
+    assert row["updated_at"] == "2026-11-01T10:00:00+00:00"
+
+
+def test_rejection_window_uses_the_event_time(tmp_path: Path) -> None:
+    """A decision proposed months ago is retrieved when rejected recently."""
+    store = _store(tmp_path)
+    store.append_journal(_event("d1", created_at="2026-06-01T10:00:00+00:00"))
+    store.append_journal(
+        {
+            **_event("d1", created_at="2026-06-01T10:00:00+00:00", status="rejected"),
+            "updated_at": "2026-11-15T10:00:00+00:00",
+        }
+    )
+
+    rows = store.recent_journal(["NVDA"], "2026-11-01")
+
+    assert [row["id"] for row in rows] == ["d1"]

@@ -227,6 +227,35 @@ def test_rejection_is_recorded(tmp_path: Path, monkeypatch) -> None:
     assert rows[0]["rejection_reason"] == "not now"
 
 
+def test_rejection_keeps_the_decision_time_and_notional(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The reject snapshot is dated by the proposal and keeps the leg value."""
+    from tradecopilot_agent import tools as tools_module
+
+    monkeypatch.setattr(
+        tools_module,
+        "interrupt",
+        lambda _value: {"decisions": [{"type": "reject", "message": "not now"}]},
+    )
+    monkeypatch.setattr(tools_module, "now_iso", lambda: "2026-10-01T10:00:00+00:00")
+    tools, store = _tools(tmp_path, FakeSource())
+    proposed = asyncio.run(
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 2}], "thesis", "weeks")
+    )
+    assert proposed.proposal is not None
+
+    monkeypatch.setattr(tools_module, "now_iso", lambda: "2026-11-15T10:00:00+00:00")
+    asyncio.run(
+        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+    )
+
+    row = store.list_journal(page_no=1, page_size=10)[0][0]
+    assert row["created_at"] == "2026-10-01T10:00:00+00:00"
+    assert row["updated_at"] == "2026-11-15T10:00:00+00:00"
+    assert row["legs"][0]["notional"] == 2000.0
+
+
 def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
     """A buy without cash is skipped and nothing is placed."""
     source = FakeSource(cash=100.0, buying_power=100_000.0)
@@ -248,3 +277,29 @@ def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
     rows, _ = store.list_journal(page_no=1, page_size=10)
     assert rows[0]["status"] == "failed"
     assert rows[0]["legs"][0]["status"] == "skipped_unfunded"
+
+
+def test_proposal_records_the_entry_price(tmp_path: Path) -> None:
+    """The proposal journal row keeps the quote used to size the ticket."""
+    source = FakeSource(prices={"AAPL": 100.0})
+    tools, store = _tools(tmp_path, source)
+
+    asyncio.run(
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 5}], "x", "weeks")
+    )
+
+    row = store.list_journal(page_no=1, page_size=10)[0][0]
+    assert row["legs"][0]["entry_price"] == 100.0
+
+
+def test_the_pending_ticket_records_the_entry_price(tmp_path: Path) -> None:
+    """Execution snapshots copy the entry price from the pending ticket."""
+    source = FakeSource(prices={"AAPL": 100.0})
+    tools, _ = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 5}], "x", "weeks")
+    )
+
+    assert output.proposal is not None
+    assert output.proposal["legs"][0]["entry_price"] == 100.0

@@ -4,6 +4,7 @@ import json
 import sqlite3
 import stat
 from collections.abc import AsyncIterator
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -364,3 +365,128 @@ def test_openapi_lists_every_route(tmp_path: Path) -> None:
     with TestClient(app) as client:
         assert client.get("/docs").status_code == 200
         assert client.get("/openapi.json").status_code == 200
+
+
+def test_journal_attaches_an_outcome_without_a_source(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """A stored decision gets a measured outcome from local prices."""
+    from tradecopilot_agent.outcomes import attach_outcomes
+
+    monkeypatch.setattr(
+        "tradecopilot_agent.server.app.attach_outcomes",
+        lambda rows, store: attach_outcomes(rows, store, date(2026, 11, 17)),
+    )
+    app = create_app(Settings(db_path=tmp_path / "data.db"))
+    with TestClient(app) as client:
+        store = app.state.store
+        store.observe_prices(
+            [
+                ("NVDA", "2026-10-01", 100.0),
+                ("NVDA", "2026-10-28", 110.0),
+                ("SPY", "2026-10-01", 500.0),
+                ("SPY", "2026-10-28", 505.0),
+            ]
+        )
+        store.append_journal(
+            {
+                "decision_id": "d1",
+                "created_at": "2026-10-01T10:00:00+00:00",
+                "legs": [
+                    {
+                        "ticker": "NVDA",
+                        "side": "buy",
+                        "qty": 10.0,
+                        "notional": 1000.0,
+                        "entry_price": 100.0,
+                        "fill_price": 100.0,
+                        "fill_at": "2026-10-01T15:00:00+00:00",
+                        "status": "filled",
+                    }
+                ],
+                "thesis": "x",
+                "horizon": "weeks",
+                "evidence_ids": [],
+                "status": "filled",
+                "user_action": "approve",
+                "rejection_reason": None,
+                "updated_at": "2026-10-01T15:00:00+00:00",
+            }
+        )
+        body = client.get("/api/journal").json()
+
+    item = body["items"][0]
+    assert item["legs"][0]["entry_price"] == 100.0
+    assert item["outcome"]["return_pct"] == 10.0
+    assert item["outcome"]["partial"] is False
+
+
+def _seed_rejections(store: Any) -> None:
+    """Seed two size rejections and backdate the profile update."""
+    from tradecopilot_agent.store import now_iso
+
+    updated = now_iso()
+    for index, reason in enumerate(["Too large for me", "Too big"]):
+        store.append_journal(
+            {
+                "decision_id": f"d{index}",
+                "created_at": updated,
+                "updated_at": updated,
+                "legs": [
+                    {
+                        "ticker": "NVDA",
+                        "side": "buy",
+                        "qty": 1.0,
+                        "notional": 100.0,
+                        "entry_price": 100.0,
+                        "fill_price": None,
+                        "fill_at": None,
+                        "status": "rejected",
+                    }
+                ],
+                "thesis": "x",
+                "horizon": "weeks",
+                "evidence_ids": [],
+                "status": "rejected",
+                "user_action": "reject",
+                "rejection_reason": reason,
+            }
+        )
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE profile SET updated_at = ? WHERE id = 1",
+            ("2026-10-01T10:00:00+00:00",),
+        )
+
+
+def test_profile_returns_suggestions(tmp_path: Path) -> None:
+    """Two size rejections surface a lower cap on the profile."""
+    app = create_app(Settings(db_path=tmp_path / "data.db"))
+    with TestClient(app) as client:
+        _seed_rejections(app.state.store)
+        body = client.get("/api/profile").json()
+
+    assert body["suggestions"][0]["key"] == "cap_8"
+    assert body["suggestions"][0]["patch"] == {"position_cap_pct": 8.0}
+
+
+def test_accepting_a_suggestion_removes_it(tmp_path: Path) -> None:
+    """Applying the suggested value satisfies the rule."""
+    app = create_app(Settings(db_path=tmp_path / "data.db"))
+    with TestClient(app) as client:
+        _seed_rejections(app.state.store)
+        body = client.patch("/api/profile", json={"position_cap_pct": 8.0}).json()
+
+    assert body["suggestions"] == []
+
+
+def test_dismissing_a_suggestion_removes_it(tmp_path: Path) -> None:
+    """A dismissed suggestion is not returned again."""
+    app = create_app(Settings(db_path=tmp_path / "data.db"))
+    with TestClient(app) as client:
+        _seed_rejections(app.state.store)
+        response = client.post("/api/profile/suggestions/cap_8/dismiss")
+        body = client.get("/api/profile").json()
+
+    assert response.status_code == 204
+    assert body["suggestions"] == []

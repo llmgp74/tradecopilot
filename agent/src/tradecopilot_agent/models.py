@@ -39,6 +39,17 @@ class ExecutionSettings(BaseModel):
     max_order_notional: float = Field(default=1000.0, ge=0)
 
 
+class Suggestion(BaseModel):
+    """A profile change proposed from repeated rejection reasons."""
+
+    key: str
+    kind: Literal["cap", "horizon", "sector"]
+    title: str
+    rationale: str
+    patch: dict[str, Any]
+    decision_ids: list[str] = Field(default_factory=list)
+
+
 class Profile(BaseModel):
     """Durable user profile."""
 
@@ -50,6 +61,7 @@ class Profile(BaseModel):
     source_preferences: list[str] = Field(default_factory=list)
     execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
     updated_at: str
+    suggestions: list[Suggestion] = Field(default_factory=list)
 
 
 class ProfilePatch(BaseModel):
@@ -175,7 +187,8 @@ class LegOutcome(BaseModel):
     ticker: str
     entry_price: float
     return_pct: float
-    alpha_pct: float
+    alpha_pct: float | None = None
+    observed_at: str | None = None
     counterfactual: bool
 
 
@@ -188,9 +201,11 @@ class JournalOutcome(BaseModel):
     horizon: Horizon
     return_pct: float
     benchmark: str
-    benchmark_return_pct: float
-    alpha_pct: float
+    benchmark_return_pct: float | None = None
+    alpha_pct: float | None = None
     computed_at: str
+    observed_at: str | None = None
+    partial: bool = False
     legs: list[LegOutcome] = Field(default_factory=list)
 
 
@@ -201,6 +216,7 @@ class JournalLeg(BaseModel):
     side: Side
     qty: float
     notional: float
+    entry_price: float | None = None
     fill_price: float | None = None
     fill_at: str | None = None
     status: JournalStatus

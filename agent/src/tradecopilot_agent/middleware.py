@@ -4,6 +4,7 @@ Only the tool artifact is trusted for state updates. Tool content is written by
 the tool itself; nothing here parses model-facing text.
 """
 
+import logging
 import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -25,6 +26,7 @@ from tradecopilot_agent.tools import (
 
 _TICKER = re.compile(r"\b[A-Z]{1,5}\b")
 _JOURNAL_LIMIT = 10
+_log = logging.getLogger(__name__)
 
 
 def request_tickers(text: str, known: set[str]) -> list[str]:
@@ -370,14 +372,17 @@ class ToolAvailabilityMiddleware(AgentMiddleware[TradingState, Any, Any]):
 class ToolResultMiddleware(AgentMiddleware[TradingState, Any, Any]):
     """Records artifacts and enforces the gather budget."""
 
-    def __init__(self, as_of: date | None) -> None:
-        """Store the evaluation cutoff.
+    def __init__(self, as_of: date | None, store: Any | None = None) -> None:
+        """Store the evaluation cutoff and the price recorder.
 
         Args:
             as_of: Cutoff date, or ``None`` for live runs.
+            store: Store that records price observations. A store without
+                ``observe_prices`` is ignored.
         """
         super().__init__()
         self.as_of = as_of
+        self.store = store
 
     def wrap_tool_call(self, request: Any, handler: Any) -> Any:
         """Record the tool artifact into state."""
@@ -394,7 +399,7 @@ class ToolResultMiddleware(AgentMiddleware[TradingState, Any, Any]):
                 tool_call_id=str(call.get("id", "")),
             )
         result = await handler(request)
-        return _with_updates(result, self.as_of)
+        return _with_updates(result, self.as_of, self.store)
 
     def _consume(self, request: Any, handler: Any) -> Any:
         state = dict(getattr(request, "state", {}) or {})
@@ -406,17 +411,76 @@ class ToolResultMiddleware(AgentMiddleware[TradingState, Any, Any]):
                 tool_call_id=str(call.get("id", "")),
             )
         result = handler(request)
-        return _with_updates(result, self.as_of)
+        return _with_updates(result, self.as_of, self.store)
 
 
-def _with_updates(result: Any, as_of: date | None) -> Any:
+def price_rows(output: ToolOutput) -> list[tuple[str, str, float]]:
+    """Return ``(ticker, date, price)`` rows from quote and bar evidence.
+
+    Args:
+        output: Tool output whose evidence payloads may carry prices.
+
+    Returns:
+        Usable observations. Malformed items are skipped.
+    """
+    rows: list[tuple[str, str, float]] = []
+    for record in output.evidence:
+        payload = record.payload
+        kind = payload.get("kind")
+        ticker = str(payload.get("ticker") or "").strip().upper()
+        if not ticker:
+            continue
+        if kind == "quote":
+            price = payload.get("price")
+            as_of = payload.get("as_of")
+            if (
+                isinstance(price, int | float)
+                and isinstance(as_of, str)
+                and len(as_of) >= 10
+            ):
+                rows.append((ticker, as_of[:10], float(price)))
+        elif kind == "bars":
+            bars = payload.get("bars")
+            if not isinstance(bars, list):
+                continue
+            for bar in bars:
+                if not isinstance(bar, dict):
+                    continue
+                stamp = bar.get("t")
+                close = bar.get("c")
+                if (
+                    isinstance(stamp, str)
+                    and len(stamp) >= 10
+                    and isinstance(close, int | float)
+                ):
+                    rows.append((ticker, stamp[:10], float(close)))
+    return rows
+
+
+def _with_updates(result: Any, as_of: date | None, store: Any | None = None) -> Any:
     if not isinstance(result, ToolMessage):
         return result
     artifact = result.artifact
-    updates: dict[str, Any] = {}
+    output: ToolOutput | None = None
     if isinstance(artifact, dict):
         try:
-            updates = artifact_updates(ToolOutput.model_validate(artifact), as_of)
+            output = ToolOutput.model_validate(artifact)
+        except ValueError:
+            output = None
+
+    if output is not None and store is not None:
+        writer = getattr(store, "observe_prices", None)
+        rows = price_rows(output)
+        if callable(writer) and rows:
+            try:
+                writer(rows)
+            except Exception:
+                _log.warning("Price observation write failed", exc_info=True)
+
+    updates: dict[str, Any] = {}
+    if output is not None:
+        try:
+            updates = artifact_updates(output, as_of)
         except ValueError:
             updates = {}
     if not updates:

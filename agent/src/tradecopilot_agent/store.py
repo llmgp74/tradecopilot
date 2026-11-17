@@ -6,6 +6,7 @@ avoid sharing one connection across FastAPI's worker threads.
 """
 
 import json
+import math
 import os
 import sqlite3
 from collections.abc import Iterator
@@ -58,6 +59,20 @@ CREATE TABLE IF NOT EXISTS journal (
 );
 CREATE INDEX IF NOT EXISTS journal_decision ON journal (decision_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS journal_created ON journal (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS price_observations (
+  ticker      TEXT NOT NULL,
+  date        TEXT NOT NULL,
+  price       REAL NOT NULL,
+  recorded_at TEXT NOT NULL,
+  PRIMARY KEY (ticker, date)
+);
+CREATE INDEX IF NOT EXISTS price_observations_date ON price_observations (date);
+
+CREATE TABLE IF NOT EXISTS dismissed_suggestions (
+  key          TEXT PRIMARY KEY,
+  dismissed_at TEXT NOT NULL
+);
 """
 
 _SECRET_FIELDS = frozenset(
@@ -356,7 +371,9 @@ class Store:
         wanted = {ticker.upper() for ticker in tickers}
         if until is None:
             rows, _ = self.list_journal(page_no=1, page_size=1000)
-            rows = [row for row in rows if row.get("created_at", "")[:10] >= since[:10]]
+            rows = [
+                row for row in rows if str(row.get("updated_at", ""))[:10] >= since[:10]
+            ]
         else:
             rows = self._journal_in_window(since, until)
         return [
@@ -386,7 +403,9 @@ class Store:
         latest: dict[str, tuple[datetime, int, dict[str, Any]]] = {}
         for row_id, raw in rows:
             payload: dict[str, Any] = json.loads(str(raw))
-            timestamp = _journal_timestamp(payload.get("created_at"))
+            timestamp = _journal_timestamp(
+                payload.get("updated_at") or payload.get("created_at")
+            )
             if timestamp is None or not lower <= timestamp <= cutoff:
                 continue
             decision_id = str(payload["decision_id"])
@@ -406,13 +425,97 @@ class Store:
         """
         decision_id = str(event["decision_id"])
         created_at = str(event.get("created_at") or now_iso())
-        payload = {**event, "decision_id": decision_id, "created_at": created_at}
+        updated_at = str(event.get("updated_at") or created_at)
+        payload = {
+            **event,
+            "decision_id": decision_id,
+            "created_at": created_at,
+            "updated_at": updated_at,
+        }
         with self._connection() as connection:
             connection.execute(
                 "INSERT INTO journal (event_id, decision_id, created_at, payload) "
                 "VALUES (?, ?, ?, ?)",
                 (uuid4().hex, decision_id, created_at, json.dumps(payload)),
             )
+
+    def observe_prices(self, rows: list[tuple[str, str, float]]) -> None:
+        """Upsert dated price observations.
+
+        Args:
+            rows: ``(ticker, ISO date, price)`` triples. A later observation on
+                the same ticker and date replaces the earlier one.
+        """
+        usable: list[tuple[str, str, float]] = []
+        for ticker, day, price in rows:
+            symbol = ticker.strip().upper()
+            try:
+                value = float(price)
+            except (TypeError, ValueError):
+                continue
+            if symbol and math.isfinite(value):
+                usable.append((symbol, day, value))
+        if not usable:
+            return
+        timestamp = now_iso()
+        with self._connection() as connection:
+            connection.executemany(
+                "INSERT INTO price_observations (ticker, date, price, recorded_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(ticker, date) DO UPDATE SET "
+                "price = excluded.price, recorded_at = excluded.recorded_at",
+                [(ticker, day, price, timestamp) for ticker, day, price in usable],
+            )
+
+    def observations_between(
+        self, tickers: set[str], start: date, end: date
+    ) -> list[dict[str, Any]]:
+        """Return observations for the tickers inside the inclusive range.
+
+        Args:
+            tickers: Symbols to match.
+            start: Inclusive lower observation date.
+            end: Inclusive upper observation date.
+
+        Returns:
+            ``{"ticker", "date", "price"}`` rows ordered by ticker and date.
+        """
+        wanted = sorted({ticker.upper() for ticker in tickers if ticker})
+        if not wanted:
+            return []
+        placeholders = ", ".join("?" for _ in wanted)
+        with self._connection() as connection:
+            rows = connection.execute(
+                f"SELECT ticker, date, price FROM price_observations "
+                f"WHERE ticker IN ({placeholders}) AND date BETWEEN ? AND ? "
+                "ORDER BY ticker, date",
+                (*wanted, start.isoformat(), end.isoformat()),
+            ).fetchall()
+        return [
+            {"ticker": str(row[0]), "date": str(row[1]), "price": float(row[2])}
+            for row in rows
+        ]
+
+    def dismiss_suggestion(self, key: str) -> None:
+        """Remember that the user declined a profile suggestion.
+
+        Args:
+            key: Stable suggestion key.
+        """
+        with self._connection() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO dismissed_suggestions (key, dismissed_at) "
+                "VALUES (?, ?)",
+                (key, now_iso()),
+            )
+
+    def dismissed_suggestion_keys(self) -> set[str]:
+        """Return the suggestion keys the user has dismissed."""
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT key FROM dismissed_suggestions"
+            ).fetchall()
+        return {str(row[0]) for row in rows}
 
     def list_journal(
         self,
@@ -497,6 +600,7 @@ def _journal_row(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(payload["decision_id"]),
         "created_at": str(payload["created_at"]),
+        "updated_at": str(payload.get("updated_at") or payload["created_at"]),
         "legs": payload.get("legs", []),
         "thesis": str(payload.get("thesis", "")),
         "horizon": str(payload.get("horizon", "weeks")),

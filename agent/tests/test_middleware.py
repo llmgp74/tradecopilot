@@ -1,6 +1,7 @@
 """Pure helpers behind the agent middleware."""
 
 from datetime import date
+from pathlib import Path
 
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
@@ -12,6 +13,7 @@ from tradecopilot_agent.middleware import (
     request_tickers,
 )
 from tradecopilot_agent.state import EvidenceRecord, ToolOutput, merge_verdicts
+from tradecopilot_agent.store import Store
 
 AS_OF = date(2026, 11, 5)
 
@@ -171,3 +173,106 @@ def test_plain_tool_results_are_untouched() -> None:
     message = ToolMessage(content="done", tool_call_id="call_2")
 
     assert _with_updates(message, AS_OF) is message
+
+
+def test_quote_evidence_is_recorded_as_a_price(tmp_path: Path) -> None:
+    """A quote artifact becomes one dated observation."""
+    store = Store(tmp_path / "data.db")
+    output = ToolOutput(
+        summary="NVDA 100",
+        evidence=[
+            EvidenceRecord(
+                id="ev_1",
+                tool="get_quote",
+                source="alpaca",
+                fetched_at="2026-11-10T14:00:00Z",
+                published_at="2026-11-10T13:55:00Z",
+                payload={
+                    "kind": "quote",
+                    "ticker": "NVDA",
+                    "price": 100.0,
+                    "as_of": "2026-11-10T13:55:00Z",
+                },
+            )
+        ],
+    )
+    message = ToolMessage(
+        content="NVDA 100", tool_call_id="c1", artifact=output.model_dump()
+    )
+
+    _with_updates(message, None, store)
+
+    rows = store.observations_between({"NVDA"}, date(2026, 11, 10), date(2026, 11, 10))
+    assert rows[0]["price"] == 100.0
+
+
+def test_bar_evidence_records_each_close(tmp_path: Path) -> None:
+    """Every daily bar in a bars artifact becomes an observation."""
+    store = Store(tmp_path / "data.db")
+    output = ToolOutput(
+        summary="2 bars",
+        evidence=[
+            EvidenceRecord(
+                id="ev_1",
+                tool="get_bars",
+                source="alpaca",
+                fetched_at="2026-11-10T14:00:00Z",
+                payload={
+                    "kind": "bars",
+                    "ticker": "NVDA",
+                    "bars": [
+                        {"t": "2026-11-09T05:00:00Z", "c": 99.0},
+                        {"t": "2026-11-10T05:00:00Z", "c": 101.0},
+                    ],
+                },
+            )
+        ],
+    )
+    message = ToolMessage(
+        content="2 bars", tool_call_id="c1", artifact=output.model_dump()
+    )
+
+    _with_updates(message, None, store)
+
+    rows = store.observations_between({"NVDA"}, date(2026, 11, 9), date(2026, 11, 10))
+    assert [row["price"] for row in rows] == [99.0, 101.0]
+
+
+def test_a_store_without_price_support_is_ignored() -> None:
+    """A store that cannot record prices does not change the result."""
+    message = ToolMessage(
+        content="x", tool_call_id="c1", artifact=ToolOutput(summary="x").model_dump()
+    )
+
+    assert _with_updates(message, None, object()) is message
+
+
+def test_a_failed_price_write_does_not_raise() -> None:
+    """A price write failure leaves the turn intact."""
+
+    class Broken:
+        """Store double whose price write always fails."""
+
+        def observe_prices(self, rows: list[tuple[str, str, float]]) -> None:
+            raise RuntimeError("disk full")
+
+    output = ToolOutput(
+        summary="x",
+        evidence=[
+            EvidenceRecord(
+                id="ev_1",
+                tool="get_quote",
+                source="alpaca",
+                fetched_at="2026-11-10T14:00:00Z",
+                payload={
+                    "kind": "quote",
+                    "ticker": "NVDA",
+                    "price": 100.0,
+                    "as_of": "2026-11-10T13:55:00Z",
+                },
+            )
+        ],
+    )
+    message = ToolMessage(content="x", tool_call_id="c1", artifact=output.model_dump())
+
+    assert _with_updates(message, None, Broken()) is not None

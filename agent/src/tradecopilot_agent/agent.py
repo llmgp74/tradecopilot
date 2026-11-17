@@ -88,7 +88,7 @@ def build_agent(
         TurnMiddleware(),
         TradingMemoryMiddleware(config, decision_time=memory_time),
         ToolAvailabilityMiddleware(source),
-        ToolResultMiddleware(as_of),
+        ToolResultMiddleware(as_of, config.store),
         TodoStreamMiddleware(),
         TodoListMiddleware(),
         ModelCallLimitMiddleware(run_limit=MODEL_CALL_LIMIT, exit_behavior="end"),
