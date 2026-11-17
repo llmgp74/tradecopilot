@@ -131,6 +131,7 @@ export function SettingsDialog({ open, onOpenChange }: DialogProps) {
       setDraft(updated);
       setBaseline(updated);
       toast.success("Settings saved.");
+      onOpenChange(false);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Save failed.");
     } finally {

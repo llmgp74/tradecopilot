@@ -44,6 +44,21 @@ it("guards the settings dialog close while edits are pending", async () => {
   expect(onOpenChange).not.toHaveBeenCalledWith(false);
 });
 
+it("closes the settings dialog after a successful save", async () => {
+  const onOpenChange = vi.fn();
+  render(
+    <ThemeProvider>
+      <SettingsDialog open onOpenChange={onOpenChange} />
+    </ThemeProvider>,
+  );
+
+  const field = await screen.findByLabelText(/provider and model/i);
+  await userEvent.type(field, "x");
+  await userEvent.click(screen.getByRole("button", { name: /save settings/i }));
+
+  await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+});
+
 it("toggles one secret field independently", async () => {
   render(
     <ThemeProvider>
