@@ -79,13 +79,16 @@ After cloning, install the frontend dependencies once with `npm --prefix ui ci`.
 Then, from the repository root:
 
 ```bash
-make macos     # macOS
-make windows   # Windows
+make macos          # macOS
+make windows-arm64  # Windows on ARM64, native build
+make windows-x64    # Windows x64, cross-built on an ARM64 host
 ```
 
 Each target stages the agent source and exported requirements into the Tauri
 resources, builds the frontend, compiles the shell, then installs and opens the
-app. Windows needs GNU make, from Git Bash or MSYS2.
+app. Windows needs GNU make, from Git Bash or MSYS2. Use `windows-x64` on any
+Windows host for builds that ship to x64 PCs. On an ARM64 host it cross-builds
+and runs the app through Windows 11 x64 emulation.
 
 The first launch downloads uv, CPython 3.13 and the locked dependencies into
 `~/.tradecopilot/runtime`, so it needs network access. Later launches start the
