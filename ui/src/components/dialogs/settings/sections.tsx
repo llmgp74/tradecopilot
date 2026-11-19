@@ -19,6 +19,8 @@ export interface SettingField {
   key: keyof Omit<AppSettings, "updated_at" | "providers">;
   label: string;
   placeholder?: string;
+  /** Shown when the stored value is empty, so the field is never blank. */
+  defaultValue?: string;
 }
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
@@ -123,7 +125,7 @@ export function SettingsFieldSection({
         const revealed = visible.has(field.key);
         const inputId = `${baseId}-${field.key}`;
         return (
-          <div key={field.key} className="space-y-1 text-xs">
+          <div key={field.key} className="space-y-2 text-xs">
             <label htmlFor={inputId} className="font-medium">
               {field.label}
             </label>
@@ -132,7 +134,7 @@ export function SettingsFieldSection({
                 <Input
                   id={inputId}
                   type={revealed ? "text" : "password"}
-                  value={draft[field.key]}
+                  value={draft[field.key] || field.defaultValue}
                   onChange={(event) =>
                     setDraft({ ...draft, [field.key]: event.target.value })
                   }
@@ -167,7 +169,7 @@ export function SettingsFieldSection({
             ) : (
               <Input
                 id={inputId}
-                value={draft[field.key]}
+                value={draft[field.key] || field.defaultValue}
                 onChange={(event) =>
                   setDraft({ ...draft, [field.key]: event.target.value })
                 }

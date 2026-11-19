@@ -43,7 +43,7 @@ const SECTION_FIELDS: Record<
     {
       key: "alpaca_base_url",
       label: "Alpaca base URL",
-      placeholder: "https://paper-api.alpaca.markets",
+      defaultValue: "https://paper-api.alpaca.markets/v2",
     },
   ],
   search: [{ key: "exa_api_key", label: "Exa API key" }],

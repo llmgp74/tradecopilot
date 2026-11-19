@@ -11,7 +11,7 @@ vi.mock("@/lib/api", () => ({
   ApiError: class extends Error {},
   getProfile: async () => baseProfile,
   patchProfile: async (patch: object) => ({ ...baseProfile, ...patch }),
-  getSettings: async () => baseSettings,
+  getSettings: async () => ({ ...baseSettings, alpaca_base_url: "" }),
   patchSettings: vi.fn(async (patch: object) => ({ ...baseSettings, ...patch })),
   putProvider: vi.fn(async () => baseSettings),
   deleteProvider: vi.fn(async () => baseSettings),
@@ -54,6 +54,18 @@ it("opens on the requested section", async () => {
   expect(await screen.findByLabelText(/^alpaca key$/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Broker" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Model Providers" })).toBeInTheDocument();
+});
+
+it("fills the default Alpaca base URL", async () => {
+  render(
+    <ThemeProvider>
+      <SettingsDialog open initialSection="broker" onOpenChange={() => {}} />
+    </ThemeProvider>,
+  );
+
+  expect(await screen.findByLabelText(/^alpaca base url$/i)).toHaveValue(
+    "https://paper-api.alpaca.markets/v2",
+  );
 });
 
 it("guards the settings dialog close while edits are pending", async () => {

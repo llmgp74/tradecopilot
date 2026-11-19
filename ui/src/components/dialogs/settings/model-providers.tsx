@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -28,7 +27,6 @@ import {
   type AppSettings,
   type ProviderModel,
 } from "@/lib/api";
-import { isTauri } from "@/lib/api-base";
 import { loadModelCatalog, SUPPORTED_NPM, type ModelCatalog } from "@/lib/catalog";
 import { reasoningChoices } from "@/lib/reasoning";
 import { AddModelsDialog } from "./add-models-dialog";
@@ -246,17 +244,6 @@ export function ModelProvidersSection({
     }
   };
 
-  const refresh = async () => {
-    if (isTauri()) {
-      try {
-        await invoke("refresh_model_catalog");
-      } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : "Catalog refresh failed.");
-      }
-    }
-    await reloadCatalog();
-  };
-
   const detailName =
     selected === null ? "" : (catalog?.providers[selected]?.name ?? selected);
 
@@ -280,7 +267,7 @@ export function ModelProvidersSection({
   return (
     <div className="flex h-full min-h-0 gap-4">
       <div className="flex w-[240px] shrink-0 flex-col gap-2">
-        <div className="space-y-1">
+        <div className="space-y-2">
           <label
             htmlFor="default-reasoning"
             className="text-[10px] font-medium text-muted-foreground"
@@ -314,24 +301,12 @@ export function ModelProvidersSection({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-1">
-          <Input
-            aria-label="Search providers"
-            placeholder="Search providers"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          {isTauri() ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => void refresh()}
-            >
-              Refresh catalog
-            </Button>
-          ) : null}
-        </div>
+        <Input
+          aria-label="Search providers"
+          placeholder="Search providers"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
         <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {loading ? <Skeleton className="h-24 w-full" /> : null}
           {rows.map((row) => (
@@ -405,7 +380,7 @@ export function ModelProvidersSection({
               </div>
             </div>
 
-            <div className="space-y-1 text-xs">
+            <div className="space-y-2 text-xs">
               <label htmlFor="provider-api-key" className="font-medium">
                 API key
               </label>
@@ -417,7 +392,7 @@ export function ModelProvidersSection({
               />
             </div>
 
-            <div className="space-y-1 text-xs">
+            <div className="space-y-2 text-xs">
               <label htmlFor="provider-base-url" className="font-medium">
                 Base URL
               </label>
