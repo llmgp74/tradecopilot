@@ -130,11 +130,10 @@ it("warns that removing the selected model changes the selection", async () => {
   expect(screen.getByText(/no models selected/i)).toBeInTheDocument();
 });
 
-it("adds a provider from the catalog search", async () => {
+it("selects an unconfigured provider from the catalog search", async () => {
   renderSection();
 
-  await userEvent.click(await screen.findByRole("button", { name: "Add provider" }));
-  await userEvent.type(screen.getByLabelText(/search providers/i), "openai");
+  await userEvent.type(await screen.findByLabelText(/search providers/i), "openai");
   await userEvent.click(screen.getByRole("button", { name: "OpenAI" }));
 
   expect(screen.getByRole("heading", { name: "OpenAI" })).toBeInTheDocument();

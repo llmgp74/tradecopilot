@@ -118,7 +118,6 @@ export function ModelProvidersSection({
   const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<ProviderDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -165,9 +164,6 @@ export function ModelProvidersSection({
       }));
     const needle = search.trim().toLowerCase();
     return [...configured, ...others].filter((row) => {
-      if (adding && row.configured) {
-        return false;
-      }
       if (needle === "") {
         return true;
       }
@@ -175,13 +171,12 @@ export function ModelProvidersSection({
         row.name.toLowerCase().includes(needle) || row.id.toLowerCase().includes(needle)
       );
     });
-  }, [settings.providers, catalog, search, adding]);
+  }, [settings.providers, catalog, search]);
 
   const select = (providerId: string) => {
     setSelected(providerId);
     setDraft(draftFor(providerId, settings, catalog));
     setRemovedSelected(false);
-    setAdding(false);
     setSearch("");
   };
 
@@ -340,17 +335,6 @@ export function ModelProvidersSection({
             </button>
           ))}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setAdding(true);
-            setSearch("");
-          }}
-        >
-          Add provider
-        </Button>
       </div>
 
       <div className="min-w-0 flex-1 space-y-4 overflow-y-auto">
