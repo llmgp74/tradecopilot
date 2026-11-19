@@ -110,6 +110,10 @@ agent can use `verify_claims` to check facts against evidence already collected.
 This deterministic tool makes no model call. Judge usage is recorded separately.
 Judge calls retry malformed structured output once.
 
+Keys may live in `eval/.env`; `uv run` does not load it automatically, so pass
+`--env-file .env`. A reasoning judge needs room for its thinking before the JSON:
+`--judge-max-output-tokens` defaults to 8192 and `--judge-timeout` to 300 seconds.
+
 The included cases need `--allow-unreviewed-fixtures` for a model pilot. Before
 reporting the proposal's empirical study, replace or supplement synthetic data
 with frozen real-source evidence, review the labels and rubric, and record that

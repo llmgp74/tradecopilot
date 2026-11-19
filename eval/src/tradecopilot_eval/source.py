@@ -209,6 +209,29 @@ class FrozenSource(DataSource):
         """
         return self._response("macro", {"series": series, "period": period})
 
+    async def open_orders(self) -> ToolOutput:
+        """Report that frozen fixtures serve no working order list.
+
+        Returns:
+            An explicit fixture error, never ``None``. The protocol declares
+            this method, so an unimplemented override would return ``None``
+            and crash the tool that reads it.
+        """
+        return _failure("fixture_missing", "No frozen fixture matches open_orders.")
+
+    async def cancel_order(self, order_id: str) -> ToolOutput:
+        """Refuse cancellation; frozen fixtures never place orders.
+
+        Args:
+            order_id: Broker order id, ignored.
+
+        Returns:
+            An execution-disabled error with no side effect.
+        """
+        return _failure(
+            "execution_disabled", "Order execution is disabled for frozen fixtures."
+        )
+
     async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:
         """Refuse every order without inspecting or submitting it.
 
