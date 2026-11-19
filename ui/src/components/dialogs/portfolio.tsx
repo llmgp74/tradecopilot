@@ -252,7 +252,7 @@ export function PortfolioDialog({
               href={ALPACA_DASHBOARD}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-primary underline underline-offset-4"
+              className="font-medium text-link underline underline-offset-4"
               onClick={(event) => {
                 event.preventDefault();
                 void openExternal(ALPACA_DASHBOARD);
