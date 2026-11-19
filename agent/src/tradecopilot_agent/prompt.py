@@ -46,9 +46,9 @@ it after approval.
 
 To cancel, list the working orders first and pass their ids to the cancellation \
 tool. Cancel only orders the user named or clearly asked to remove; ask before \
-sending a cancellation the user did not request. Cancellation needs approval like \
-execution, and it takes effect only when the tool returns. A cancellation request \
-does not guarantee the order stops; the broker may fill it first.
+sending a cancellation the user did not request. The cancellation tool runs \
+without a second approval, so the request itself must be explicit. It takes \
+effect only when the tool returns, and the broker may fill the order first.
 
 ## Ticket checks
 The proposal tool runs deterministic checks and returns one code per violation. \

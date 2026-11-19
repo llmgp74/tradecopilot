@@ -251,35 +251,14 @@ def test_open_orders_are_listed(tmp_path: Path) -> None:
     assert json.loads(output.summary)[0]["order_id"] == "o1"
 
 
-def test_cancelling_requires_approval(tmp_path: Path, monkeypatch) -> None:
-    """A cancelled approval leaves the orders working."""
+def test_cancellation_does_not_pause_for_approval(tmp_path: Path, monkeypatch) -> None:
+    """The user's cancel request is the approval, so the tool runs directly."""
     from tradecopilot_agent import tools as tools_module
 
-    monkeypatch.setattr(
-        tools_module,
-        "interrupt",
-        lambda _value: {"decisions": [{"type": "reject", "message": "keep them"}]},
-    )
-    source = FakeSource()
-    tools, _ = _tools(tmp_path, source)
+    def fail(_value: object) -> None:
+        raise AssertionError("cancellation must not interrupt")
 
-    output = asyncio.run(
-        tools.cancel([{"order_id": "o1", "ticker": "AAPL", "side": "buy", "qty": "1"}])
-    )
-
-    assert output.error == "rejected"
-    assert source.cancelled == []
-
-
-def test_approved_cancellation_cancels_each_order(tmp_path: Path, monkeypatch) -> None:
-    """Approving the cancellation deletes every listed order."""
-    from tradecopilot_agent import tools as tools_module
-
-    monkeypatch.setattr(
-        tools_module,
-        "interrupt",
-        lambda _value: {"decisions": [{"type": "approve"}]},
-    )
+    monkeypatch.setattr(tools_module, "interrupt", fail)
     source = FakeSource()
     tools, _ = _tools(tmp_path, source)
 

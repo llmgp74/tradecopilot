@@ -530,7 +530,11 @@ class TradingTools:
         return await self.source.open_orders()
 
     async def cancel(self, orders: list[dict[str, Any]]) -> ToolOutput:
-        """Cancel working orders after user approval.
+        """Cancel working orders.
+
+        The user's cancellation request is the approval, so this runs without
+        an interrupt. The model is responsible for canceling only orders the
+        user asked about.
 
         Args:
             orders: Orders from ``get_open_orders``, each with an ``order_id``.
@@ -559,31 +563,6 @@ class TradingTools:
             )
         if not cleaned:
             return ToolOutput(summary="No orders to cancel.", error="invalid")
-
-        profile = self.store.get_profile()
-        if not profile.get("execution", {}).get("autonomous", False):
-            decision = interrupt(
-                {
-                    "action_requests": [
-                        {
-                            "name": "cancel_orders",
-                            "args": {"orders": cleaned},
-                            "description": "Review the order cancellations",
-                        }
-                    ],
-                    "review_configs": [
-                        {
-                            "action_name": "cancel_orders",
-                            "allowed_decisions": ["approve", "reject"],
-                        }
-                    ],
-                }
-            )
-            if not self._approved(decision):
-                reason = self._rejection_reason(decision)
-                return ToolOutput(
-                    summary=f"Cancellation rejected: {reason}", error="rejected"
-                )
 
         results = []
         for order in cleaned:
