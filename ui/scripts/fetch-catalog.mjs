@@ -29,6 +29,17 @@ function slimModel(model) {
 }
 
 /**
+ * Sorts object entries by key so regenerated output is byte-identical when
+ * the upstream catalog is unchanged.
+ *
+ * @param {object} object - Source object.
+ * @returns {[string, unknown][]} Entries in ascending key order.
+ */
+function sortedEntries(object) {
+  return Object.entries(object).sort(([left], [right]) => (left < right ? -1 : 1));
+}
+
+/**
  * Drops every provider and model field the UI does not render.
  *
  * @param {string} raw - Catalog JSON.
@@ -40,12 +51,12 @@ export function slimCatalog(raw) {
     throw new Error("The catalog is not an object.");
   }
   const providers = {};
-  for (const [id, provider] of Object.entries(parsed)) {
+  for (const [id, provider] of sortedEntries(parsed)) {
     if (provider === null || typeof provider !== "object") {
       continue;
     }
     const models = {};
-    for (const [modelId, model] of Object.entries(provider.models ?? {})) {
+    for (const [modelId, model] of sortedEntries(provider.models ?? {})) {
       models[modelId] = slimModel(model);
     }
     providers[id] = {
@@ -96,7 +107,7 @@ async function main(argv) {
   try {
     const slim = slimCatalog(await load(source));
     const temporary = `${output}.tmp`;
-    writeFileSync(temporary, JSON.stringify(slim));
+    writeFileSync(temporary, `${JSON.stringify(slim, null, 2)}\n`);
     renameSync(temporary, output);
     console.log(`Wrote ${Object.keys(slim.providers).length} providers to ${output}`);
   } catch (error) {
@@ -105,7 +116,7 @@ async function main(argv) {
       console.warn(`Catalog refresh failed (${message}); keeping ${output}`);
       return;
     }
-    writeFileSync(output, JSON.stringify({ providers: {} }));
+    writeFileSync(output, `${JSON.stringify({ providers: {} }, null, 2)}\n`);
     console.warn(`Catalog refresh failed (${message}); wrote an empty catalog`);
   }
 }

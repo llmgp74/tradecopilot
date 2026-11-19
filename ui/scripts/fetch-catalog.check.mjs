@@ -48,3 +48,15 @@ test("keeps model ids with colons verbatim", () => {
 
   assert.ok(slim.providers.openrouter.models["anthropic/claude:thinking"]);
 });
+
+test("sorts provider and model ids", () => {
+  const slim = slimCatalog(
+    JSON.stringify({
+      zeta: { models: { zulu: { name: "Z" }, alpha: { name: "A" } } },
+      alpha: { models: {} },
+    }),
+  );
+
+  assert.deepEqual(Object.keys(slim.providers), ["alpha", "zeta"]);
+  assert.deepEqual(Object.keys(slim.providers.zeta.models), ["alpha", "zulu"]);
+});
