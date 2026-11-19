@@ -1,5 +1,6 @@
 """Alpaca account, market data, and order placement."""
 
+import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -15,7 +16,7 @@ from tradecopilot_agent.portfolio import (
     trading_base_url,
 )
 from tradecopilot_agent.sources.common import record
-from tradecopilot_agent.sources.http import fetch_json, post_json
+from tradecopilot_agent.sources.http import delete_json, fetch_json, post_json
 from tradecopilot_agent.state import ToolOutput
 
 DATA_URL = "https://data.alpaca.markets"
@@ -203,6 +204,59 @@ class AlpacaSource:
             is_open=data["is_open"],
             next_open=next_open if isinstance(next_open, str) else None,
         )
+
+    async def open_orders(self) -> ToolOutput:
+        """List the broker's working orders.
+
+        Returns:
+            A JSON summary of each order with the fields needed to cancel it.
+        """
+        current = self.settings()
+        try:
+            data = await fetch_json(
+                f"{trading_base_url(current.alpaca_base_url)}/v2/orders",
+                headers=self._headers(),
+                params={"status": "open", "limit": 100, "direction": "desc"},
+                client=self.client,
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            return ToolOutput(summary=f"Open orders failed: {exc}", error="http")
+        orders = [
+            {
+                "order_id": str(item.get("id", "")),
+                "ticker": str(item.get("symbol", "")),
+                "side": str(item.get("side", "")),
+                "qty": str(item.get("qty", "")),
+                "filled_qty": str(item.get("filled_qty", "")),
+                "type": str(item.get("type", "")),
+                "limit_price": item.get("limit_price"),
+                "status": str(item.get("status", "")),
+                "submitted_at": item.get("submitted_at"),
+            }
+            for item in data
+            if isinstance(item, dict)
+        ]
+        return ToolOutput(summary=json.dumps(orders, default=str))
+
+    async def cancel_order(self, order_id: str) -> ToolOutput:
+        """Request cancellation of one working order.
+
+        Args:
+            order_id: Broker order id from ``open_orders``.
+
+        Returns:
+            The cancellation result.
+        """
+        current = self.settings()
+        try:
+            await delete_json(
+                f"{trading_base_url(current.alpaca_base_url)}/v2/orders/{order_id}",
+                headers=self._headers(),
+                client=self.client,
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            return ToolOutput(summary=f"Cancel failed: {exc}", error="http")
+        return ToolOutput(summary=f"Cancel requested for order {order_id}.")
 
     async def place_leg(
         self,

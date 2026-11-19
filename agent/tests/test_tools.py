@@ -1,6 +1,7 @@
 """Tool behavior against a stub data source."""
 
 import asyncio
+import json
 from datetime import date
 from pathlib import Path
 
@@ -49,6 +50,7 @@ class FakeSource:
         self.place_status = place_status
         self.positions = positions or []
         self.placed: list[tuple[dict, str]] = []
+        self.cancelled: list[str] = []
 
     def capabilities(self) -> set[str]:
         return set(self._capabilities)
@@ -124,6 +126,25 @@ class FakeSource:
             ],
         )
 
+    async def open_orders(self) -> ToolOutput:
+        return ToolOutput(
+            summary=json.dumps(
+                [
+                    {
+                        "order_id": "o1",
+                        "ticker": "AAPL",
+                        "side": "buy",
+                        "qty": "1",
+                        "status": "accepted",
+                    }
+                ]
+            )
+        )
+
+    async def cancel_order(self, order_id: str) -> ToolOutput:
+        self.cancelled.append(order_id)
+        return ToolOutput(summary=f"Cancel requested for order {order_id}.")
+
 
 def _tools(tmp_path: Path, source: FakeSource) -> tuple[TradingTools, Store]:
     store = Store(tmp_path / "data.db")
@@ -181,6 +202,71 @@ def test_a_blocked_ticket_is_not_stored(tmp_path: Path) -> None:
     assert output.error == "blocked"
     assert output.proposal is None
     assert store.list_journal(page_no=1, page_size=10)[1] == 0
+
+
+def test_open_orders_are_listed(tmp_path: Path) -> None:
+    """The listing carries the ids the model needs to cancel."""
+    tools, _ = _tools(tmp_path, FakeSource())
+
+    output = asyncio.run(tools.open_orders())
+
+    assert output.error is None
+    assert json.loads(output.summary)[0]["order_id"] == "o1"
+
+
+def test_cancelling_requires_approval(tmp_path: Path, monkeypatch) -> None:
+    """A cancelled approval leaves the orders working."""
+    from tradecopilot_agent import tools as tools_module
+
+    monkeypatch.setattr(
+        tools_module,
+        "interrupt",
+        lambda _value: {"decisions": [{"type": "reject", "message": "keep them"}]},
+    )
+    source = FakeSource()
+    tools, _ = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.cancel([{"order_id": "o1", "ticker": "AAPL", "side": "buy", "qty": "1"}])
+    )
+
+    assert output.error == "rejected"
+    assert source.cancelled == []
+
+
+def test_approved_cancellation_cancels_each_order(tmp_path: Path, monkeypatch) -> None:
+    """Approving the cancellation deletes every listed order."""
+    from tradecopilot_agent import tools as tools_module
+
+    monkeypatch.setattr(
+        tools_module,
+        "interrupt",
+        lambda _value: {"decisions": [{"type": "approve"}]},
+    )
+    source = FakeSource()
+    tools, _ = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.cancel(
+            [
+                {"order_id": "o1", "ticker": "AAPL", "side": "buy", "qty": "1"},
+                {"order_id": "o2", "ticker": "MSFT", "side": "buy", "qty": "1"},
+            ]
+        )
+    )
+
+    assert output.error is None
+    assert source.cancelled == ["o1", "o2"]
+    assert json.loads(output.summary)["status"] == "cancelled"
+
+
+def test_cancellation_needs_order_ids(tmp_path: Path) -> None:
+    """A call without broker ids is rejected before any approval."""
+    tools, _ = _tools(tmp_path, FakeSource())
+
+    output = asyncio.run(tools.cancel([{"ticker": "AAPL", "side": "buy"}]))
+
+    assert output.error == "invalid"
 
 
 def test_missing_provider_guards_the_tool(tmp_path: Path) -> None:

@@ -81,6 +81,14 @@ class DataSource(Protocol):
         """Place one order leg."""
         ...
 
+    async def open_orders(self) -> ToolOutput:
+        """Return the broker's working orders."""
+        ...
+
+    async def cancel_order(self, order_id: str) -> ToolOutput:
+        """Request cancellation of one working order."""
+        ...
+
     async def clock(self) -> MarketClock | None:
         """Return the broker's session state, or None when unavailable."""
         ...

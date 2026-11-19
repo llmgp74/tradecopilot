@@ -520,6 +520,20 @@ def test_put_provider_rejects_non_tool_model(tmp_path: Path) -> None:
     assert "tool" in response.json()["detail"]
 
 
+def test_cancel_approval_descriptor_lists_the_orders() -> None:
+    """The cancellation card receives the orders from the interrupt."""
+    from tradecopilot_agent.server.app import _approval_descriptor
+
+    request = {
+        "name": "cancel_orders",
+        "args": {"orders": [{"order_id": "o1", "ticker": "AAPL", "qty": "1"}]},
+    }
+
+    descriptor = _approval_descriptor({}, request)
+
+    assert descriptor["cancellation"]["orders"][0]["order_id"] == "o1"
+
+
 def test_put_provider_moves_selection_when_model_removed(tmp_path: Path) -> None:
     """Removing the selected model through the API moves to the first one left."""
     with _client(tmp_path) as client:

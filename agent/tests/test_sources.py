@@ -210,6 +210,53 @@ def test_alpaca_places_a_market_order_in_regular_hours() -> None:
     assert "extended_hours" not in seen
 
 
+def test_alpaca_lists_open_orders() -> None:
+    """Open orders are normalized to the fields the agent needs."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "o1",
+                    "symbol": "AAPL",
+                    "side": "buy",
+                    "qty": "1",
+                    "filled_qty": "0",
+                    "type": "market",
+                    "limit_price": None,
+                    "status": "accepted",
+                    "submitted_at": "2026-11-19T13:00:00Z",
+                }
+            ],
+        )
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    output = asyncio.run(source.open_orders())
+
+    assert seen["status"] == "open"
+    assert output.error is None
+    assert json.loads(output.summary)[0]["order_id"] == "o1"
+    assert json.loads(output.summary)[0]["ticker"] == "AAPL"
+
+
+def test_alpaca_cancels_one_order() -> None:
+    """Cancelling deletes the order by id."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "DELETE"
+        assert request.url.path == "/v2/orders/o1"
+        return httpx.Response(204)
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    output = asyncio.run(source.cancel_order("o1"))
+
+    assert output.error is None
+    assert "o1" in output.summary
+
+
 def test_alpaca_bars_requests_a_date_range() -> None:
     """Alpaca needs an explicit window to return bars."""
     seen: dict = {}

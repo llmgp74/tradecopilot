@@ -614,6 +614,8 @@ def _approval_descriptor(
         The ticket and the decision context.
     """
     raw_args = request.get("args")
+    if request.get("name") == "cancel_orders" and isinstance(raw_args, dict):
+        return {"cancellation": raw_args}
     ticket = state.get("pending_ticket")
     if not isinstance(ticket, dict):
         return {"error": "No matching pending ticket."}

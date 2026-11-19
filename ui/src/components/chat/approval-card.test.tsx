@@ -90,6 +90,50 @@ it("opens the full leg list in a dialog past ten rows", async () => {
   expect(screen.getByText("SYM11")).toBeInTheDocument();
 });
 
+it("asks for approval before cancelling orders", async () => {
+  const onRespond = vi.fn();
+  const cancelView: ToolPartView = {
+    ...view,
+    approval: {
+      id: "c2",
+      descriptor: {
+        cancellation: {
+          orders: [
+            { order_id: "o1", ticker: "AAPL", side: "buy", qty: "1" },
+            { order_id: "o2", ticker: "MSFT", side: "sell", qty: "2" },
+          ],
+        },
+      },
+    },
+  };
+  render(<ApprovalCard view={cancelView} onRespond={onRespond} />);
+
+  expect(screen.getByText("Cancel open orders?")).toBeInTheDocument();
+  expect(screen.getByText("AAPL")).toBeInTheDocument();
+  expect(screen.getByText("MSFT")).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: /approve cancellation/i }));
+
+  expect(onRespond).toHaveBeenCalledWith("c2", true);
+});
+
+it("shows a rejected cancellation without actions", () => {
+  const cancelView: ToolPartView = {
+    ...view,
+    approval: {
+      id: "c2",
+      approved: false,
+      descriptor: {
+        cancellation: { orders: [{ order_id: "o1", ticker: "AAPL", qty: "1" }] },
+      },
+    },
+  };
+  render(<ApprovalCard view={cancelView} onRespond={() => {}} />);
+
+  expect(screen.getByText("Cancellation rejected")).toBeInTheDocument();
+  expect(screen.queryByRole("button")).toBeNull();
+});
+
 it("rejects with a reason", async () => {
   const onRespond = vi.fn();
   render(<ApprovalCard view={view} onRespond={onRespond} />);

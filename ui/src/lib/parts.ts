@@ -24,11 +24,20 @@ export interface PortfolioImpact {
   equity?: number;
 }
 
+/** One working order awaiting cancellation approval. */
+export interface CancellationOrder {
+  order_id?: string;
+  ticker?: string;
+  side?: string;
+  qty?: string | number;
+}
+
 /** Payload rendered by the approval card. */
 export interface ApprovalDescriptor {
   ticket?: Ticket;
   rationale?: unknown;
   portfolio_impact?: PortfolioImpact | null;
+  cancellation?: { orders?: CancellationOrder[] };
   error?: string;
 }
 

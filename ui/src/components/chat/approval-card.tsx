@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import type { ToolPartView } from "@/lib/parts";
+import type { CancellationOrder, ToolPartView } from "@/lib/parts";
 
 /** Props for the approval card. */
 export interface ApprovalCardProps {
@@ -276,6 +276,129 @@ function TicketBody({ legs, rationale, impact }: TicketBodyProps) {
   );
 }
 
+/** Props for the cancellation card. */
+interface CancellationApprovalProps {
+  /** Tool part carrying the cancellation descriptor. */
+  view: ToolPartView;
+  /** Working orders the tool will cancel. */
+  orders: CancellationOrder[];
+  /** Sends the decision to the chat. */
+  onRespond: ApprovalCardProps["onRespond"];
+}
+
+/**
+ * Lists the orders a cancellation would remove.
+ *
+ * @param props - Orders from the interrupt.
+ * @returns The order table.
+ */
+function CancellationTable({ orders }: { orders: CancellationOrder[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b text-[10px] uppercase tracking-wide text-muted-foreground">
+            <th className="px-4 py-1.5 text-left font-medium">Symbol</th>
+            <th className="px-2 py-1.5 text-left font-medium">Side</th>
+            <th className="px-4 py-1.5 text-right font-medium">Size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order, index) => (
+            <tr key={order.order_id ?? index} className="border-b last:border-0">
+              <td className="px-4 py-1.5 font-mono font-semibold">
+                {order.ticker ?? "?"}
+              </td>
+              <td className="px-2 py-1.5 text-[10px] font-medium uppercase text-muted-foreground">
+                {order.side ?? "?"}
+              </td>
+              <td className="px-4 py-1.5 text-right font-mono">
+                {order.qty === undefined
+                  ? "-"
+                  : `${order.qty} ${Number(order.qty) === 1 ? "share" : "shares"}`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Renders a cancellation awaiting approval, or its resolved state.
+ *
+ * @param props - Tool view, orders, and decision callback.
+ * @returns The cancellation card.
+ */
+function CancellationApproval({ view, orders, onRespond }: CancellationApprovalProps) {
+  const approval = view.approval;
+  const approvalId = approval?.id ?? view.toolCallId;
+  const rejected = approval?.approved === false;
+  const pendingExecution = approval?.approved === true && view.result === undefined;
+  const resolved = view.result !== undefined || rejected;
+
+  if (resolved) {
+    return (
+      <div className="overflow-hidden rounded-xl border bg-card text-sm">
+        <div className="flex items-center gap-2 border-b px-4 py-2.5">
+          {rejected ? (
+            <XCircleIcon className="size-4" style={{ color: "var(--negative)" }} />
+          ) : (
+            <CheckCircle2Icon className="size-4" />
+          )}
+          <span className="font-medium">
+            {rejected ? "Cancellation rejected" : "Cancellation sent"}
+          </span>
+        </div>
+        <div className="py-2">
+          <CancellationTable orders={orders} />
+        </div>
+        {approval?.reason ? (
+          <p className="px-4 pb-3 text-xs text-muted-foreground">
+            Reason: {approval.reason}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (pendingExecution) {
+    return (
+      <div className="overflow-hidden rounded-xl border bg-card text-sm">
+        <div className="flex items-center gap-2 border-b px-4 py-2.5">
+          <ShieldAlertIcon className="size-4 text-muted-foreground" />
+          <span className="font-medium">Approval sent</span>
+          <span className="ml-auto text-xs text-muted-foreground">Cancelling...</span>
+        </div>
+        <div className="py-2">
+          <CancellationTable orders={orders} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-primary/25 bg-card shadow-sm">
+      <div className="flex items-center gap-2 border-b border-primary/20 bg-primary/5 px-4 py-2.5">
+        <ShieldAlertIcon className="size-4 text-primary" />
+        <span className="text-sm font-medium">Cancel open orders?</span>
+      </div>
+      <div className="py-2">
+        <CancellationTable orders={orders} />
+      </div>
+      <div className="flex gap-2 px-4 pb-3">
+        <Button size="sm" onClick={() => onRespond(approvalId, true)}>
+          Approve cancellation
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => onRespond(approvalId, false)}>
+          Reject
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Renders a ticket awaiting approval, or its resolved state after a decision.
  *
@@ -298,6 +421,16 @@ export function ApprovalCard({ view, onRespond }: ApprovalCardProps) {
   const resolved = view.result !== undefined || rejected;
   const rationale =
     typeof descriptor?.rationale === "string" ? descriptor.rationale : ticket?.thesis;
+
+  if (descriptor?.cancellation) {
+    return (
+      <CancellationApproval
+        view={view}
+        orders={descriptor.cancellation.orders ?? []}
+        onRespond={onRespond}
+      />
+    );
+  }
 
   if (descriptor?.error && !ticket) {
     return (
