@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Area, AreaChart, CartesianGrid } from "recharts";
+import { ArrowUpRightIcon } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getPortfolio, type Portfolio, type PortfolioRange } from "@/lib/api";
+import { openExternal } from "@/lib/external";
 import { formatPct, formatSignedPct, formatUsd } from "@/lib/format";
 import { useResource } from "@/lib/use-resource";
 
@@ -35,9 +37,53 @@ export interface DialogProps {
 
 const RANGES: PortfolioRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
 
+const ALPACA_DASHBOARD = "https://app.alpaca.markets/dashboard/";
+
+/** Holdings shown before the rest move to Alpaca. */
+const VISIBLE_POSITIONS = 5;
+
 const chartConfig = {
   equity: { label: "Equity", color: "var(--chart-1)" },
 } satisfies ChartConfig;
+
+/** Formats an axis amount without cents, so close ticks stay distinct. */
+function axisUsd(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+/** Formats one equity-curve timestamp for the x axis. */
+function timeTick(value: string, range: PortfolioRange): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return range === "1D"
+    ? date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** Formats the tooltip timestamp with more context than the axis tick. */
+function timeLabel(value: string, range: PortfolioRange): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(
+    "en-US",
+    range === "1D"
+      ? {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }
+      : { year: "numeric", month: "short", day: "numeric" },
+  );
+}
 
 /**
  * Renders account metrics, the equity curve, and positions.
@@ -47,13 +93,16 @@ const chartConfig = {
  */
 function PortfolioBody({
   portfolio,
+  range,
   onOpenSettings,
 }: {
   portfolio: Portfolio;
+  range: PortfolioRange;
   onOpenSettings: () => void;
 }) {
   const { account, day, positions, equity_curve } = portfolio;
   const sorted = [...positions].sort((a, b) => b.market_value - a.market_value);
+  const shown = sorted.slice(0, VISIBLE_POSITIONS);
 
   return (
     <div className="space-y-4">
@@ -83,10 +132,31 @@ function PortfolioBody({
         <ChartContainer config={chartConfig} className="h-44 w-full">
           <AreaChart
             data={equity_curve}
-            margin={{ left: 0, right: 0, top: 4, bottom: 0 }}
+            margin={{ left: 0, right: 8, top: 4, bottom: 0 }}
           >
             <CartesianGrid vertical={false} />
-            <ChartTooltip content={<ChartTooltipContent />} />
+            <XAxis
+              dataKey="t"
+              tickLine={false}
+              axisLine={false}
+              minTickGap={32}
+              tickFormatter={(value) => timeTick(String(value), range)}
+            />
+            <YAxis
+              width={84}
+              tickLine={false}
+              axisLine={false}
+              domain={["auto", "auto"]}
+              tickFormatter={(value) => axisUsd(Number(value))}
+            />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(value) => timeLabel(String(value), range)}
+                  formatter={(value) => formatUsd(Number(value))}
+                />
+              }
+            />
             <Area
               dataKey="equity"
               type="monotone"
@@ -137,7 +207,7 @@ function PortfolioBody({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((position) => (
+              {shown.map((position) => (
                 <TableRow key={position.ticker}>
                   <TableCell className="font-mono font-semibold">
                     {position.ticker}
@@ -175,6 +245,11 @@ function PortfolioBody({
           </Table>
         </div>
       )}
+      {sorted.length > VISIBLE_POSITIONS ? (
+        <p className="text-xs text-muted-foreground">
+          Showing the {VISIBLE_POSITIONS} largest of {sorted.length} holdings.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -213,7 +288,7 @@ function PortfolioRangeBody({
       </div>
     );
   }
-  return <PortfolioBody portfolio={data} onOpenSettings={onOpenSettings} />;
+  return <PortfolioBody portfolio={data} range={range} onOpenSettings={onOpenSettings} />;
 }
 
 /**
@@ -234,7 +309,22 @@ export function PortfolioDialog({
       <DialogContent className="max-h-[85vh] w-[min(960px,100vw-32px)] max-w-none overflow-y-auto sm:max-w-none">
         <DialogHeader>
           <DialogTitle>Portfolio</DialogTitle>
-          <DialogDescription>Account, positions, and equity history.</DialogDescription>
+          <DialogDescription>
+            Account, positions, and equity history.{" "}
+            <a
+              href={ALPACA_DASHBOARD}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-link underline underline-offset-4"
+              onClick={(event) => {
+                event.preventDefault();
+                void openExternal(ALPACA_DASHBOARD);
+              }}
+            >
+              View in Alpaca
+              <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
+            </a>
+          </DialogDescription>
         </DialogHeader>
         <div className="flex gap-1">
           {RANGES.map((value) => (

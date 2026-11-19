@@ -30,8 +30,10 @@ from tradecopilot_agent.state import (
 from tradecopilot_agent.store import now_iso
 from tradecopilot_agent.web import WebResult, WebSearch, WebSearchUnavailable
 
-MAX_LEGS = 10
 GATHER_BUDGET = 12
+# Safety bound only: the approval card previews ten rows and opens the full
+# table in a dialog, so ordinary baskets stay in one ticket.
+MAX_LEGS = 1000
 
 TOOL_CAPABILITIES: dict[str, str] = {
     "get_quote": "alpaca",
@@ -43,6 +45,8 @@ TOOL_CAPABILITIES: dict[str, str] = {
     "get_xbrl_fact": "edgar",
     "get_news": "finnhub",
     "get_macro": "fred",
+    "get_open_orders": "alpaca",
+    "cancel_orders": "order_execution",
     "propose_ticket": "alpaca",
     "execute_ticket": "order_execution",
     "verify_claims": "",
@@ -441,7 +445,8 @@ class TradingTools:
         guard = self._guard("order_execution")
         if guard is not None:
             return guard
-        pending = state.get("pending_ticket")
+        entry = (state.get("pending_tickets") or {}).get(ticket_id)
+        pending = entry.get("ticket") if isinstance(entry, dict) else None
         if not isinstance(pending, dict) or pending.get("id") != ticket_id:
             return ToolOutput(summary="No matching pending ticket.", error="invalid")
         legs = [dict(leg) for leg in pending.get("legs", [])]
@@ -512,6 +517,72 @@ class TradingTools:
             ),
             ticket_done=True,
         )
+
+    async def open_orders(self) -> ToolOutput:
+        """List the broker's working orders.
+
+        Returns:
+            The orders with the ids needed to cancel them.
+        """
+        guard = self._guard("alpaca")
+        if guard is not None:
+            return guard
+        return await self.source.open_orders()
+
+    async def cancel(self, orders: list[dict[str, Any]]) -> ToolOutput:
+        """Cancel working orders.
+
+        The user's cancellation request is the approval, so this runs without
+        an interrupt. The model is responsible for canceling only orders the
+        user asked about.
+
+        Args:
+            orders: Orders from ``get_open_orders``, each with an ``order_id``.
+
+        Returns:
+            Per-order cancellation results.
+        """
+        guard = self._guard("order_execution")
+        if guard is not None:
+            return guard
+        cleaned: list[dict[str, Any]] = []
+        for order in orders:
+            order_id = order.get("order_id") if isinstance(order, dict) else None
+            if not isinstance(order_id, str) or not order_id:
+                return ToolOutput(
+                    summary="Each order needs an order_id from get_open_orders.",
+                    error="invalid",
+                )
+            cleaned.append(
+                {
+                    "order_id": order_id,
+                    "ticker": order.get("ticker"),
+                    "side": order.get("side"),
+                    "qty": order.get("qty"),
+                }
+            )
+        if not cleaned:
+            return ToolOutput(summary="No orders to cancel.", error="invalid")
+
+        results = []
+        for order in cleaned:
+            output = await self.source.cancel_order(order["order_id"])
+            results.append(
+                {
+                    "order_id": order["order_id"],
+                    "ok": output.error is None,
+                    "message": output.summary,
+                }
+            )
+        failed = [result for result in results if not result["ok"]]
+        status = (
+            "cancelled"
+            if not failed
+            else "partial"
+            if len(failed) < len(results)
+            else "failed"
+        )
+        return ToolOutput(summary=json.dumps({"status": status, "orders": results}))
 
     async def _place(
         self, ticket_id: str, legs: list[dict[str, Any]], prices: dict[str, float]
@@ -805,6 +876,18 @@ def build_tools(
         return _text(output), output.model_dump(mode="json")
 
     @artifact
+    async def get_open_orders() -> tuple[str, dict[str, Any]]:
+        """List working orders with the ids needed to cancel them."""
+        output = await impl.open_orders()
+        return _text(output), output.model_dump(mode="json")
+
+    @artifact
+    async def cancel_orders(orders: list[dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+        """Cancel working orders after the user approves the list."""
+        output = await impl.cancel(orders)
+        return _text(output), output.model_dump(mode="json")
+
+    @artifact
     async def propose_ticket(
         legs: list[dict[str, Any]],
         thesis: str,
@@ -833,6 +916,8 @@ def build_tools(
         get_news,
         get_macro,
         verify_claims,
+        get_open_orders,
+        cancel_orders,
         propose_ticket,
         execute_ticket,
     ]

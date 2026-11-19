@@ -91,3 +91,11 @@ class LiveSource:
     async def clock(self) -> MarketClock | None:
         """Return Alpaca's session state."""
         return await self.alpaca.clock()
+
+    async def open_orders(self) -> ToolOutput:
+        """Return Alpaca's working orders."""
+        return await self.alpaca.open_orders()
+
+    async def cancel_order(self, order_id: str) -> ToolOutput:
+        """Cancel one working order through Alpaca."""
+        return await self.alpaca.cancel_order(order_id)

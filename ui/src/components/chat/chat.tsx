@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
+  APICallError,
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
   type UIMessage,
@@ -301,9 +302,11 @@ export function Chat({
           style={{ color: "var(--negative)" }}
         >
           <span className="min-w-0 flex-1">{error.message}</span>
-          <Button variant="outline" size="sm" onClick={() => onOpenSettings("models")}>
-            Open settings
-          </Button>
+          {APICallError.isInstance(error) && error.statusCode === 503 ? (
+            <Button variant="outline" size="sm" onClick={() => onOpenSettings("models")}>
+              Open settings
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

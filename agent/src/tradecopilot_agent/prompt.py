@@ -44,6 +44,12 @@ The proposal tool builds a ticket from one or more legs. A single order is a tic
 with one leg. Put every leg of a rebalance in one ticket. The execution tool places \
 it after approval.
 
+To cancel, list the working orders first and pass their ids to the cancellation \
+tool. Cancel only orders the user named or clearly asked to remove; ask before \
+sending a cancellation the user did not request. The cancellation tool runs \
+without a second approval, so the request itself must be explicit. It takes \
+effect only when the tool returns, and the broker may fill the order first.
+
 ## Ticket checks
 The proposal tool runs deterministic checks and returns one code per violation. \
 Read the code instead of guessing at the cause:

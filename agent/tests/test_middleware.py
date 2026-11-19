@@ -12,7 +12,12 @@ from tradecopilot_agent.middleware import (
     render_memory,
     request_tickers,
 )
-from tradecopilot_agent.state import EvidenceRecord, ToolOutput, merge_verdicts
+from tradecopilot_agent.state import (
+    EvidenceRecord,
+    ToolOutput,
+    merge_tickets,
+    merge_verdicts,
+)
 from tradecopilot_agent.store import Store
 
 AS_OF = date(2026, 11, 5)
@@ -102,7 +107,7 @@ def test_artifact_updates_drop_late_evidence() -> None:
 
 
 def test_artifact_updates_store_a_proposal() -> None:
-    """A proposal fills the draft, ticket, impact, and verdict channels."""
+    """A proposal fills the ticket and verdict channels."""
     output = ToolOutput(
         summary="proposed",
         proposal={"id": "t_1", "legs": [], "thesis": "x"},
@@ -112,16 +117,31 @@ def test_artifact_updates_store_a_proposal() -> None:
 
     updates = artifact_updates(output, None)
 
-    assert updates["pending_ticket"]["id"] == "t_1"
-    assert updates["portfolio_impact"] == {"net_notional": 100.0}
+    entry = updates["pending_tickets"]["t_1"]
+    assert entry["ticket"]["id"] == "t_1"
+    assert entry["portfolio_impact"] == {"net_notional": 100.0}
     assert updates["verification"][0]["scope"] == "draft"
 
 
-def test_artifact_updates_clear_the_ticket_after_execution() -> None:
-    """A finished execution clears the pending ticket."""
-    updates = artifact_updates(ToolOutput(summary="done", ticket_done=True), None)
+def test_concurrent_proposals_merge() -> None:
+    """Two proposals in one graph step both stay addressable by id."""
+    first = artifact_updates(
+        ToolOutput(summary="a", proposal={"id": "t_1", "legs": [], "thesis": "a"}),
+        None,
+    )
+    second = artifact_updates(
+        ToolOutput(summary="b", proposal={"id": "t_2", "legs": [], "thesis": "b"}),
+        None,
+    )
 
-    assert updates["pending_ticket"] is None
+    merged = merge_tickets(first["pending_tickets"], second["pending_tickets"])
+
+    assert set(merged) == {"t_1", "t_2"}
+
+
+def test_a_new_turn_clears_pending_tickets() -> None:
+    """The empty turn reset replaces the merged ticket map."""
+    assert merge_tickets({"t_1": {"ticket": {"id": "t_1"}}}, {}) == {}
 
 
 def test_budget_denies_after_twelve_evidence_calls() -> None:

@@ -614,15 +614,16 @@ def _approval_descriptor(
         The ticket and the decision context.
     """
     raw_args = request.get("args")
-    ticket = state.get("pending_ticket")
-    if not isinstance(ticket, dict):
+    ticket_id = raw_args.get("ticket_id") if isinstance(raw_args, dict) else None
+    pending = (state.get("pending_tickets") or {}).get(ticket_id)
+    if not isinstance(ticket_id, str) or not isinstance(pending, dict):
         return {"error": "No matching pending ticket."}
-    if isinstance(raw_args, dict) and raw_args.get("ticket_id") != ticket.get("id"):
+    if not isinstance(pending.get("ticket"), dict):
         return {"error": "No matching pending ticket."}
     return {
-        "ticket": ticket,
-        "rationale": state.get("draft_recommendation"),
-        "portfolio_impact": state.get("portfolio_impact"),
+        "ticket": pending.get("ticket"),
+        "rationale": pending.get("rationale"),
+        "portfolio_impact": pending.get("portfolio_impact"),
     }
 
 

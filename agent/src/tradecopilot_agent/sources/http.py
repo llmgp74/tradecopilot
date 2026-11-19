@@ -65,6 +65,34 @@ async def post_json(
     return response.json()
 
 
+async def delete_json(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    client: httpx.AsyncClient | None = None,
+) -> Any:
+    """Delete a resource and return the decoded body, if any.
+
+    Args:
+        url: Absolute URL.
+        headers: Request headers.
+        client: Injected client, used by tests.
+
+    Returns:
+        The decoded response, or None for an empty body.
+
+    Raises:
+        httpx.HTTPError: When the request fails.
+    """
+    if client is None:
+        async with httpx.AsyncClient(timeout=15.0) as owned:
+            response = await owned.delete(url, headers=headers)
+    else:
+        response = await client.delete(url, headers=headers)
+    response.raise_for_status()
+    return None if not response.content else response.json()
+
+
 async def _fetch(
     client: httpx.AsyncClient,
     url: str,

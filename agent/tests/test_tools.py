@@ -1,6 +1,7 @@
 """Tool behavior against a stub data source."""
 
 import asyncio
+import json
 from datetime import date
 from pathlib import Path
 
@@ -49,6 +50,7 @@ class FakeSource:
         self.place_status = place_status
         self.positions = positions or []
         self.placed: list[tuple[dict, str]] = []
+        self.cancelled: list[str] = []
 
     def capabilities(self) -> set[str]:
         return set(self._capabilities)
@@ -124,6 +126,25 @@ class FakeSource:
             ],
         )
 
+    async def open_orders(self) -> ToolOutput:
+        return ToolOutput(
+            summary=json.dumps(
+                [
+                    {
+                        "order_id": "o1",
+                        "ticker": "AAPL",
+                        "side": "buy",
+                        "qty": "1",
+                        "status": "accepted",
+                    }
+                ]
+            )
+        )
+
+    async def cancel_order(self, order_id: str) -> ToolOutput:
+        self.cancelled.append(order_id)
+        return ToolOutput(summary=f"Cancel requested for order {order_id}.")
+
 
 def _tools(tmp_path: Path, source: FakeSource) -> tuple[TradingTools, Store]:
     store = Store(tmp_path / "data.db")
@@ -183,6 +204,87 @@ def test_a_blocked_ticket_is_not_stored(tmp_path: Path) -> None:
     assert store.list_journal(page_no=1, page_size=10)[1] == 0
 
 
+def test_a_twenty_leg_ticket_is_one_ticket(tmp_path: Path) -> None:
+    """A basket past ten legs stays in a single approval."""
+    source = FakeSource(prices={"NVDA": 1.0}, cash=10_000_000.0)
+    tools, _ = _tools(tmp_path, source)
+    legs = [{"ticker": "NVDA", "side": "buy", "qty": 1} for _ in range(20)]
+
+    output = asyncio.run(tools.propose(legs, "basket", "weeks"))
+
+    assert output.error is None
+    assert output.proposal is not None
+    assert len(output.proposal["legs"]) == 20
+
+
+def test_a_large_ticket_stays_in_one_ticket(tmp_path: Path) -> None:
+    """A basket well past the old ten-leg cap is one approval."""
+    source = FakeSource(prices={"NVDA": 1.0}, cash=10_000_000.0)
+    tools, _ = _tools(tmp_path, source)
+    legs = [{"ticker": "NVDA", "side": "buy", "qty": 1} for _ in range(51)]
+
+    output = asyncio.run(tools.propose(legs, "big basket", "weeks"))
+
+    assert output.error is None
+    assert output.proposal is not None
+    assert len(output.proposal["legs"]) == 51
+
+
+def test_a_ticket_beyond_one_thousand_legs_is_rejected(tmp_path: Path) -> None:
+    """The safety bound refuses an oversized ticket with the limit named."""
+    tools, _ = _tools(tmp_path, FakeSource())
+    legs = [{"ticker": "NVDA", "side": "buy", "qty": 1} for _ in range(1001)]
+
+    output = asyncio.run(tools.propose(legs, "too many", "weeks"))
+
+    assert output.error == "invalid"
+    assert "1000" in output.summary
+
+
+def test_open_orders_are_listed(tmp_path: Path) -> None:
+    """The listing carries the ids the model needs to cancel."""
+    tools, _ = _tools(tmp_path, FakeSource())
+
+    output = asyncio.run(tools.open_orders())
+
+    assert output.error is None
+    assert json.loads(output.summary)[0]["order_id"] == "o1"
+
+
+def test_cancellation_does_not_pause_for_approval(tmp_path: Path, monkeypatch) -> None:
+    """The user's cancel request is the approval, so the tool runs directly."""
+    from tradecopilot_agent import tools as tools_module
+
+    def fail(_value: object) -> None:
+        raise AssertionError("cancellation must not interrupt")
+
+    monkeypatch.setattr(tools_module, "interrupt", fail)
+    source = FakeSource()
+    tools, _ = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.cancel(
+            [
+                {"order_id": "o1", "ticker": "AAPL", "side": "buy", "qty": "1"},
+                {"order_id": "o2", "ticker": "MSFT", "side": "buy", "qty": "1"},
+            ]
+        )
+    )
+
+    assert output.error is None
+    assert source.cancelled == ["o1", "o2"]
+    assert json.loads(output.summary)["status"] == "cancelled"
+
+
+def test_cancellation_needs_order_ids(tmp_path: Path) -> None:
+    """A call without broker ids is rejected before any approval."""
+    tools, _ = _tools(tmp_path, FakeSource())
+
+    output = asyncio.run(tools.cancel([{"ticker": "AAPL", "side": "buy"}]))
+
+    assert output.error == "invalid"
+
+
 def test_missing_provider_guards_the_tool(tmp_path: Path) -> None:
     """A tool whose provider is not configured returns an error."""
     source = FakeSource(capabilities={"alpaca"})
@@ -205,7 +307,14 @@ def test_autonomous_execution_fills_the_ticket(tmp_path: Path) -> None:
     assert proposed.proposal is not None
 
     output = asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     assert output.error is None
@@ -231,7 +340,14 @@ def test_rejection_is_recorded(tmp_path: Path, monkeypatch) -> None:
     assert proposed.proposal is not None
 
     output = asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     assert output.error == "rejected"
@@ -260,7 +376,14 @@ def test_rejection_keeps_the_decision_time_and_notional(
 
     monkeypatch.setattr(tools_module, "now_iso", lambda: "2026-11-15T10:00:00+00:00")
     asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     row = store.list_journal(page_no=1, page_size=10)[0][0]
@@ -282,7 +405,14 @@ def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
     assert proposed.proposal is not None, proposed.summary
 
     output = asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     assert output.error is None
