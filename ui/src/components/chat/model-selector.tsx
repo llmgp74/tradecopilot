@@ -74,6 +74,7 @@ export function ModelSelector({
           />
         }
       >
+        <ProviderIcon provider={provider} />
         <span className="truncate">{label}</span>
         <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
