@@ -262,7 +262,7 @@ export function ModelProvidersSection({
 
   return (
     <div className="flex h-full min-h-0 gap-4">
-      <div className="flex w-[240px] shrink-0 flex-col gap-2">
+      <div className="flex w-60 shrink-0 flex-col gap-2">
         <div className="space-y-2">
           <label
             htmlFor="default-reasoning"
