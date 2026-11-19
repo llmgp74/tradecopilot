@@ -32,6 +32,64 @@ it("approves the ticket", async () => {
   expect(onRespond).toHaveBeenCalledWith("c1", true);
 });
 
+it("lays the legs out as a table with the weight change", () => {
+  const ticketView: ToolPartView = {
+    ...view,
+    approval: {
+      ...view.approval!,
+      descriptor: {
+        ticket: {
+          id: "t1",
+          legs: [
+            { ticker: "NVDA", side: "buy", qty: 1 },
+            { ticker: "LLY", side: "sell", qty: 2 },
+          ],
+        },
+        portfolio_impact: {
+          before_pct: { NVDA: 0.02, LLY: 0.14 },
+          after_pct: { NVDA: 0.03, LLY: 0.11 },
+        },
+      },
+    },
+  };
+
+  render(<ApprovalCard view={ticketView} onRespond={() => {}} />);
+
+  expect(screen.getByText("Symbol")).toBeInTheDocument();
+  expect(screen.getByText("Side")).toBeInTheDocument();
+  expect(screen.getByText("Size")).toBeInTheDocument();
+  expect(screen.getByText("Weight change")).toBeInTheDocument();
+  expect(screen.getByText("2 shares")).toBeInTheDocument();
+  expect(screen.getByText("0.02% to 0.03%")).toBeInTheDocument();
+  expect(screen.getByText("0.14% to 0.11%")).toBeInTheDocument();
+});
+
+it("opens the full leg list in a dialog past ten rows", async () => {
+  const legs = Array.from({ length: 12 }, (_, index) => ({
+    ticker: `SYM${index}`,
+    side: "buy" as const,
+    qty: 1,
+  }));
+  const bigView: ToolPartView = {
+    ...view,
+    approval: {
+      ...view.approval!,
+      descriptor: { ticket: { id: "t1", legs } },
+    },
+  };
+
+  render(<ApprovalCard view={bigView} onRespond={() => {}} />);
+
+  expect(screen.getByText("SYM9")).toBeInTheDocument();
+  expect(screen.queryByText("SYM10")).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: /show all 12 legs/i }));
+
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  expect(screen.getByText("SYM10")).toBeInTheDocument();
+  expect(screen.getByText("SYM11")).toBeInTheDocument();
+});
+
 it("rejects with a reason", async () => {
   const onRespond = vi.fn();
   render(<ApprovalCard view={view} onRespond={onRespond} />);

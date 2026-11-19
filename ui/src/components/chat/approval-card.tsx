@@ -2,6 +2,13 @@ import { useState } from "react";
 import { CheckCircle2Icon, ShieldAlertIcon, XCircleIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import type { ToolPartView } from "@/lib/parts";
 
@@ -65,6 +72,91 @@ function price(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+/** Preview rows before the full list moves into a dialog. */
+const PREVIEW_ROWS = 10;
+
+/**
+ * Formats the portfolio weight before and after one leg.
+ *
+ * @param before - Weight before the trade, when known.
+ * @param after - Weight after the trade, when known.
+ * @returns Both weights, or a dash without impact data.
+ */
+function weightChange(before?: number, after?: number): string {
+  if (before === undefined && after === undefined) {
+    return "-";
+  }
+  return `${weight(before)} to ${weight(after)}`;
+}
+
+/** Props for the leg table. */
+interface TicketTableProps {
+  /** Legs to render. */
+  legs: TicketLeg[];
+  /** Portfolio impact keyed by ticker. */
+  impact?: TicketBodyProps["impact"];
+}
+
+/**
+ * Renders one compact row per order.
+ *
+ * @param props - Legs and impact weights.
+ * @returns The table.
+ */
+function TicketTable({ legs, impact }: TicketTableProps) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b text-[10px] uppercase tracking-wide text-muted-foreground">
+            <th className="px-4 py-1.5 text-left font-medium">Symbol</th>
+            <th className="px-2 py-1.5 text-left font-medium">Side</th>
+            <th className="px-2 py-1.5 text-right font-medium">Size</th>
+            <th className="px-4 py-1.5 text-right font-medium">Weight change</th>
+          </tr>
+        </thead>
+        <tbody>
+          {legs.map((leg, index) => {
+            const detail =
+              typeof leg.fill_price === "number"
+                ? `Filled at ${price(leg.fill_price)}`
+                : (LEG_STATUS_LABELS[leg.status ?? ""] ?? null);
+            return (
+              <tr
+                key={`${leg.ticker}-${leg.side}-${index}`}
+                className="border-b last:border-0"
+              >
+                <td className="px-4 py-1.5">
+                  <span className="font-mono font-semibold">{leg.ticker ?? "?"}</span>
+                  {detail ? (
+                    <span className="block text-[10px] text-muted-foreground">
+                      {detail}
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-2 py-1.5">
+                  <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                    {leg.side ?? "?"}
+                  </span>
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono">
+                  {leg.qty ?? 0} {leg.qty === 1 ? "share" : "shares"}
+                </td>
+                <td className="px-4 py-1.5 text-right font-mono text-muted-foreground">
+                  {weightChange(
+                    leg.ticker ? impact?.before_pct?.[leg.ticker] : undefined,
+                    leg.ticker ? impact?.after_pct?.[leg.ticker] : undefined,
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 /**
@@ -131,68 +223,55 @@ interface TicketBodyProps {
 /**
  * Lists the ticket legs and the context around them.
  *
+ * More than ten legs are previewed; the full list opens in a dialog.
+ *
  * @param props - Legs, rationale, and portfolio impact.
  * @returns The ticket body.
  */
 function TicketBody({ legs, rationale, impact }: TicketBodyProps) {
+  const [showAll, setShowAll] = useState(false);
   return (
-    <div className="space-y-3 px-4 py-3">
+    <div className="space-y-3 py-3">
       {legs.length > 0 ? (
-        <ul className="space-y-1.5">
-          {legs.map((leg, index) => {
-            const detail =
-              typeof leg.fill_price === "number"
-                ? `Filled at ${price(leg.fill_price)}`
-                : (LEG_STATUS_LABELS[leg.status ?? ""] ?? null);
-            return (
-              <li
-                key={`${leg.ticker}-${leg.side}-${index}`}
-                className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-              >
-                <Badge variant="secondary" className="uppercase">
-                  {leg.side ?? "?"}
-                </Badge>
-                <span className="font-mono font-semibold">{leg.ticker ?? "?"}</span>
-                <span className="text-xs text-muted-foreground">
-                  {leg.qty ?? 0} shares
-                </span>
-                {detail ? (
-                  <span className="ml-auto text-xs text-muted-foreground">{detail}</span>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <TicketTable legs={legs.slice(0, PREVIEW_ROWS)} impact={impact} />
       ) : (
-        <p className="text-sm text-muted-foreground">The ticket has no legs.</p>
+        <p className="px-4 text-sm text-muted-foreground">The ticket has no legs.</p>
       )}
 
-      {rationale ? (
-        <p className="text-xs leading-relaxed text-muted-foreground">{rationale}</p>
-      ) : null}
-
-      {impact?.after_pct ? (
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Position weight
-          </p>
-          {Object.entries(impact.after_pct).map(([ticker, after]) => (
-            <div key={ticker} className="flex items-center justify-between text-xs">
-              <span className="font-mono">{ticker}</span>
-              <span className="font-mono text-muted-foreground">
-                {weight(impact.before_pct?.[ticker])} to {weight(after)}
-              </span>
-            </div>
-          ))}
+      {legs.length > PREVIEW_ROWS ? (
+        <div className="px-4">
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto px-0"
+            onClick={() => setShowAll(true)}
+          >
+            Show all {legs.length} legs
+          </Button>
         </div>
       ) : null}
 
+      {rationale ? (
+        <p className="px-4 text-xs leading-relaxed text-muted-foreground">{rationale}</p>
+      ) : null}
+
       {impact ? (
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 px-4 text-xs text-muted-foreground">
           <span>Net notional {usd(impact.net_notional)}</span>
           <span>Equity {usd(impact.equity)}</span>
         </div>
       ) : null}
+
+      <Dialog open={showAll} onOpenChange={setShowAll}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Ticket legs</DialogTitle>
+            <DialogDescription>{legs.length} orders in this ticket.</DialogDescription>
+          </DialogHeader>
+          <TicketTable legs={legs} impact={impact} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -289,9 +368,7 @@ export function ApprovalCard({ view, onRespond }: ApprovalCardProps) {
     <div className="overflow-hidden rounded-xl border border-primary/25 bg-card shadow-sm">
       <div className="flex items-center gap-2 border-b border-primary/20 bg-primary/5 px-4 py-2.5">
         <ShieldAlertIcon className="size-4 text-primary" />
-        <span className="text-sm font-medium text-primary">
-          Ticket requires your approval
-        </span>
+        <span className="text-sm font-medium">Ticket requires your approval</span>
       </div>
 
       <TicketBody legs={ticket?.legs ?? []} rationale={rationale} impact={impact} />
