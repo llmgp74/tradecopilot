@@ -1,7 +1,7 @@
 """Graph input selection and SSE framing for the chat endpoint."""
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
@@ -29,6 +29,8 @@ STREAM_HEADERS = {
     "Cache-Control": "no-cache",
     "x-vercel-ai-ui-message-stream": "v1",
 }
+
+AUTO_REJECT_REASON = "Superseded by a new message."
 
 
 @dataclass(frozen=True)
@@ -89,7 +91,14 @@ async def stream_chat(
         "transient": True,
     }
     try:
-        turn = await _resolve_input(graph, messages, config)
+        snapshot = await graph.aget_state(config)
+        if _needs_auto_reject(snapshot, messages):
+            resume = reject_resume(snapshot)
+            async for _ in graph.astream(
+                Command(resume=resume), config, stream_mode=["values"]
+            ):
+                pass
+        turn = await _resolve_input(graph, messages, config, snapshot)
     except Exception as exc:
         yield {"type": "start", "messageId": assistant_id}
         yield thread_part
@@ -114,10 +123,30 @@ async def stream_chat(
         yield part
 
 
+def _needs_auto_reject(snapshot: Any, messages: list[UIMessage]) -> bool:
+    """Whether a new user message arrives while an approval is pending.
+
+    The user did not approve or reject; the pending ticket is rejected so the
+    conversation can continue instead of blocking on a decision.
+
+    Args:
+        snapshot: Graph state snapshot.
+        messages: UI messages from the request.
+
+    Returns:
+        True when a new message supersedes a pending approval.
+    """
+    if not messages or messages[-1].get("role") != "user":
+        return False
+    return bool(_actionable_interrupts(getattr(snapshot, "interrupts", ())))
+
+
 async def _resolve_input(
-    graph: Any, messages: list[UIMessage], config: RunnableConfig
+    graph: Any,
+    messages: list[UIMessage],
+    config: RunnableConfig,
+    snapshot: Any,
 ) -> GraphTurn:
-    snapshot = await graph.aget_state(config)
     values = getattr(snapshot, "values", {})
     history_ids = _message_ids(values)
     responses = find_approval_responses(messages)
@@ -223,11 +252,7 @@ def build_resume(snapshot: Any, responses: list[dict[str, Any]]) -> dict[str, An
         if (approval_id := _approval_id(response)) is not None
     }
 
-    by_interrupt: dict[str, dict[str, Any]] = {}
-    for interrupt in interrupts:
-        interrupt_id = getattr(interrupt, "id", None)
-        if not isinstance(interrupt_id, str) or not interrupt_id:
-            raise ValueError("Cannot identify the pending interrupt.")
+    def decisions_for(interrupt: Any) -> list[dict[str, Any]]:
         decisions: list[dict[str, Any]] = []
         for request in _action_requests(interrupt):
             call_id = _request_call_id(request, assistant)
@@ -237,7 +262,45 @@ def build_resume(snapshot: Any, responses: list[dict[str, Any]]) -> dict[str, An
                     "Approval response does not match a pending tool call."
                 )
             decisions.append(_decision(response))
-        by_interrupt[interrupt_id] = {"decisions": decisions}
+        return decisions
+
+    return _group_resume(interrupts, decisions_for)
+
+
+def reject_resume(snapshot: Any) -> Any:
+    """Build the resume value that rejects every pending approval.
+
+    Args:
+        snapshot: Graph state snapshot containing pending interrupts.
+
+    Returns:
+        The resume value for ``Command``.
+
+    Raises:
+        ValueError: If no interrupt is pending or it has no id.
+    """
+    interrupts = _actionable_interrupts(getattr(snapshot, "interrupts", ()))
+    if not interrupts:
+        raise ValueError("No approval is pending for this thread.")
+    return _group_resume(
+        interrupts,
+        lambda interrupt: [
+            {"type": "reject", "message": AUTO_REJECT_REASON}
+            for _ in _action_requests(interrupt)
+        ],
+    )
+
+
+def _group_resume(
+    interrupts: list[Any],
+    decisions_for: Callable[[Any], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    by_interrupt: dict[str, dict[str, Any]] = {}
+    for interrupt in interrupts:
+        interrupt_id = getattr(interrupt, "id", None)
+        if not isinstance(interrupt_id, str) or not interrupt_id:
+            raise ValueError("Cannot identify the pending interrupt.")
+        by_interrupt[interrupt_id] = {"decisions": decisions_for(interrupt)}
     if len(by_interrupt) == 1:
         return next(iter(by_interrupt.values()))
     return by_interrupt

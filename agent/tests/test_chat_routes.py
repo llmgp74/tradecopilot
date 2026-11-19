@@ -20,6 +20,7 @@ class StubGraph:
             values={"messages": []}, interrupts=()
         )
         self.received: Any = None
+        self.inputs: list[Any] = []
         self.calls = 0
 
     async def aget_state(self, config: Any) -> SimpleNamespace:
@@ -31,6 +32,7 @@ class StubGraph:
     ) -> AsyncIterator[tuple[str, Any]]:
         """Record the graph input and stream one text chunk."""
         self.received = graph_input
+        self.inputs.append(graph_input)
         self.calls += 1
         yield (
             "messages",
@@ -213,6 +215,57 @@ def test_two_pending_interrupts_resume_by_id(tmp_path: Path) -> None:
         "int-1": {"decisions": [{"type": "approve"}]},
         "int-2": {"decisions": [{"type": "reject", "message": "not now"}]},
     }
+
+
+def test_a_new_message_auto_rejects_the_pending_ticket(tmp_path: Path) -> None:
+    """Sending a new message instead of deciding rejects the pending ticket."""
+    tool_call = {
+        "name": "execute_ticket",
+        "args": {"ticket_id": "t_1"},
+        "id": "call_1",
+        "type": "tool_call",
+    }
+    snapshot = SimpleNamespace(
+        values={"messages": [AIMessage(content="", id="a1", tool_calls=[tool_call])]},
+        interrupts=(
+            Interrupt(
+                id="int-1",
+                value={
+                    "action_requests": [
+                        {
+                            "name": "execute_ticket",
+                            "args": {"ticket_id": "t_1"},
+                            "description": "Review",
+                        }
+                    ]
+                },
+            ),
+        ),
+    )
+    graph = StubGraph(snapshot)
+    body = {
+        "thread_id": "t1",
+        "messages": [
+            {
+                "id": "u2",
+                "role": "user",
+                "parts": [{"type": "text", "text": "never mind"}],
+            }
+        ],
+    }
+
+    with _client(tmp_path, graph) as client:
+        response = client.post("/api/chat", json=body)
+
+    assert response.status_code == 200
+    assert graph.calls == 2
+    first, second = graph.inputs
+    assert isinstance(first, Command)
+    assert first.resume == {
+        "decisions": [{"type": "reject", "message": "Superseded by a new message."}]
+    }
+    assert isinstance(second, dict)
+    assert second["messages"][0].content == "never mind"
 
 
 def test_mismatched_approval_returns_error_part(tmp_path: Path) -> None:
