@@ -204,6 +204,43 @@ def test_a_blocked_ticket_is_not_stored(tmp_path: Path) -> None:
     assert store.list_journal(page_no=1, page_size=10)[1] == 0
 
 
+def test_a_twenty_leg_ticket_is_one_ticket(tmp_path: Path) -> None:
+    """A basket past ten legs stays in a single approval."""
+    source = FakeSource(prices={"NVDA": 1.0}, cash=10_000_000.0)
+    tools, _ = _tools(tmp_path, source)
+    legs = [{"ticker": "NVDA", "side": "buy", "qty": 1} for _ in range(20)]
+
+    output = asyncio.run(tools.propose(legs, "basket", "weeks"))
+
+    assert output.error is None
+    assert output.proposal is not None
+    assert len(output.proposal["legs"]) == 20
+
+
+def test_a_large_ticket_stays_in_one_ticket(tmp_path: Path) -> None:
+    """A basket well past the old ten-leg cap is one approval."""
+    source = FakeSource(prices={"NVDA": 1.0}, cash=10_000_000.0)
+    tools, _ = _tools(tmp_path, source)
+    legs = [{"ticker": "NVDA", "side": "buy", "qty": 1} for _ in range(51)]
+
+    output = asyncio.run(tools.propose(legs, "big basket", "weeks"))
+
+    assert output.error is None
+    assert output.proposal is not None
+    assert len(output.proposal["legs"]) == 51
+
+
+def test_a_ticket_beyond_one_thousand_legs_is_rejected(tmp_path: Path) -> None:
+    """The safety bound refuses an oversized ticket with the limit named."""
+    tools, _ = _tools(tmp_path, FakeSource())
+    legs = [{"ticker": "NVDA", "side": "buy", "qty": 1} for _ in range(1001)]
+
+    output = asyncio.run(tools.propose(legs, "too many", "weeks"))
+
+    assert output.error == "invalid"
+    assert "1000" in output.summary
+
+
 def test_open_orders_are_listed(tmp_path: Path) -> None:
     """The listing carries the ids the model needs to cancel."""
     tools, _ = _tools(tmp_path, FakeSource())

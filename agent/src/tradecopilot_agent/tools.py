@@ -30,8 +30,10 @@ from tradecopilot_agent.state import (
 from tradecopilot_agent.store import now_iso
 from tradecopilot_agent.web import WebResult, WebSearch, WebSearchUnavailable
 
-MAX_LEGS = 10
 GATHER_BUDGET = 12
+# Safety bound only: the approval card previews ten rows and opens the full
+# table in a dialog, so ordinary baskets stay in one ticket.
+MAX_LEGS = 1000
 
 TOOL_CAPABILITIES: dict[str, str] = {
     "get_quote": "alpaca",
