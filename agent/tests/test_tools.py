@@ -291,7 +291,14 @@ def test_autonomous_execution_fills_the_ticket(tmp_path: Path) -> None:
     assert proposed.proposal is not None
 
     output = asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     assert output.error is None
@@ -317,7 +324,14 @@ def test_rejection_is_recorded(tmp_path: Path, monkeypatch) -> None:
     assert proposed.proposal is not None
 
     output = asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     assert output.error == "rejected"
@@ -346,7 +360,14 @@ def test_rejection_keeps_the_decision_time_and_notional(
 
     monkeypatch.setattr(tools_module, "now_iso", lambda: "2026-11-15T10:00:00+00:00")
     asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     row = store.list_journal(page_no=1, page_size=10)[0][0]
@@ -368,7 +389,14 @@ def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
     assert proposed.proposal is not None, proposed.summary
 
     output = asyncio.run(
-        tools.execute(proposed.proposal["id"], {"pending_ticket": proposed.proposal})
+        tools.execute(
+            proposed.proposal["id"],
+            {
+                "pending_tickets": {
+                    proposed.proposal["id"]: {"ticket": proposed.proposal}
+                }
+            },
+        )
     )
 
     assert output.error is None

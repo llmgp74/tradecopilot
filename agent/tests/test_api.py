@@ -140,7 +140,13 @@ def test_thread_detail_restores_a_pending_approval(tmp_path: Path) -> None:
                 HumanMessage(content="buy", id="u1"),
                 AIMessage(content="", id="a1", tool_calls=[tool_call]),
             ],
-            "pending_ticket": pending,
+            "pending_tickets": {
+                "t_1": {
+                    "ticket": pending,
+                    "rationale": "add NVDA",
+                    "portfolio_impact": None,
+                }
+            },
         },
         interrupts=(
             Interrupt(

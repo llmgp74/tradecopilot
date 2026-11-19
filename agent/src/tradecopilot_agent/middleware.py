@@ -136,19 +136,15 @@ def artifact_updates(output: ToolOutput, as_of: date | None) -> dict[str, Any]:
         }
     if output.proposal is not None:
         proposal = output.proposal
-        updates["pending_ticket"] = proposal
-        updates["draft_recommendation"] = {
-            "ticket_id": proposal.get("id"),
-            "legs": proposal.get("legs", []),
-            "thesis": proposal.get("thesis", ""),
-            "horizon": proposal.get("horizon", "weeks"),
+        updates["pending_tickets"] = {
+            str(proposal.get("id", "")): {
+                "ticket": proposal,
+                "rationale": proposal.get("thesis", ""),
+                "portfolio_impact": output.portfolio_impact,
+            }
         }
-    if output.portfolio_impact is not None:
-        updates["portfolio_impact"] = output.portfolio_impact
     if output.verification:
         updates["verification"] = output.verification
-    if output.ticket_done:
-        updates["pending_ticket"] = None
     return updates
 
 

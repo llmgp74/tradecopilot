@@ -443,7 +443,8 @@ class TradingTools:
         guard = self._guard("order_execution")
         if guard is not None:
             return guard
-        pending = state.get("pending_ticket")
+        entry = (state.get("pending_tickets") or {}).get(ticket_id)
+        pending = entry.get("ticket") if isinstance(entry, dict) else None
         if not isinstance(pending, dict) or pending.get("id") != ticket_id:
             return ToolOutput(summary="No matching pending ticket.", error="invalid")
         legs = [dict(leg) for leg in pending.get("legs", [])]

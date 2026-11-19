@@ -130,21 +130,39 @@ def merge_verdicts(current: list[Any], incoming: list[Any]) -> list[Any]:
     return list(merged.values())
 
 
+def merge_tickets(current: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    """Merge pending tickets by id.
+
+    A turn can draft more than one ticket, for example when a basket exceeds
+    the ten-leg cap. Both proposals land in the same graph step, so the channel
+    needs a reducer instead of rejecting the concurrent update.
+
+    An empty update resets the channel, which is how a new turn clears state
+    that a reducer would otherwise keep merging.
+
+    Args:
+        current: Tickets already in state.
+        incoming: Tickets added by this update.
+
+    Returns:
+        The merged tickets, newest entry winning for the same id.
+    """
+    if not incoming:
+        return {}
+    return {**current, **incoming}
+
+
 class TradingState(DeepAgentState):
     """Graph state shared by tools, middleware, and the server."""
 
     evidence: NotRequired[Annotated[dict[str, Any], merge_evidence]]
-    draft_recommendation: NotRequired[dict[str, Any] | None]
     verification: NotRequired[Annotated[list[Any], merge_verdicts]]
-    portfolio_impact: NotRequired[dict[str, Any] | None]
-    pending_ticket: NotRequired[dict[str, Any] | None]
+    pending_tickets: NotRequired[Annotated[dict[str, Any], merge_tickets]]
     todos_snapshot: NotRequired[list[Any]]
 
 
 TURN_FIELDS: dict[str, Any] = {
-    "draft_recommendation": None,
-    "portfolio_impact": None,
-    "pending_ticket": None,
+    "pending_tickets": {},
     "verification": [],
 }
 """State values cleared when a new user turn starts."""

@@ -197,6 +197,38 @@ it("shows a request error with the settings escape hatch", async () => {
   ).toBeInTheDocument();
 });
 
+it("shows a run error without the settings escape hatch", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      sseResponse([
+        { type: "start", messageId: "m1" },
+        {
+          type: "error",
+          errorText: "At key 'pending_ticket': Can receive only one value per step.",
+        },
+      ]),
+    ),
+  );
+
+  render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      settings={baseSettings}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  await userEvent.type(screen.getByPlaceholderText(/ask tradecopilot/i), "Hello{Enter}");
+
+  expect(await screen.findByText(/can receive only one value/i)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /open settings/i })).toBeNull();
+});
+
 it("sends an image pasted into the composer", async () => {
   Object.assign(URL, {
     createObjectURL: vi.fn(() => "blob:chart"),
