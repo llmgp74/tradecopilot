@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowUpRightIcon } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   Dialog,
@@ -314,13 +315,14 @@ export function PortfolioDialog({
               href={ALPACA_DASHBOARD}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-link underline underline-offset-4"
+              className="inline-flex items-center gap-1 font-medium text-link underline underline-offset-4"
               onClick={(event) => {
                 event.preventDefault();
                 void openExternal(ALPACA_DASHBOARD);
               }}
             >
-              View portfolio
+              View in Alpaca
+              <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
             </a>
           </DialogDescription>
         </DialogHeader>
