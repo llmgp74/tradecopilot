@@ -89,6 +89,16 @@ it("lists configured providers first and disables unsupported ones", async () =>
   expect(screen.getByRole("button", { name: "OpenAI" })).toBeEnabled();
 });
 
+it("shows a logo in each provider row", async () => {
+  renderSection();
+
+  const row = await screen.findByRole("button", { name: /deepseek/i });
+
+  expect(
+    row.querySelector('img[src="https://models.dev/logos/deepseek.svg"]'),
+  ).not.toBeNull();
+});
+
 it("saves the whole provider draft", async () => {
   renderSection();
 
@@ -108,7 +118,7 @@ it("saves the whole provider draft", async () => {
   );
 });
 
-it("warns that removing the selected model clears the selection", async () => {
+it("warns that removing the selected model changes the selection", async () => {
   renderSection();
 
   await userEvent.click(await screen.findByRole("button", { name: "DeepSeek" }));
@@ -116,7 +126,7 @@ it("warns that removing the selected model clears the selection", async () => {
     screen.getByRole("button", { name: "Remove DeepSeek V4.1 Flash" }),
   );
 
-  expect(screen.getByText(/clears the selection/i)).toBeInTheDocument();
+  expect(screen.getByText(/changes the selection/i)).toBeInTheDocument();
   expect(screen.getByText(/no models selected/i)).toBeInTheDocument();
 });
 

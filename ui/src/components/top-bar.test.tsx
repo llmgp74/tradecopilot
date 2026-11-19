@@ -1,8 +1,20 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import type { ConnectionStatus } from "@/lib/connection";
 import { TopBar } from "./top-bar";
+
+const { startDragging } = vi.hoisted(() => ({ startDragging: vi.fn() }));
+
+vi.mock("@/lib/api-base", () => ({ isTauri: () => true }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    startDragging,
+    minimize: vi.fn(),
+    toggleMaximize: vi.fn(),
+    close: vi.fn(),
+  }),
+}));
 
 function renderBar(status: ConnectionStatus, onOpenSettings = vi.fn()) {
   render(
@@ -51,6 +63,24 @@ it("renders an unreachable broker", () => {
   renderBar({ broker: "error", environment: "paper", environmentVerified: false });
 
   expect(screen.getByRole("button", { name: "Broker unreachable" })).toBeInTheDocument();
+});
+
+it("starts a window drag from the empty bar", () => {
+  renderBar(unconfigured);
+
+  fireEvent.mouseDown(screen.getByText("NVDA earnings"), { button: 0 });
+
+  expect(startDragging).toHaveBeenCalledTimes(1);
+});
+
+it("does not start a window drag from a control", () => {
+  renderBar(unconfigured);
+
+  fireEvent.mouseDown(screen.getByRole("button", { name: "Broker not configured" }), {
+    button: 0,
+  });
+
+  expect(startDragging).not.toHaveBeenCalled();
 });
 
 it("opens the broker section when clicked", async () => {

@@ -520,8 +520,8 @@ def test_put_provider_rejects_non_tool_model(tmp_path: Path) -> None:
     assert "tool" in response.json()["detail"]
 
 
-def test_put_provider_clears_selection_when_model_removed(tmp_path: Path) -> None:
-    """Removing the selected model through the API clears the selection."""
+def test_put_provider_moves_selection_when_model_removed(tmp_path: Path) -> None:
+    """Removing the selected model through the API moves to the first one left."""
     with _client(tmp_path) as client:
         client.put(
             "/api/providers/openai",
@@ -544,8 +544,8 @@ def test_put_provider_clears_selection_when_model_removed(tmp_path: Path) -> Non
             },
         )
         settings = client.get("/api/settings").json()
-    assert settings["model_provider"] == ""
-    assert settings["model_id"] == ""
+    assert settings["model_provider"] == "openai"
+    assert settings["model_id"] == "gpt-4"
 
 
 def test_patch_selection_rejects_unconfigured_model(tmp_path: Path) -> None:

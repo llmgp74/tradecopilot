@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { AppSettings } from "@/lib/api";
+import { ProviderIcon } from "@/components/provider-icon";
 
 /** Props for the composer model selector. */
 export interface ModelSelectorProps {
@@ -83,7 +84,10 @@ export function ModelSelector({
           <DropdownMenuRadioGroup value={value} onValueChange={choose}>
             {providers.map((item) => (
               <DropdownMenuGroup key={item.provider_id}>
-                <DropdownMenuLabel>{item.provider_id}</DropdownMenuLabel>
+                <DropdownMenuLabel className="flex items-center gap-1.5">
+                  <ProviderIcon provider={item.provider_id} />
+                  {item.provider_id}
+                </DropdownMenuLabel>
                 {item.models.map((model) => (
                   <DropdownMenuRadioItem
                     key={model.id}

@@ -59,8 +59,8 @@ def test_old_schema_fails_with_a_clear_error(tmp_path: Path) -> None:
         Store(path)
 
 
-def test_upsert_provider_clears_selection_when_model_removed(tmp_path: Path) -> None:
-    """Removing the selected model clears the selection."""
+def test_upsert_provider_moves_selection_when_model_removed(tmp_path: Path) -> None:
+    """Removing the selected model falls back to the first remaining one."""
     store = Store(tmp_path / "data.db")
     store.upsert_provider(
         ProviderCredential(
@@ -82,8 +82,73 @@ def test_upsert_provider_clears_selection_when_model_removed(tmp_path: Path) -> 
     )
 
     settings = store.get_settings()
-    assert settings.model_provider == ""
-    assert settings.model_id == ""
+    assert settings.model_provider == "openai"
+    assert settings.model_id == "gpt-4"
+
+
+def test_get_settings_defaults_to_the_first_configured_model(tmp_path: Path) -> None:
+    """Without a selection, the first usable model is reported."""
+    store = Store(tmp_path / "data.db")
+    store.upsert_provider(
+        ProviderCredential(
+            provider_id="openai",
+            api_key="k",
+            npm="@ai-sdk/openai",
+            models=[ProviderModel(id="gpt-5", name="GPT-5")],
+        )
+    )
+
+    settings = store.get_settings()
+
+    assert settings.model_provider == "openai"
+    assert settings.model_id == "gpt-5"
+
+
+def test_get_settings_skips_providers_without_a_key(tmp_path: Path) -> None:
+    """A provider with no key cannot supply the default model."""
+    store = Store(tmp_path / "data.db")
+    store.upsert_provider(
+        ProviderCredential(
+            provider_id="anthropic",
+            api_key="",
+            npm="@ai-sdk/anthropic",
+            models=[ProviderModel(id="claude-sonnet-5", name="Claude Sonnet 5")],
+        )
+    )
+    store.upsert_provider(
+        ProviderCredential(
+            provider_id="openai",
+            api_key="k",
+            npm="@ai-sdk/openai",
+            models=[ProviderModel(id="gpt-5", name="GPT-5")],
+        )
+    )
+
+    settings = store.get_settings()
+
+    assert settings.model_provider == "openai"
+    assert settings.model_id == "gpt-5"
+
+
+def test_get_settings_keeps_an_explicit_selection(tmp_path: Path) -> None:
+    """A stored selection wins over the default."""
+    store = Store(tmp_path / "data.db")
+    store.upsert_provider(
+        ProviderCredential(
+            provider_id="openai",
+            api_key="k",
+            npm="@ai-sdk/openai",
+            models=[
+                ProviderModel(id="gpt-5", name="GPT-5"),
+                ProviderModel(id="gpt-4", name="GPT-4"),
+            ],
+        )
+    )
+    store.patch_settings({"model_provider": "openai", "model_id": "gpt-4"})
+
+    settings = store.get_settings()
+
+    assert settings.model_id == "gpt-4"
 
 
 def test_delete_provider_clears_selection(tmp_path: Path) -> None:

@@ -48,6 +48,25 @@ it("shows the selected model name", () => {
   ).toBeInTheDocument();
 });
 
+it("shows a logo beside each provider group", async () => {
+  render(
+    <ModelSelector
+      settings={settings}
+      provider="openai"
+      modelId="gpt-5"
+      disabled={false}
+      onChange={() => {}}
+      onManage={() => {}}
+    />,
+  );
+
+  await openMenu(/gpt-5/i);
+
+  expect(
+    document.querySelector('img[src="https://models.dev/logos/openai.svg"]'),
+  ).not.toBeNull();
+});
+
 it("lists only configured models grouped by provider", async () => {
   render(
     <ModelSelector

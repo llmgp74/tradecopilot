@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { loadModelCatalog, SUPPORTED_NPM, type ModelCatalog } from "@/lib/catalog";
 import { reasoningChoices } from "@/lib/reasoning";
+import { ProviderIcon } from "@/components/provider-icon";
 import { AddModelsDialog } from "./add-models-dialog";
 
 /** Props for the model providers section. */
@@ -318,22 +319,23 @@ export function ModelProvidersSection({
               onClick={() => requestSelect(row.id)}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 aria-current:bg-accent aria-current:font-medium"
             >
-              <span
-                aria-hidden
-                className="size-1.5 shrink-0 rounded-full"
-                style={{
-                  background: row.hasKey
-                    ? row.modelCount > 0
-                      ? "var(--positive)"
-                      : "var(--muted-foreground)"
-                    : "transparent",
-                }}
-              />
+              <ProviderIcon provider={row.id} />
               <span className="min-w-0 flex-1 truncate">{row.name}</span>
               {!row.supported ? (
                 <span aria-hidden className="text-[10px] text-muted-foreground">
                   Not supported
                 </span>
+              ) : null}
+              {row.hasKey ? (
+                <span
+                  aria-hidden
+                  data-testid={`provider-status-${row.id}`}
+                  className="size-1.5 shrink-0 rounded-full"
+                  style={{
+                    background:
+                      row.modelCount > 0 ? "var(--positive)" : "var(--muted-foreground)",
+                  }}
+                />
               ) : null}
             </button>
           ))}
@@ -359,7 +361,10 @@ export function ModelProvidersSection({
         ) : (
           <>
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">{detailName}</h3>
+              <div className="flex items-center gap-2">
+                <ProviderIcon provider={selected ?? ""} className="size-4" />
+                <h3 className="text-sm font-semibold">{detailName}</h3>
+              </div>
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -420,7 +425,7 @@ export function ModelProvidersSection({
               </div>
               {removedSelected ? (
                 <p className="text-xs" style={{ color: "var(--warning)" }}>
-                  Saving clears the selection.
+                  Saving changes the selection.
                 </p>
               ) : null}
               {draft.models.length === 0 ? (

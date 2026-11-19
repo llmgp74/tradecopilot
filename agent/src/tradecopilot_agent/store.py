@@ -235,6 +235,9 @@ class Store:
     def get_settings(self) -> AppSettings:
         """Return the stored settings with secrets decrypted.
 
+        An unset model selection falls back to the first provider with a key
+        and models, so a configured app never reports "no model".
+
         Returns:
             The stored settings. Fields without a stored value are empty.
         """
@@ -244,21 +247,47 @@ class Store:
             ).fetchone()
         if row is None:
             return AppSettings(updated_at=now_iso())
-        return AppSettings(
-            model_provider=str(row[0]),
-            model_id=str(row[1]),
-            reasoning_effort=str(row[2]),
-            alpaca_api_key=self._secrets.decrypt(str(row[3])),
-            alpaca_api_secret=self._secrets.decrypt(str(row[4])),
-            alpaca_base_url=str(row[5]),
-            fmp_api_key=self._secrets.decrypt(str(row[6])),
-            finnhub_api_key=self._secrets.decrypt(str(row[7])),
-            fred_api_key=self._secrets.decrypt(str(row[8])),
-            edgar_user_agent=str(row[9]),
-            exa_api_key=self._secrets.decrypt(str(row[10])),
-            providers=self.list_providers(),
-            updated_at=str(row[11]),
+        return self._with_default_selection(
+            AppSettings(
+                model_provider=str(row[0]),
+                model_id=str(row[1]),
+                reasoning_effort=str(row[2]),
+                alpaca_api_key=self._secrets.decrypt(str(row[3])),
+                alpaca_api_secret=self._secrets.decrypt(str(row[4])),
+                alpaca_base_url=str(row[5]),
+                fmp_api_key=self._secrets.decrypt(str(row[6])),
+                finnhub_api_key=self._secrets.decrypt(str(row[7])),
+                fred_api_key=self._secrets.decrypt(str(row[8])),
+                edgar_user_agent=str(row[9]),
+                exa_api_key=self._secrets.decrypt(str(row[10])),
+                providers=self.list_providers(),
+                updated_at=str(row[11]),
+            )
         )
+
+    def _with_default_selection(self, settings: AppSettings) -> AppSettings:
+        """Fill an unset model selection with the first usable model.
+
+        The default is derived on read, so it follows provider edits without a
+        write. An explicit selection is never replaced.
+
+        Args:
+            settings: Stored settings.
+
+        Returns:
+            The settings with a usable selection when one can be found.
+        """
+        if settings.model_provider != "" or settings.model_id != "":
+            return settings
+        for provider in settings.providers:
+            if provider.api_key != "" and provider.models:
+                return settings.model_copy(
+                    update={
+                        "model_provider": provider.provider_id,
+                        "model_id": provider.models[0].id,
+                    }
+                )
+        return settings
 
     def patch_settings(self, changes: dict[str, Any]) -> AppSettings:
         """Apply validated changes to the stored settings.

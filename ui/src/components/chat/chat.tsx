@@ -51,13 +51,11 @@ export interface ChatProps {
   onThreadStarted: (threadId: string) => void;
   /** Runs after a turn finishes so the rail can refresh. */
   onTurnFinished: () => void;
-  /** True when no model is configured. */
-  setupRequired: boolean;
   /** Effective settings with the configured models. */
   settings: AppSettings;
   /** Opens the settings dialog on a section. */
   onOpenSettings: (section: SettingsSection) => void;
-  /** Runs after a model switch so the shell can refresh health. */
+  /** Runs after a model switch so the shell can refresh the top bar. */
   onModelChanged?: () => void;
   /** Failure while restoring a stored thread. */
   loadError?: string | null;
@@ -114,7 +112,6 @@ export function Chat({
   initialMessages,
   onThreadStarted,
   onTurnFinished,
-  setupRequired,
   settings,
   onOpenSettings,
   onModelChanged,
@@ -224,14 +221,6 @@ export function Chat({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {setupRequired ? (
-        <div className="mx-auto mt-4 flex w-full max-w-[min(720px,100%-3rem)] items-center justify-between gap-3 rounded-lg border bg-muted px-4 py-3 text-sm">
-          <span>Set a model to start.</span>
-          <Button size="sm" onClick={() => onOpenSettings("models")}>
-            Open settings
-          </Button>
-        </div>
-      ) : null}
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="mx-auto w-full max-w-[min(720px,100%-3rem)] px-0">
           {loadError ? (

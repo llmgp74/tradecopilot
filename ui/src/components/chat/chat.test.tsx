@@ -30,7 +30,6 @@ it("streams an answer and reports the new thread id", async () => {
       initialMessages={[]}
       onThreadStarted={onThreadStarted}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={baseSettings}
       onOpenSettings={() => {}}
     />,
@@ -68,7 +67,6 @@ it("renders the live plan from a transient todos part", async () => {
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={baseSettings}
       onOpenSettings={() => {}}
     />,
@@ -97,7 +95,6 @@ it("shows a request error with the settings escape hatch", async () => {
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={baseSettings}
       onOpenSettings={() => {}}
     />,
@@ -139,7 +136,6 @@ it("sends an image pasted into the composer", async () => {
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={baseSettings}
       onOpenSettings={() => {}}
     />,
@@ -183,7 +179,6 @@ it("opens the file picker from the plus menu", async () => {
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={baseSettings}
       onOpenSettings={() => {}}
     />,
@@ -230,7 +225,6 @@ it("switches the model through settings", async () => {
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={settings}
       onOpenSettings={() => {}}
       onModelChanged={onModelChanged}
@@ -275,7 +269,6 @@ it("sends the temporary reasoning override with the turn", async () => {
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={baseSettings}
       onOpenSettings={() => {}}
     />,
@@ -317,7 +310,6 @@ it("resets the reasoning override when the selected model changes", async () => 
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={settings}
       onOpenSettings={() => {}}
     />,
@@ -336,7 +328,6 @@ it("resets the reasoning override when the selected model changes", async () => 
       initialMessages={[]}
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
-      setupRequired={false}
       settings={{ ...settings, model_id: "deepseek-v4-pro" }}
       onOpenSettings={() => {}}
     />,

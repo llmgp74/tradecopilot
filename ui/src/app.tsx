@@ -8,15 +8,8 @@ import { JournalDialog } from "@/components/dialogs/journal";
 import { SettingsDialog } from "@/components/dialogs/settings";
 import { Rail, type DialogName } from "@/components/rail";
 import { TopBar } from "@/components/top-bar";
-import {
-  ApiError,
-  getHealth,
-  getPortfolio,
-  getSettings,
-  getThread,
-  listThreads,
-} from "@/lib/api";
-import type { AppSettings, Health, ThreadSummary } from "@/lib/api";
+import { ApiError, getPortfolio, getSettings, getThread, listThreads } from "@/lib/api";
+import type { AppSettings, ThreadSummary } from "@/lib/api";
 import { isTauri } from "@/lib/api-base";
 import { deriveConnectionStatus, type BrokerProbe } from "@/lib/connection";
 import type { SettingsSection } from "@/lib/settings";
@@ -56,7 +49,6 @@ export default function App() {
   const [dialog, setDialog] = useState<DialogName | null>(null);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth >= 1024);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [health, setHealth] = useState<Health | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [probe, setProbe] = useState<BrokerProbe>("pending");
   const [paper, setPaper] = useState<boolean | null>(null);
@@ -99,13 +91,6 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    void getHealth()
-      .then((value) => {
-        if (active) {
-          setHealth(value);
-        }
-      })
-      .catch(() => {});
     void refreshThreads();
     void loadStatus();
     if (isTauri()) {
@@ -192,11 +177,8 @@ export default function App() {
   const dialogChange = (name: DialogName) => (open: boolean) => {
     setDialog(open ? name : null);
     if (!open && name === "settings") {
-      // The banner and the status header read state fetched at startup, so
-      // refresh after a model or provider is saved.
-      void getHealth()
-        .then(setHealth)
-        .catch(() => {});
+      // The status header reads state fetched at startup, so refresh after a
+      // model or provider is saved.
       void loadStatus();
     }
   };
@@ -232,20 +214,12 @@ export default function App() {
             initialMessages={conversation.initialMessages}
             onThreadStarted={handleThreadStarted}
             onTurnFinished={() => void refreshThreads()}
-            setupRequired={
-              health !== null && health.model_provider === "" && health.model_id === ""
-            }
             settings={settings ?? EMPTY_SETTINGS}
             onOpenSettings={(section) => {
               setSettingsSection(section);
               setDialog("settings");
             }}
-            onModelChanged={() => {
-              void getHealth()
-                .then(setHealth)
-                .catch(() => {});
-              void loadStatus();
-            }}
+            onModelChanged={() => void loadStatus()}
             loadError={loadError}
           />
         </main>

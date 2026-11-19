@@ -1,7 +1,9 @@
+import type { MouseEvent } from "react";
 import { MinusIcon, PanelLeftIcon, SquareIcon, XIcon } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { isTauri } from "@/lib/api-base";
 import type { ConnectionStatus } from "@/lib/connection";
 import { isMacDesktop, isWindowsDesktop } from "@/lib/platform";
 
@@ -33,6 +35,23 @@ export function TopBar({
   onOpenSettings,
 }: TopBarProps) {
   const window = () => getCurrentWindow();
+
+  // The drag attribute only covers its own element, so most of the bar sits
+  // over children. Start the drag from any press that misses a control.
+  const startDrag = (event: MouseEvent<HTMLElement>) => {
+    if (!isTauri() || event.button !== 0) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.hasAttribute("data-tauri-drag-region")) {
+      return;
+    }
+    if (target.closest("button, a, input, select, textarea")) {
+      return;
+    }
+    void window().startDragging();
+  };
+
   const brokerLabel = {
     unconfigured: "Broker not configured",
     saved: "Broker saved",
@@ -49,6 +68,7 @@ export function TopBar({
   return (
     <header
       data-tauri-drag-region
+      onMouseDown={startDrag}
       className="flex h-12 shrink-0 items-center gap-2 border-b px-3"
     >
       {isMacDesktop() && !railOpen ? <div className="w-5 shrink-0" /> : null}
