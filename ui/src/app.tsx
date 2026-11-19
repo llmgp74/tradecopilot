@@ -12,6 +12,7 @@ import { ApiError, getPortfolio, getSettings, getThread, listThreads } from "@/l
 import type { AppSettings, ThreadSummary } from "@/lib/api";
 import { isTauri } from "@/lib/api-base";
 import { deriveConnectionStatus, type BrokerProbe } from "@/lib/connection";
+import { isMac } from "@/lib/platform";
 import type { SettingsSection } from "@/lib/settings";
 import {
   conversationReducer,
@@ -125,12 +126,13 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey && event.key.toLowerCase() === "n") {
+      const shortcut = isMac() ? event.metaKey : event.ctrlKey;
+      if (shortcut && event.key.toLowerCase() === "n") {
         event.preventDefault();
         dispatch({ type: "new" });
         window.history.replaceState(null, "", "/");
       }
-      if (event.metaKey && event.key.toLowerCase() === "b") {
+      if (shortcut && event.key.toLowerCase() === "b") {
         event.preventDefault();
         setRailOpen((value) => !value);
       }

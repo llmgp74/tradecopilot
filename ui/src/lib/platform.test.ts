@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { isMacDesktop, isWindowsDesktop } from "./platform";
+import { isMac, isMacDesktop, isWindowsDesktop } from "./platform";
 
 function stubTauri(): void {
   Object.defineProperty(window, "__TAURI_INTERNALS__", {
@@ -29,6 +29,20 @@ it("detects Windows inside the desktop webview", () => {
   );
   expect(isWindowsDesktop()).toBe(true);
   expect(isMacDesktop()).toBe(false);
+});
+
+it("detects macOS outside the desktop webview", () => {
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)",
+  );
+  expect(isMac()).toBe(true);
+});
+
+it("is not macOS on Windows", () => {
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+  );
+  expect(isMac()).toBe(false);
 });
 
 it("is neither platform outside the desktop webview", () => {

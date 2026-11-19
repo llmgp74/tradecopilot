@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { groupThreads } from "@/lib/conversation";
-import { isMacDesktop } from "@/lib/platform";
+import { isMacDesktop, primaryModifier } from "@/lib/platform";
 import type { ThreadSummary } from "@/lib/api";
 
 /** Destinations that open as dialogs. */
@@ -156,12 +156,13 @@ export function Rail({
         <Button
           variant="outline"
           className="mb-3 justify-start gap-2"
+          aria-label={`New chat, ${primaryModifier()} + N`}
           onClick={onNewChat}
         >
           <PlusIcon className="size-3.5" />
           New chat
           <kbd className="ml-auto rounded border px-1 text-[10px] text-muted-foreground">
-            Cmd N
+            {primaryModifier()} + N
           </kbd>
         </Button>
 
