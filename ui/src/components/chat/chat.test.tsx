@@ -42,6 +42,96 @@ it("streams an answer and reports the new thread id", async () => {
   await waitFor(() => expect(onThreadStarted).toHaveBeenCalledWith("abc"));
 });
 
+it("offers a working stop control while a turn streams", async () => {
+  let signal: AbortSignal | undefined;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_url: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      const encoder = new TextEncoder();
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode('data: {"type":"start","messageId":"m1"}\n\n'),
+              );
+              controller.enqueue(
+                encoder.encode('data: {"type":"text-start","id":"t1"}\n\n'),
+              );
+              controller.enqueue(
+                encoder.encode(
+                  'data: {"type":"text-delta","id":"t1","delta":"Partial"}\n\n',
+                ),
+              );
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "text/event-stream",
+              "x-vercel-ai-ui-message-stream": "v1",
+            },
+          },
+        ),
+      );
+    }),
+  );
+
+  render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      settings={baseSettings}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  await userEvent.type(screen.getByPlaceholderText(/ask tradecopilot/i), "Hello{Enter}");
+
+  const stop = await screen.findByRole("button", { name: "Stop" });
+  expect(stop).toBeEnabled();
+
+  await userEvent.click(stop);
+
+  await waitFor(() => expect(signal?.aborted).toBe(true));
+});
+
+it("shows a stop icon while waiting for the first token", async () => {
+  let signal: AbortSignal | undefined;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_url: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise<Response>(() => {});
+    }),
+  );
+
+  render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      settings={baseSettings}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  await userEvent.type(screen.getByPlaceholderText(/ask tradecopilot/i), "Hello{Enter}");
+
+  const stop = await screen.findByRole("button", { name: "Stop" });
+  expect(stop.querySelector("svg.lucide-square")).not.toBeNull();
+
+  await userEvent.click(stop);
+
+  await waitFor(() => expect(signal?.aborted).toBe(true));
+});
+
 it("renders the live plan from a transient todos part", async () => {
   vi.stubGlobal(
     "fetch",
