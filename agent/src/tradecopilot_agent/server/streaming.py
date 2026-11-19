@@ -122,9 +122,9 @@ async def _resolve_input(
     history_ids = _message_ids(values)
     responses = find_approval_responses(messages)
     if responses:
-        decisions = build_decisions(snapshot, responses)
+        resume = build_resume(snapshot, responses)
         return GraphTurn(
-            graph_input=Command(resume={"decisions": decisions}),
+            graph_input=Command(resume=resume),
             history_ids=history_ids,
             unfinished_tool_calls=_unfinished_tool_calls(values),
         )
@@ -194,24 +194,27 @@ def last_user_message(messages: list[UIMessage]) -> UIMessage:
     return messages[-1]
 
 
-def build_decisions(
-    snapshot: Any, responses: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """Map UI approval responses to LangGraph HITL decisions.
+def build_resume(snapshot: Any, responses: list[dict[str, Any]]) -> dict[str, Any]:
+    """Map UI approval responses to a LangGraph resume value.
+
+    Each interrupt carries its own action requests, so decisions are grouped
+    per interrupt. One interrupt resumes with the decisions object. Two or more
+    need a mapping keyed by interrupt id, which is how LangGraph tells them
+    apart.
 
     Args:
         snapshot: Graph state snapshot containing pending interrupts.
         responses: Tool approval response parts.
 
     Returns:
-        Decisions in the order of the pending action requests.
+        The resume value for ``Command``.
 
     Raises:
-        ValueError: If no interrupt is pending or a response cannot be
-            matched to a tool call.
+        ValueError: If no interrupt is actionable, an interrupt has no id, or
+            a response cannot be matched to a tool call.
     """
-    requests = _pending_requests(getattr(snapshot, "interrupts", ()))
-    if not requests:
+    interrupts = _actionable_interrupts(getattr(snapshot, "interrupts", ()))
+    if not interrupts:
         raise ValueError("No approval is pending for this thread.")
     assistant = _last_ai_message(getattr(snapshot, "values", {}))
     by_id = {
@@ -220,26 +223,38 @@ def build_decisions(
         if (approval_id := _approval_id(response)) is not None
     }
 
-    decisions: list[dict[str, Any]] = []
-    for request in requests:
-        call_id = _request_call_id(request, assistant)
-        response = by_id.get(call_id) if call_id is not None else None
-        if response is None:
-            raise ValueError("Approval response does not match a pending tool call.")
-        decisions.append(_decision(response))
-    return decisions
+    by_interrupt: dict[str, dict[str, Any]] = {}
+    for interrupt in interrupts:
+        interrupt_id = getattr(interrupt, "id", None)
+        if not isinstance(interrupt_id, str) or not interrupt_id:
+            raise ValueError("Cannot identify the pending interrupt.")
+        decisions: list[dict[str, Any]] = []
+        for request in _action_requests(interrupt):
+            call_id = _request_call_id(request, assistant)
+            response = by_id.get(call_id) if call_id is not None else None
+            if response is None:
+                raise ValueError(
+                    "Approval response does not match a pending tool call."
+                )
+            decisions.append(_decision(response))
+        by_interrupt[interrupt_id] = {"decisions": decisions}
+    if len(by_interrupt) == 1:
+        return next(iter(by_interrupt.values()))
+    return by_interrupt
 
 
-def _pending_requests(interrupts: Any) -> list[dict[str, Any]]:
-    requests: list[dict[str, Any]] = []
-    for interrupt in interrupts or ():
-        value = getattr(interrupt, "value", None)
-        if not isinstance(value, dict):
-            continue
-        raw = value.get("action_requests")
-        if isinstance(raw, list):
-            requests.extend(item for item in raw if isinstance(item, dict))
-    return requests
+def _actionable_interrupts(interrupts: Any) -> list[Any]:
+    return [interrupt for interrupt in interrupts or () if _action_requests(interrupt)]
+
+
+def _action_requests(interrupt: Any) -> list[dict[str, Any]]:
+    value = getattr(interrupt, "value", None)
+    if not isinstance(value, dict):
+        return []
+    raw = value.get("action_requests")
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
 
 
 def _last_ai_message(values: Any) -> AIMessage | None:

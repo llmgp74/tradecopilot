@@ -136,6 +136,85 @@ def test_approval_response_resumes_with_reject(tmp_path: Path) -> None:
     }
 
 
+def test_two_pending_interrupts_resume_by_id(tmp_path: Path) -> None:
+    """LangGraph routes a multi-interrupt resume by interrupt id."""
+    calls = [
+        {"name": "execute_ticket", "args": {"ticket_id": "t_1"}, "id": "call_1"},
+        {"name": "execute_ticket", "args": {"ticket_id": "t_2"}, "id": "call_2"},
+    ]
+    snapshot = SimpleNamespace(
+        values={"messages": [AIMessage(content="", id="a1", tool_calls=calls)]},
+        interrupts=(
+            Interrupt(
+                id="int-1",
+                value={
+                    "action_requests": [
+                        {
+                            "name": "execute_ticket",
+                            "args": {"ticket_id": "t_1"},
+                            "description": "Review",
+                        }
+                    ]
+                },
+            ),
+            Interrupt(
+                id="int-2",
+                value={
+                    "action_requests": [
+                        {
+                            "name": "execute_ticket",
+                            "args": {"ticket_id": "t_2"},
+                            "description": "Review",
+                        }
+                    ]
+                },
+            ),
+        ),
+    )
+    graph = StubGraph(snapshot)
+    approval = {
+        "type": "tool-execute_ticket",
+        "state": "approval-responded",
+    }
+    body = {
+        "thread_id": "t1",
+        "messages": [
+            {
+                "id": "a1",
+                "role": "assistant",
+                "parts": [
+                    {
+                        **approval,
+                        "toolCallId": "call_1",
+                        "input": {"ticket_id": "t_1"},
+                        "approval": {"id": "call_1", "approved": True},
+                    },
+                    {
+                        **approval,
+                        "toolCallId": "call_2",
+                        "input": {"ticket_id": "t_2"},
+                        "approval": {
+                            "id": "call_2",
+                            "approved": False,
+                            "reason": "not now",
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+
+    with _client(tmp_path, graph) as client:
+        response = client.post("/api/chat", json=body)
+
+    assert response.status_code == 200
+    assert isinstance(graph.received, Command)
+    assert graph.received.resume == {
+        "int-1": {"decisions": [{"type": "approve"}]},
+        "int-2": {"decisions": [{"type": "reject", "message": "not now"}]},
+    }
+
+
 def test_mismatched_approval_returns_error_part(tmp_path: Path) -> None:
     """An approval for a different tool call does not resume the graph."""
     tool_call = {
