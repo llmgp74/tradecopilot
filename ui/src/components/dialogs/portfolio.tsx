@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getPortfolio, type Portfolio, type PortfolioRange } from "@/lib/api";
+import { openExternal } from "@/lib/external";
 import { formatPct, formatSignedPct, formatUsd } from "@/lib/format";
 import { useResource } from "@/lib/use-resource";
 
@@ -34,6 +35,11 @@ export interface DialogProps {
 }
 
 const RANGES: PortfolioRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
+
+const ALPACA_DASHBOARD = "https://app.alpaca.markets/dashboard/";
+
+/** Holdings shown before the rest move to Alpaca. */
+const VISIBLE_POSITIONS = 5;
 
 const chartConfig = {
   equity: { label: "Equity", color: "var(--chart-1)" },
@@ -54,6 +60,7 @@ function PortfolioBody({
 }) {
   const { account, day, positions, equity_curve } = portfolio;
   const sorted = [...positions].sort((a, b) => b.market_value - a.market_value);
+  const shown = sorted.slice(0, VISIBLE_POSITIONS);
 
   return (
     <div className="space-y-4">
@@ -137,7 +144,7 @@ function PortfolioBody({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((position) => (
+              {shown.map((position) => (
                 <TableRow key={position.ticker}>
                   <TableCell className="font-mono font-semibold">
                     {position.ticker}
@@ -175,6 +182,11 @@ function PortfolioBody({
           </Table>
         </div>
       )}
+      {sorted.length > VISIBLE_POSITIONS ? (
+        <p className="text-xs text-muted-foreground">
+          Showing the {VISIBLE_POSITIONS} largest of {sorted.length} holdings.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -234,7 +246,21 @@ export function PortfolioDialog({
       <DialogContent className="max-h-[85vh] w-[min(960px,100vw-32px)] max-w-none overflow-y-auto sm:max-w-none">
         <DialogHeader>
           <DialogTitle>Portfolio</DialogTitle>
-          <DialogDescription>Account, positions, and equity history.</DialogDescription>
+          <DialogDescription>
+            Account, positions, and equity history.{" "}
+            <a
+              href={ALPACA_DASHBOARD}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary underline underline-offset-4"
+              onClick={(event) => {
+                event.preventDefault();
+                void openExternal(ALPACA_DASHBOARD);
+              }}
+            >
+              View portfolio
+            </a>
+          </DialogDescription>
         </DialogHeader>
         <div className="flex gap-1">
           {RANGES.map((value) => (
