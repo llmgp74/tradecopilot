@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Area, AreaChart, CartesianGrid } from "recharts";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,45 @@ const chartConfig = {
   equity: { label: "Equity", color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
+/** Formats an axis amount without cents, so close ticks stay distinct. */
+function axisUsd(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+/** Formats one equity-curve timestamp for the x axis. */
+function timeTick(value: string, range: PortfolioRange): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return range === "1D"
+    ? date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** Formats the tooltip timestamp with more context than the axis tick. */
+function timeLabel(value: string, range: PortfolioRange): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(
+    "en-US",
+    range === "1D"
+      ? {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }
+      : { year: "numeric", month: "short", day: "numeric" },
+  );
+}
+
 /**
  * Renders account metrics, the equity curve, and positions.
  *
@@ -53,9 +92,11 @@ const chartConfig = {
  */
 function PortfolioBody({
   portfolio,
+  range,
   onOpenSettings,
 }: {
   portfolio: Portfolio;
+  range: PortfolioRange;
   onOpenSettings: () => void;
 }) {
   const { account, day, positions, equity_curve } = portfolio;
@@ -90,10 +131,31 @@ function PortfolioBody({
         <ChartContainer config={chartConfig} className="h-44 w-full">
           <AreaChart
             data={equity_curve}
-            margin={{ left: 0, right: 0, top: 4, bottom: 0 }}
+            margin={{ left: 0, right: 8, top: 4, bottom: 0 }}
           >
             <CartesianGrid vertical={false} />
-            <ChartTooltip content={<ChartTooltipContent />} />
+            <XAxis
+              dataKey="t"
+              tickLine={false}
+              axisLine={false}
+              minTickGap={32}
+              tickFormatter={(value) => timeTick(String(value), range)}
+            />
+            <YAxis
+              width={84}
+              tickLine={false}
+              axisLine={false}
+              domain={["auto", "auto"]}
+              tickFormatter={(value) => axisUsd(Number(value))}
+            />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(value) => timeLabel(String(value), range)}
+                  formatter={(value) => formatUsd(Number(value))}
+                />
+              }
+            />
             <Area
               dataKey="equity"
               type="monotone"
@@ -225,7 +287,7 @@ function PortfolioRangeBody({
       </div>
     );
   }
-  return <PortfolioBody portfolio={data} onOpenSettings={onOpenSettings} />;
+  return <PortfolioBody portfolio={data} range={range} onOpenSettings={onOpenSettings} />;
 }
 
 /**
