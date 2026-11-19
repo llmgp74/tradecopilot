@@ -166,8 +166,9 @@ server is loopback-only and has no authentication.
 
 ```json
 {
-  "agent_model": "deepseek:deepseek-flash",
-  "model_api_key": "sk-...",
+  "model_provider": "deepseek",
+  "model_id": "deepseek-flash",
+  "reasoning_effort": "high",
   "alpaca_api_key": "PK...",
   "alpaca_api_secret": "...",
   "alpaca_base_url": "https://paper-api.alpaca.markets",
@@ -176,14 +177,35 @@ server is loopback-only and has no authentication.
   "fred_api_key": "",
   "edgar_user_agent": "TradeCopilot you@example.com",
   "exa_api_key": "",
+  "providers": [
+    {
+      "provider_id": "deepseek",
+      "api_key": "sk-...",
+      "base_url": "",
+      "npm": "@ai-sdk/openai-compatible",
+      "models": [
+        {
+          "id": "deepseek-flash",
+          "name": "DeepSeek V4.1 Flash",
+          "tool_call": true,
+          "reasoning_options": [
+            {"type": "toggle"},
+            {"type": "effort", "values": ["low", "high", "max"]}
+          ]
+        }
+      ],
+      "updated_at": "2026-11-05T03:00:12Z"
+    }
+  ],
   "updated_at": "2026-11-05T03:00:12Z"
 }
 ```
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `agent_model` | string | `provider:model`; empty means unset |
-| `model_api_key` | string | Key for the selected provider; empty means unset |
+| `model_provider` | string | Catalog provider id; empty means no selection |
+| `model_id` | string | Catalog model id; may contain colons |
+| `reasoning_effort` | string | Normalized default; empty uses the provider default |
 | `alpaca_api_key` | string | Empty means unset |
 | `alpaca_api_secret` | string | Empty means unset |
 | `alpaca_base_url` | string | Trading host; defaults to the paper host |
@@ -192,11 +214,13 @@ server is loopback-only and has no authentication.
 | `fred_api_key` | string | Macro series; its tools are hidden when empty |
 | `edgar_user_agent` | string | Name and contact email required by SEC EDGAR |
 | `exa_api_key` | string | Web search for non-DeepSeek models; its tools are hidden when empty |
+| `providers` | array | One row per configured provider, with its key and model list |
 | `updated_at` | timestamp | Server-managed |
 
-Resolution order for every field: stored setting, then process environment, then
-the repository `.env` file, then the default. Cleared fields fall back to the
-environment.
+Credentials come from SQLite only. The process environment supplies `DB_PATH`,
+`HOST`, and `PORT` and is never read for a key or a model. A cleared field stays
+empty. Provider keys are written through the provider routes in section 3.12;
+the settings patch does not accept them.
 
 ## 3. Endpoints
 
@@ -207,15 +231,16 @@ Readiness probe and frontend setup signal.
 Response 200:
 
 ```json
-{"status": "ok", "agent_model": "anthropic:claude-sonnet-5"}
+{"status": "ok", "model_provider": "deepseek", "model_id": "deepseek-flash"}
 ```
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `status` | string | Always `ok` while the process is serving |
-| `agent_model` | string | The effective `provider:model` string; empty when neither settings nor environment provide one |
+| `model_provider` | string | The selected catalog provider id; empty when unset |
+| `model_id` | string | The selected model id; empty when unset |
 
-The endpoint never calls an upstream provider. A server with an empty `agent_model`
+The endpoint never calls an upstream provider. A server with an empty selection
 still answers 200; chat and thread detail then return 503.
 
 ### 3.2 POST /api/chat
@@ -229,6 +254,7 @@ Runs one agent turn and streams it as an AI SDK UI message stream.
   "thread_id": "9f2c8e1a0b7d4c3e9a1f2b3c4d5e6f70",
   "trigger": "submit-message",
   "messageId": "Kq3Zx9mN2pLr",
+  "reasoning": "high",
   "messages": [
     {"id": "u1", "role": "user", "parts": [{"type": "text", "text": "Should I add NVDA?"}]}
   ]
@@ -241,6 +267,7 @@ Runs one agent turn and streams it as an AI SDK UI message stream.
 | `messages` | UIMessage[] | yes | Full client history from `useChat` |
 | `trigger` | enum | no | `submit-message` or `regenerate-message`; accepted, not used by the server |
 | `messageId` | string | no | Client-generated id of the assistant message being regenerated; ignored by the server |
+| `reasoning` | string | no | Per-turn override; omitted uses `reasoning_effort` from settings. Rejected with 400 when the selected model does not allow the value |
 
 The server reads only the last element of `messages`:
 
@@ -348,7 +375,7 @@ the graph; the server rejects a response that does not match a pending interrupt
 | Status | When | Body |
 | --- | --- | --- |
 | 422 | Invalid request body | FastAPI validation shape |
-| 503 | `agent_model` is empty | `{"detail": "..."}` |
+| 503 | no model is selected | `{"detail": "..."}` |
 
 Failures inside the stream do not change the HTTP status. The server emits an `error`
 part, then `finish`, then `[DONE]`.
@@ -389,7 +416,7 @@ Lists conversation threads, newest first.
 | `title` | First user message, trimmed to about 60 characters; set when the thread is created |
 
 A page past the end returns 200 with `items: []`. `total` counts records, not pages.
-The endpoint reads SQLite only and works while `agent_model` is empty.
+The endpoint reads SQLite only and works while no model is selected.
 
 ### 3.4 GET /api/threads/{thread_id}
 
@@ -439,7 +466,7 @@ Messages are rehydrated from the checkpoint:
 | Status | When |
 | --- | --- |
 | 404 | No thread row or no checkpoint for the id |
-| 503 | `agent_model` is empty, because the detail reads graph state |
+| 503 | no model is selected, because the detail reads graph state |
 
 ### 3.5 GET /api/portfolio
 
@@ -678,15 +705,21 @@ Partially updates the stored settings.
 
 #### Request
 
-Any subset of the fields. Omitted fields are untouched. An empty string clears a
-stored value, which makes the environment fallback apply again.
+Any subset of the scalar fields in section 2.4. Omitted fields are untouched.
+An empty string clears a stored value. Provider keys are written through
+section 3.12, not here.
 
 ```json
 {
-  "agent_model": "deepseek:deepseek-flash",
-  "model_api_key": "sk-..."
+  "model_provider": "deepseek",
+  "model_id": "deepseek-flash",
+  "reasoning_effort": "high"
 }
 ```
+
+A selection is rejected with 400 unless the provider holds a key and the model
+is in its configured list with tool calling enabled. `reasoning_effort` is
+rejected with 400 unless the selected model allows it.
 
 `updated_at` is ignored if sent.
 
@@ -696,12 +729,55 @@ The full effective Settings, with secrets in plaintext and `Cache-Control: no-st
 
 #### Behaviour
 
-Changing `agent_model` or `model_api_key` discards the cached agent graph. The next
-chat turn builds a new graph with the new model.
+Changing the selection, the reasoning default, or the Exa key discards the cached
+graphs. The next chat turn builds a new graph. Provider writes also discard them.
 
 #### Errors
 
-422 for wrong field types.
+400 for an unusable selection or reasoning value. 422 for wrong field types.
+
+### 3.12 PUT /api/providers/{provider_id}
+
+Stores one provider, its key, and its configured models.
+
+#### Request
+
+```json
+{
+  "api_key": "sk-...",
+  "base_url": "",
+  "npm": "@ai-sdk/openai-compatible",
+  "models": [
+    {"id": "deepseek-flash", "name": "DeepSeek V4.1 Flash", "tool_call": true,
+     "reasoning_options": [{"type": "toggle"}]}
+  ]
+}
+```
+
+`npm` must be one of `@ai-sdk/openai`, `@ai-sdk/openai-compatible`,
+`@ai-sdk/anthropic`, or `@ai-sdk/google`. Model ids must be unique and every
+model must set `tool_call` to true.
+
+#### Response 200
+
+The full Settings, with `Cache-Control: no-store`.
+
+#### Behaviour
+
+When the written provider is the selected one and the selected model is gone or
+the key is empty, the selection and reasoning default are cleared in the same
+transaction. Cached graphs are discarded.
+
+#### Errors
+
+400 for an unsupported integration or a non-tool model.
+
+### 3.13 DELETE /api/providers/{provider_id}
+
+Deletes the provider and its models.
+
+Response 200: the full Settings. The selection is cleared when it pointed at the
+deleted provider.
 
 ## 4. Error format
 
@@ -711,7 +787,7 @@ All non-streaming errors use `{"detail": ...}`.
 | --- | --- |
 | 404 | `{"detail": "thread not found"}` |
 | 422 | `{"detail": [{"loc": ["body", "position_cap_pct"], "msg": "...", "type": "..."}]}` |
-| 503 | `{"detail": "AGENT_MODEL is not set. ..."}` |
+| 503 | `{"detail": "No model is configured. Choose one in Settings."}` |
 
 5xx other than 503 is unexpected and indicates a server bug.
 
