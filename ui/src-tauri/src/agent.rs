@@ -104,6 +104,14 @@ pub fn spawn(
             .map_err(|error| format!("Cannot check the agent: {error}"))?
             .is_none()
     {
+        // A webview reload runs boot again while the agent keeps running. Emit
+        // the known base so the new page reconnects instead of waiting for a
+        // port line that was printed before it started listening.
+        if let Ok(base) = state.base.lock()
+            && let Some(base) = base.as_ref()
+        {
+            let _ = app.emit("agent_ready", ReadyPayload { base: base.clone() });
+        }
         return Ok(());
     }
 
