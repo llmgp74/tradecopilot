@@ -1,5 +1,6 @@
-import { useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { toast } from "sonner";
+import { invoke } from "@tauri-apps/api/core";
 import { Chat } from "@/components/chat/chat";
 import { PortfolioDialog } from "@/components/dialogs/portfolio";
 import { ProfileDialog } from "@/components/dialogs/profile";
@@ -7,17 +8,43 @@ import { JournalDialog } from "@/components/dialogs/journal";
 import { SettingsDialog } from "@/components/dialogs/settings";
 import { Rail, type DialogName } from "@/components/rail";
 import { TopBar } from "@/components/top-bar";
-import { ApiError, getHealth, getThread, listThreads } from "@/lib/api";
-import type { Health, ThreadSummary } from "@/lib/api";
+import {
+  ApiError,
+  getHealth,
+  getPortfolio,
+  getSettings,
+  getThread,
+  listThreads,
+} from "@/lib/api";
+import type { AppSettings, Health, ThreadSummary } from "@/lib/api";
+import { isTauri } from "@/lib/api-base";
+import { deriveConnectionStatus, type BrokerProbe } from "@/lib/connection";
+import type { SettingsSection } from "@/lib/settings";
 import {
   conversationReducer,
   initialConversationState,
   readThreadParam,
 } from "@/lib/conversation";
 
+const EMPTY_SETTINGS: AppSettings = {
+  model_provider: "",
+  model_id: "",
+  reasoning_effort: "",
+  alpaca_api_key: "",
+  alpaca_api_secret: "",
+  alpaca_base_url: "",
+  fmp_api_key: "",
+  finnhub_api_key: "",
+  fred_api_key: "",
+  edgar_user_agent: "",
+  exa_api_key: "",
+  providers: [],
+  updated_at: "",
+};
+
 /**
- * Application shell. Holds the conversation epoch, thread history, and the
- * single open dialog.
+ * Application shell. Holds the conversation epoch, thread history, settings,
+ * the broker probe, and the single open dialog.
  *
  * @returns The shell.
  */
@@ -30,7 +57,36 @@ export default function App() {
   const [railOpen, setRailOpen] = useState(() => window.innerWidth >= 1024);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [probe, setProbe] = useState<BrokerProbe>("pending");
+  const [paper, setPaper] = useState<boolean | null>(null);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadStatus = useCallback(async () => {
+    const [nextSettings, portfolio] = await Promise.all([
+      getSettings().catch(() => null),
+      getPortfolio("1D")
+        .then((value) => ({ ok: true as const, paper: value.paper }))
+        .catch((error: unknown) => ({
+          ok: false as const,
+          status: error instanceof ApiError ? error.status : 0,
+        })),
+    ]);
+    if (nextSettings !== null) {
+      setSettings(nextSettings);
+    }
+    if (portfolio.ok) {
+      setProbe("ok");
+      setPaper(portfolio.paper);
+    } else if (portfolio.status === 503) {
+      setProbe("unconfigured");
+      setPaper(null);
+    } else {
+      setProbe("error");
+      setPaper(null);
+    }
+  }, []);
 
   const refreshThreads = async () => {
     try {
@@ -51,6 +107,10 @@ export default function App() {
       })
       .catch(() => {});
     void refreshThreads();
+    void loadStatus();
+    if (isTauri()) {
+      void invoke("refresh_model_catalog").catch(() => {});
+    }
 
     const requested = readThreadParam(window.location.search);
     if (requested) {
@@ -76,7 +136,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadStatus]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -132,11 +192,12 @@ export default function App() {
   const dialogChange = (name: DialogName) => (open: boolean) => {
     setDialog(open ? name : null);
     if (!open && name === "settings") {
-      // The setup banner reads health fetched at startup, so refresh it after
-      // a model is saved.
+      // The banner and the status header read state fetched at startup, so
+      // refresh after a model or provider is saved.
       void getHealth()
         .then(setHealth)
         .catch(() => {});
+      void loadStatus();
     }
   };
 
@@ -157,6 +218,11 @@ export default function App() {
           title={activeThread?.title ?? "New conversation"}
           onToggleRail={() => setRailOpen((value) => !value)}
           railOpen={railOpen}
+          status={deriveConnectionStatus(settings ?? EMPTY_SETTINGS, probe, paper)}
+          onOpenSettings={(section) => {
+            setSettingsSection(section);
+            setDialog("settings");
+          }}
         />
         <main className="min-h-0 flex-1">
           <Chat
@@ -166,8 +232,20 @@ export default function App() {
             initialMessages={conversation.initialMessages}
             onThreadStarted={handleThreadStarted}
             onTurnFinished={() => void refreshThreads()}
-            setupRequired={health !== null && health.agent_model === ""}
-            onOpenSettings={() => setDialog("settings")}
+            setupRequired={
+              health !== null && health.model_provider === "" && health.model_id === ""
+            }
+            settings={settings ?? EMPTY_SETTINGS}
+            onOpenSettings={(section) => {
+              setSettingsSection(section);
+              setDialog("settings");
+            }}
+            onModelChanged={() => {
+              void getHealth()
+                .then(setHealth)
+                .catch(() => {});
+              void loadStatus();
+            }}
             loadError={loadError}
           />
         </main>
@@ -182,6 +260,7 @@ export default function App() {
       <JournalDialog open={dialog === "journal"} onOpenChange={dialogChange("journal")} />
       <SettingsDialog
         open={dialog === "settings"}
+        initialSection={settingsSection}
         onOpenChange={dialogChange("settings")}
       />
     </div>

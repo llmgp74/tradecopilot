@@ -3,8 +3,8 @@ import { SECRET_FIELDS, settingsChanges } from "./settings";
 import { baseSettings } from "@/test/fixtures";
 
 it("sends only changed fields", () => {
-  expect(settingsChanges(baseSettings, { ...baseSettings, agent_model: "x:y" })).toEqual({
-    agent_model: "x:y",
+  expect(settingsChanges(baseSettings, { ...baseSettings, model_id: "gpt-5" })).toEqual({
+    model_id: "gpt-5",
   });
 });
 
@@ -19,7 +19,7 @@ it("does not copy unchanged environment-backed values", () => {
 });
 
 it("marks secret fields", () => {
-  expect(SECRET_FIELDS.has("model_api_key")).toBe(true);
+  expect(SECRET_FIELDS.has("alpaca_api_key")).toBe(true);
   expect(SECRET_FIELDS.has("exa_api_key")).toBe(true);
   expect(SECRET_FIELDS.has("edgar_user_agent")).toBe(false);
 });

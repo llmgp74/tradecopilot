@@ -2,8 +2,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import App from "./app";
-import { getHealth } from "@/lib/api";
+import { getHealth, getSettings } from "@/lib/api";
 import { ThemeProvider } from "@/theme-provider";
+import { baseSettings } from "@/test/fixtures";
 
 vi.mock("@/components/chat/chat", () => ({
   Chat: ({ setupRequired }: { setupRequired: boolean }) => (
@@ -13,7 +14,11 @@ vi.mock("@/components/chat/chat", () => ({
 
 vi.mock("@/lib/api", () => ({
   ApiError: class extends Error {},
-  getHealth: vi.fn(async () => ({ status: "ok", agent_model: "x:y" })),
+  getHealth: vi.fn(async () => ({
+    status: "ok",
+    model_provider: "deepseek",
+    model_id: "deepseek-flash",
+  })),
   listThreads: async () => ({ items: [], page_no: 1, page_size: 50, total: 0 }),
   getThread: async () => {
     throw new Error("not used");
@@ -33,7 +38,7 @@ vi.mock("@/lib/api", () => ({
     equity_curve: [],
   }),
   getProfile: async () => ({}),
-  getSettings: async () => ({}),
+  getSettings: vi.fn(async () => baseSettings),
   listJournal: async () => ({ items: [], page_no: 1, page_size: 20, total: 0 }),
   patchProfile: async () => ({}),
   patchSettings: async () => ({}),
@@ -55,8 +60,12 @@ it("keeps the chat mounted while a dialog is open", async () => {
 
 it("refreshes the setup banner after a model is saved", async () => {
   vi.mocked(getHealth)
-    .mockResolvedValueOnce({ status: "ok", agent_model: "" })
-    .mockResolvedValue({ status: "ok", agent_model: "x:y" });
+    .mockResolvedValueOnce({ status: "ok", model_provider: "", model_id: "" })
+    .mockResolvedValue({
+      status: "ok",
+      model_provider: "deepseek",
+      model_id: "deepseek-flash",
+    });
   render(
     <ThemeProvider>
       <App />
@@ -72,4 +81,37 @@ it("refreshes the setup banner after a model is saved", async () => {
   await waitFor(() =>
     expect(screen.getByTestId("chat")).toHaveAttribute("data-setup", "false"),
   );
+});
+
+it("opens settings on the broker section from the status chip", async () => {
+  render(
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>,
+  );
+
+  await screen.findByTestId("chat");
+  await userEvent.click(await screen.findByRole("button", { name: "Alpaca" }));
+
+  expect(await screen.findByLabelText(/^alpaca key$/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Broker" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+});
+
+it("refreshes settings after the dialog closes", async () => {
+  render(
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>,
+  );
+
+  await screen.findByTestId("chat");
+  await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(1));
+  await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(2));
+  await userEvent.keyboard("{Escape}");
+
+  await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(3));
 });

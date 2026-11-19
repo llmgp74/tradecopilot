@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import { apiUrl } from "./api-base";
+import type { ReasoningOption } from "./catalog";
 
 /** Error raised for any non-2xx API response. */
 export class ApiError extends Error {
@@ -19,7 +20,31 @@ export class ApiError extends Error {
 
 export interface Health {
   status: string;
-  agent_model: string;
+  model_provider: string;
+  model_id: string;
+}
+
+export interface ProviderModel {
+  id: string;
+  name: string;
+  tool_call: boolean;
+  reasoning_options: ReasoningOption[];
+}
+
+export interface ProviderCredential {
+  provider_id: string;
+  api_key: string;
+  base_url: string;
+  npm: string;
+  models: ProviderModel[];
+  updated_at: string;
+}
+
+export interface ProviderCredentialPatch {
+  api_key: string;
+  base_url: string;
+  npm: string;
+  models: ProviderModel[];
 }
 
 export interface ThreadSummary {
@@ -192,8 +217,9 @@ export interface JournalQuery {
 }
 
 export interface AppSettings {
-  agent_model: string;
-  model_api_key: string;
+  model_provider: string;
+  model_id: string;
+  reasoning_effort: string;
   alpaca_api_key: string;
   alpaca_api_secret: string;
   alpaca_base_url: string;
@@ -202,10 +228,11 @@ export interface AppSettings {
   fred_api_key: string;
   edgar_user_agent: string;
   exa_api_key: string;
+  providers: ProviderCredential[];
   updated_at: string;
 }
 
-export type AppSettingsPatch = Partial<Omit<AppSettings, "updated_at">>;
+export type AppSettingsPatch = Partial<Omit<AppSettings, "updated_at" | "providers">>;
 
 /**
  * Calls one API endpoint and returns its parsed JSON body.
@@ -368,5 +395,35 @@ export function patchSettings(patch: AppSettingsPatch): Promise<AppSettings> {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
+  });
+}
+
+/**
+ * Stores one provider and its configured models.
+ *
+ * @param providerId - Catalog provider id.
+ * @param patch - Key, base URL, integration, and models.
+ * @returns The full settings after the write.
+ */
+export function putProvider(
+  providerId: string,
+  patch: ProviderCredentialPatch,
+): Promise<AppSettings> {
+  return apiRequest<AppSettings>(`/api/providers/${encodeURIComponent(providerId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
+/**
+ * Deletes one provider.
+ *
+ * @param providerId - Catalog provider id.
+ * @returns The full settings after the delete.
+ */
+export function deleteProvider(providerId: string): Promise<AppSettings> {
+  return apiRequest<AppSettings>(`/api/providers/${encodeURIComponent(providerId)}`, {
+    method: "DELETE",
   });
 }

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { Chat } from "./chat";
 import { sseResponse } from "@/test/sse";
+import { baseSettings } from "@/test/fixtures";
 
 it("streams an answer and reports the new thread id", async () => {
   vi.stubGlobal(
@@ -30,6 +31,7 @@ it("streams an answer and reports the new thread id", async () => {
       onThreadStarted={onThreadStarted}
       onTurnFinished={() => {}}
       setupRequired={false}
+      settings={baseSettings}
       onOpenSettings={() => {}}
     />,
   );
@@ -67,6 +69,7 @@ it("renders the live plan from a transient todos part", async () => {
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
       setupRequired={false}
+      settings={baseSettings}
       onOpenSettings={() => {}}
     />,
   );
@@ -95,6 +98,7 @@ it("shows a request error with the settings escape hatch", async () => {
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
       setupRequired={false}
+      settings={baseSettings}
       onOpenSettings={() => {}}
     />,
   );
@@ -136,6 +140,7 @@ it("sends an image pasted into the composer", async () => {
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
       setupRequired={false}
+      settings={baseSettings}
       onOpenSettings={() => {}}
     />,
   );
@@ -179,6 +184,7 @@ it("opens the file picker from the plus menu", async () => {
       onThreadStarted={() => {}}
       onTurnFinished={() => {}}
       setupRequired={false}
+      settings={baseSettings}
       onOpenSettings={() => {}}
     />,
   );
@@ -188,4 +194,153 @@ it("opens the file picker from the plus menu", async () => {
   await userEvent.click(item);
 
   expect(click).toHaveBeenCalled();
+});
+
+it("switches the model through settings", async () => {
+  const onModelChanged = vi.fn();
+  const settings = {
+    ...baseSettings,
+    providers: [
+      baseSettings.providers[0],
+      {
+        provider_id: "openai",
+        api_key: "sk",
+        base_url: "",
+        npm: "@ai-sdk/openai",
+        models: [{ id: "gpt-5", name: "GPT-5", tool_call: true, reasoning_options: [] }],
+        updated_at: "2026-11-01T00:00:00Z",
+      },
+    ],
+  };
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/api/settings") && init?.method === "PATCH") {
+      return new Response(
+        JSON.stringify({ ...settings, model_provider: "openai", model_id: "gpt-5" }),
+        { status: 200 },
+      );
+    }
+    return sseResponse([]);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      setupRequired={false}
+      settings={settings}
+      onOpenSettings={() => {}}
+      onModelChanged={onModelChanged}
+    />,
+  );
+
+  const trigger = screen.getByRole("button", { name: /deepseek v4.1 flash/i });
+  trigger.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  await userEvent.click(screen.getByRole("menuitemradio", { name: /^gpt-5$/i }));
+
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/settings"),
+      expect.objectContaining({ method: "PATCH" }),
+    ),
+  );
+  expect(await screen.findByRole("button", { name: /^gpt-5$/i })).toBeInTheDocument();
+});
+
+it("sends the temporary reasoning override with the turn", async () => {
+  let captured = "";
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/api/chat")) {
+      captured = String(init?.body ?? "");
+      return sseResponse([
+        { type: "start", messageId: "m1" },
+        { type: "text-start", id: "t1" },
+        { type: "text-delta", id: "t1", delta: "ok" },
+        { type: "text-end", id: "t1" },
+        { type: "finish" },
+      ]);
+    }
+    return sseResponse([]);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      setupRequired={false}
+      settings={baseSettings}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  const trigger = screen.getByRole("button", { name: /^default$/i });
+  trigger.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  await userEvent.click(screen.getByRole("menuitemradio", { name: "High" }));
+  await userEvent.type(screen.getByPlaceholderText(/ask tradecopilot/i), "Hello{Enter}");
+
+  await waitFor(() => expect(captured).toContain('"reasoning":"high"'));
+  expect(screen.getByRole("button", { name: /^high$/i })).toBeInTheDocument();
+});
+
+it("resets the reasoning override when the selected model changes", async () => {
+  const provider = baseSettings.providers[0];
+  const settings = {
+    ...baseSettings,
+    providers: [
+      {
+        ...provider,
+        models: [
+          provider.models[0],
+          {
+            id: "deepseek-v4-pro",
+            name: "DeepSeek V4 Pro",
+            tool_call: true,
+            reasoning_options: [{ type: "toggle" as const }],
+          },
+        ],
+      },
+    ],
+  };
+  const { rerender } = render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      setupRequired={false}
+      settings={settings}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  const trigger = screen.getByRole("button", { name: /^default$/i });
+  trigger.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  await userEvent.click(screen.getByRole("menuitemradio", { name: "High" }));
+  expect(screen.getByRole("button", { name: /^high$/i })).toBeInTheDocument();
+
+  rerender(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      setupRequired={false}
+      settings={{ ...settings, model_id: "deepseek-v4-pro" }}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  expect(await screen.findByRole("button", { name: /^default$/i })).toBeInTheDocument();
 });

@@ -19,6 +19,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::bootstrap,
             commands::restart_agent,
+            commands::cached_model_catalog,
+            commands::refresh_model_catalog,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

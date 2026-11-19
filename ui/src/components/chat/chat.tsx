@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -31,7 +31,12 @@ import { XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { apiUrl } from "@/lib/api-base";
+import { patchSettings, type AppSettings } from "@/lib/api";
 import { chatRequest } from "@/lib/chat-request";
+import type { SettingsSection } from "@/lib/settings";
+import { reasoningChoices } from "@/lib/reasoning";
+import { ModelSelector } from "./model-selector";
+import { ReasoningSelector } from "./reasoning-selector";
 import { normalizeMessages, type TodoItem } from "@/lib/parts";
 
 /** Props supplied by the shell for one conversation epoch. */
@@ -48,8 +53,12 @@ export interface ChatProps {
   onTurnFinished: () => void;
   /** True when no model is configured. */
   setupRequired: boolean;
-  /** Opens the settings dialog. */
-  onOpenSettings: () => void;
+  /** Effective settings with the configured models. */
+  settings: AppSettings;
+  /** Opens the settings dialog on a section. */
+  onOpenSettings: (section: SettingsSection) => void;
+  /** Runs after a model switch so the shell can refresh health. */
+  onModelChanged?: () => void;
   /** Failure while restoring a stored thread. */
   loadError?: string | null;
 }
@@ -106,11 +115,41 @@ export function Chat({
   onThreadStarted,
   onTurnFinished,
   setupRequired,
+  settings,
   onOpenSettings,
+  onModelChanged,
   loadError,
 }: ChatProps) {
   const [threadId, setThreadId] = useState<string | null>(initialThreadId);
   const [liveTodos, setLiveTodos] = useState<TodoItem[] | null>(null);
+  const [selection, setSelection] = useState({
+    provider: settings.model_provider,
+    model: settings.model_id,
+  });
+  const [reasoning, setReasoning] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelection({
+      provider: settings.model_provider,
+      model: settings.model_id,
+    });
+    // The override belongs to the previous model's options.
+    setReasoning(null);
+  }, [settings.model_provider, settings.model_id]);
+
+  const chooseModel = async (provider: string, model: string) => {
+    try {
+      const updated = await patchSettings({
+        model_provider: provider,
+        model_id: model,
+      });
+      setSelection({ provider: updated.model_provider, model: updated.model_id });
+      setReasoning(null);
+      onModelChanged?.();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not switch model.");
+    }
+  };
 
   // Rebuilt when the thread id changes. useChat swaps transports without
   // resetting messages, so the turn that discovered the id keeps streaming.
@@ -119,9 +158,9 @@ export function Chat({
       new DefaultChatTransport<UIMessage>({
         api: apiUrl("/api/chat"),
         prepareSendMessagesRequest: ({ messages }) =>
-          chatRequest(messages as UIMessage[], threadId),
+          chatRequest(messages as UIMessage[], threadId, reasoning),
       }),
-    [threadId],
+    [threadId, reasoning],
   );
 
   const { messages, sendMessage, status, stop, error, addToolApprovalResponse } = useChat(
@@ -148,6 +187,11 @@ export function Chat({
   );
 
   const display = useMemo(() => normalizeMessages(messages), [messages]);
+
+  const selectedModel = settings.providers
+    .find((item) => item.provider_id === selection.provider)
+    ?.models.find((item) => item.id === selection.model);
+  const reasoningOptions = reasoningChoices(selectedModel?.reasoning_options ?? []);
 
   const sendText = (text: string) => {
     const trimmed = text.trim();
@@ -183,7 +227,7 @@ export function Chat({
       {setupRequired ? (
         <div className="mx-auto mt-4 flex w-full max-w-[min(720px,100%-3rem)] items-center justify-between gap-3 rounded-lg border bg-muted px-4 py-3 text-sm">
           <span>Set a model to start.</span>
-          <Button size="sm" onClick={onOpenSettings}>
+          <Button size="sm" onClick={() => onOpenSettings("models")}>
             Open settings
           </Button>
         </div>
@@ -268,7 +312,7 @@ export function Chat({
           style={{ color: "var(--negative)" }}
         >
           <span className="min-w-0 flex-1">{error.message}</span>
-          <Button variant="outline" size="sm" onClick={onOpenSettings}>
+          <Button variant="outline" size="sm" onClick={() => onOpenSettings("models")}>
             Open settings
           </Button>
         </div>
@@ -295,6 +339,22 @@ export function Chat({
                   <PromptInputActionAddAttachments label="Add image" />
                 </PromptInputActionMenuContent>
               </PromptInputActionMenu>
+              <ModelSelector
+                settings={settings}
+                provider={selection.provider}
+                modelId={selection.model}
+                disabled={status === "streaming"}
+                onChange={(provider, model) => void chooseModel(provider, model)}
+                onManage={() => onOpenSettings("models")}
+              />
+              {reasoningOptions.length > 0 ? (
+                <ReasoningSelector
+                  choices={reasoningOptions}
+                  value={reasoning}
+                  disabled={status === "streaming"}
+                  onChange={setReasoning}
+                />
+              ) : null}
             </PromptInputTools>
             <PromptInputSubmit status={status} onStop={stop} />
           </PromptInputFooter>
