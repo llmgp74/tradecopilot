@@ -9,6 +9,7 @@ from tradecopilot_agent.llm import (
     MAX_TOKENS,
     AnthropicCompatibleChat,
     build_chat_model,
+    build_provider_model,
 )
 
 
@@ -50,3 +51,77 @@ def test_forced_tool_choice_survives_thinking(monkeypatch: pytest.MonkeyPatch) -
     bound = model.bind_tools([add], tool_choice="any")
 
     assert cast(Any, bound).kwargs.get("tool_choice") == {"type": "any"}
+
+
+def test_openai_model_uses_stored_key_base_url_and_reasoning() -> None:
+    """Construction takes the key, base URL, and reasoning from the row."""
+    from tradecopilot_agent.models import ProviderCredential, ProviderModel
+
+    credential = ProviderCredential(
+        provider_id="openrouter",
+        api_key="sk-x",
+        base_url="https://openrouter.ai/api/v1",
+        npm="@ai-sdk/openai-compatible",
+        models=[
+            ProviderModel(
+                id="m",
+                name="M",
+                reasoning_options=[
+                    {"type": "effort", "values": ["low", "high"]},
+                ],
+            )
+        ],
+    )
+
+    model = build_provider_model("openrouter", "m", credential, "high")
+
+    assert model.model_name == "m"
+    assert model.reasoning_effort == "high"
+    assert str(model.openai_api_base) == "https://openrouter.ai/api/v1"
+    assert model.openai_api_key.get_secret_value() == "sk-x"
+
+
+def test_deepseek_uses_the_anthropic_protocol() -> None:
+    """The deepseek provider id maps to the Anthropic-compatible client."""
+    from tradecopilot_agent.models import ProviderCredential, ProviderModel
+
+    credential = ProviderCredential(
+        provider_id="deepseek",
+        api_key="sk-d",
+        npm="@ai-sdk/openai-compatible",
+        models=[ProviderModel(id="deepseek-flash", name="DeepSeek Flash")],
+    )
+
+    model = build_provider_model("deepseek", "deepseek-flash", credential, "off")
+
+    assert isinstance(model, AnthropicCompatibleChat)
+    assert model.thinking == {"type": "disabled"}
+
+
+def test_unsupported_npm_is_rejected() -> None:
+    """A provider outside the allowlist cannot be constructed."""
+    from tradecopilot_agent.models import ProviderCredential
+
+    credential = ProviderCredential(
+        provider_id="azure", api_key="k", npm="@ai-sdk/azure"
+    )
+
+    with pytest.raises(ValueError, match="not supported"):
+        build_provider_model("azure", "m", credential, "")
+
+
+def test_deepseek_catalog_base_url_maps_to_the_anthropic_endpoint() -> None:
+    """The catalog API root is not the Anthropic-compatible endpoint."""
+    from tradecopilot_agent.models import ProviderCredential, ProviderModel
+
+    credential = ProviderCredential(
+        provider_id="deepseek",
+        api_key="k",
+        base_url="https://api.deepseek.com",
+        npm="@ai-sdk/openai-compatible",
+        models=[ProviderModel(id="deepseek-flash", name="DeepSeek Flash")],
+    )
+
+    model = build_provider_model("deepseek", "deepseek-flash", credential, "")
+
+    assert model.anthropic_api_url == DEEPSEEK_ANTHROPIC_URL

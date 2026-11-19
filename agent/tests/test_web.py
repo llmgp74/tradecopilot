@@ -106,22 +106,17 @@ def test_adapter_error_is_wrapped() -> None:
         asyncio.run(search.search("market", 3))
 
 
-def test_build_web_search_follows_the_model() -> None:
-    """A DeepSeek model uses its own search; others use Exa when keyed."""
-    assert isinstance(
-        build_web_search("deepseek:deepseek-chat", "ds", "exa"), DeepSeekWebSearch
-    )
-    assert isinstance(
-        build_web_search("anthropic:deepseek-flash", "ds", "exa"), DeepSeekWebSearch
-    )
-    assert isinstance(build_web_search("openai:gpt-5", "oai", "exa"), ExaWebSearch)
-    assert isinstance(build_web_search("deepseek:x", "", "exa"), ExaWebSearch)
-    assert build_web_search("openai:gpt-5", "oai", None) is None
+def test_build_web_search_follows_the_provider() -> None:
+    """A DeepSeek provider uses its own search; others use Exa when keyed."""
+    assert isinstance(build_web_search("deepseek", "ds", "exa"), DeepSeekWebSearch)
+    assert isinstance(build_web_search("openai", "oai", "exa"), ExaWebSearch)
+    assert isinstance(build_web_search("deepseek", "", "exa"), ExaWebSearch)
+    assert build_web_search("openai", "oai", None) is None
 
 
 def test_deepseek_model_without_a_key_has_no_search() -> None:
     """No key in settings means no search tool."""
-    assert build_web_search("anthropic:deepseek-flash", "", None) is None
+    assert build_web_search("deepseek", "", None) is None
 
 
 def test_web_tool_is_registered_only_with_a_searcher() -> None:

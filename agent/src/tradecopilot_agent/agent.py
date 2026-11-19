@@ -13,7 +13,6 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
-from tradecopilot_agent.config import get_settings
 from tradecopilot_agent.data import DataSource
 from tradecopilot_agent.llm import build_chat_model
 from tradecopilot_agent.memory import MemoryConfig
@@ -76,14 +75,10 @@ def build_agent(
 
     if isinstance(model, BaseChatModel):
         chat_model = model
+    elif model is not None:
+        chat_model = build_chat_model(model)
     else:
-        model_name = model or get_settings().agent_model
-        if model_name is None:
-            raise RuntimeError(
-                "AGENT_MODEL is not set. Provide a provider:model string, "
-                "for example anthropic:claude-sonnet-5."
-            )
-        chat_model = build_chat_model(model_name)
+        raise RuntimeError("No model is configured.")
     middleware: list[AgentMiddleware[Any, Any, Any]] = [
         TurnMiddleware(),
         TradingMemoryMiddleware(config, decision_time=memory_time),

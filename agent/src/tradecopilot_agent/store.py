@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from tradecopilot_agent.models import AppSettings
+from tradecopilot_agent.models import AppSettings, ProviderCredential, ProviderModel
 from tradecopilot_agent.secrets import SecretBox
 
 _SCHEMA = """
@@ -38,8 +38,9 @@ CREATE TABLE IF NOT EXISTS profile (
 
 CREATE TABLE IF NOT EXISTS settings (
   id                INTEGER PRIMARY KEY CHECK (id = 1),
-  agent_model       TEXT NOT NULL DEFAULT '',
-  model_api_key     TEXT NOT NULL DEFAULT '',
+  model_provider    TEXT NOT NULL DEFAULT '',
+  model_id          TEXT NOT NULL DEFAULT '',
+  reasoning_effort  TEXT NOT NULL DEFAULT '',
   alpaca_api_key    TEXT NOT NULL DEFAULT '',
   alpaca_api_secret TEXT NOT NULL DEFAULT '',
   alpaca_base_url   TEXT NOT NULL DEFAULT '',
@@ -49,6 +50,15 @@ CREATE TABLE IF NOT EXISTS settings (
   edgar_user_agent  TEXT NOT NULL DEFAULT '',
   exa_api_key       TEXT NOT NULL DEFAULT '',
   updated_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS provider_credentials (
+  provider_id TEXT PRIMARY KEY,
+  api_key     TEXT NOT NULL DEFAULT '',
+  base_url    TEXT NOT NULL DEFAULT '',
+  npm         TEXT NOT NULL DEFAULT '',
+  models      TEXT NOT NULL DEFAULT '[]',
+  updated_at  TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS journal (
@@ -77,7 +87,6 @@ CREATE TABLE IF NOT EXISTS dismissed_suggestions (
 
 _SECRET_FIELDS = frozenset(
     {
-        "model_api_key",
         "alpaca_api_key",
         "alpaca_api_secret",
         "fmp_api_key",
@@ -87,8 +96,9 @@ _SECRET_FIELDS = frozenset(
     }
 )
 _SETTINGS_COLUMNS = (
-    "agent_model",
-    "model_api_key",
+    "model_provider",
+    "model_id",
+    "reasoning_effort",
     "alpaca_api_key",
     "alpaca_api_secret",
     "alpaca_base_url",
@@ -99,10 +109,19 @@ _SETTINGS_COLUMNS = (
     "exa_api_key",
 )
 _SETTINGS_SELECT = (
-    "agent_model, model_api_key, alpaca_api_key, alpaca_api_secret, "
-    "alpaca_base_url, fmp_api_key, finnhub_api_key, fred_api_key, "
-    "edgar_user_agent, exa_api_key, updated_at"
+    "model_provider, model_id, reasoning_effort, alpaca_api_key, "
+    "alpaca_api_secret, alpaca_base_url, fmp_api_key, finnhub_api_key, "
+    "fred_api_key, edgar_user_agent, exa_api_key, updated_at"
 )
+_PROVIDER_COLUMNS = (
+    "provider_id",
+    "api_key",
+    "base_url",
+    "npm",
+    "models",
+    "updated_at",
+)
+_PROVIDER_SELECT = ", ".join(_PROVIDER_COLUMNS)
 
 DEFAULT_PROFILE: dict[str, Any] = {
     "risk_band": "moderate",
@@ -146,10 +165,28 @@ class Store:
         self.path = path
         with self._connection() as connection:
             connection.executescript(_SCHEMA)
+        self._check_schema()
         os.chmod(path, 0o600)
         self._secrets = SecretBox(path.parent / "settings.key")
         self._seed_profile()
         self._seed_settings()
+
+    def _check_schema(self) -> None:
+        """Fail with an instruction when the database predates the redesign.
+
+        Raises:
+            RuntimeError: When the settings table has no model_provider column.
+        """
+        with self._connection() as connection:
+            columns = {
+                str(row[1])
+                for row in connection.execute("PRAGMA table_info(settings)").fetchall()
+            }
+        if "model_provider" not in columns:
+            raise RuntimeError(
+                f"The database at {self.path} uses the old settings schema. "
+                "delete the file and start the server again."
+            )
 
     def _seed_settings(self) -> None:
         with self._connection() as connection:
@@ -208,17 +245,19 @@ class Store:
         if row is None:
             return AppSettings(updated_at=now_iso())
         return AppSettings(
-            agent_model=str(row[0]),
-            model_api_key=self._secrets.decrypt(str(row[1])),
-            alpaca_api_key=self._secrets.decrypt(str(row[2])),
-            alpaca_api_secret=self._secrets.decrypt(str(row[3])),
-            alpaca_base_url=str(row[4]),
-            fmp_api_key=self._secrets.decrypt(str(row[5])),
-            finnhub_api_key=self._secrets.decrypt(str(row[6])),
-            fred_api_key=self._secrets.decrypt(str(row[7])),
-            edgar_user_agent=str(row[8]),
-            exa_api_key=self._secrets.decrypt(str(row[9])),
-            updated_at=str(row[10]),
+            model_provider=str(row[0]),
+            model_id=str(row[1]),
+            reasoning_effort=str(row[2]),
+            alpaca_api_key=self._secrets.decrypt(str(row[3])),
+            alpaca_api_secret=self._secrets.decrypt(str(row[4])),
+            alpaca_base_url=str(row[5]),
+            fmp_api_key=self._secrets.decrypt(str(row[6])),
+            finnhub_api_key=self._secrets.decrypt(str(row[7])),
+            fred_api_key=self._secrets.decrypt(str(row[8])),
+            edgar_user_agent=str(row[9]),
+            exa_api_key=self._secrets.decrypt(str(row[10])),
+            providers=self.list_providers(),
+            updated_at=str(row[11]),
         )
 
     def patch_settings(self, changes: dict[str, Any]) -> AppSettings:
@@ -247,6 +286,137 @@ class Store:
                 (*params, now_iso()),
             )
         return self.get_settings()
+
+    def _provider_from_row(self, row: tuple[Any, ...]) -> ProviderCredential:
+        """Build a credential from a provider row.
+
+        Args:
+            row: Row selected with _PROVIDER_SELECT.
+
+        Returns:
+            The decrypted credential.
+        """
+        return ProviderCredential(
+            provider_id=str(row[0]),
+            api_key=self._secrets.decrypt(str(row[1])),
+            base_url=str(row[2]),
+            npm=str(row[3]),
+            models=[
+                ProviderModel.model_validate(item)
+                for item in json.loads(str(row[4]) or "[]")
+            ],
+            updated_at=str(row[5]),
+        )
+
+    def get_provider(self, provider_id: str) -> ProviderCredential | None:
+        """Return one provider credential.
+
+        Args:
+            provider_id: Catalog provider id.
+
+        Returns:
+            The credential, or None when it does not exist.
+        """
+        with self._connection() as connection:
+            row = connection.execute(
+                f"SELECT {_PROVIDER_SELECT} FROM provider_credentials "
+                "WHERE provider_id = ?",
+                (provider_id,),
+            ).fetchone()
+        return None if row is None else self._provider_from_row(row)
+
+    def list_providers(self) -> list[ProviderCredential]:
+        """Return every provider credential, ordered by id.
+
+        Returns:
+            The decrypted credentials.
+        """
+        with self._connection() as connection:
+            rows = connection.execute(
+                f"SELECT {_PROVIDER_SELECT} FROM provider_credentials "
+                "ORDER BY provider_id"
+            ).fetchall()
+        return [self._provider_from_row(row) for row in rows]
+
+    def upsert_provider(self, credential: ProviderCredential) -> ProviderCredential:
+        """Insert or replace a provider and its configured models.
+
+        Args:
+            credential: The full provider row to store.
+
+        Returns:
+            The stored credential.
+        """
+        timestamp = now_iso()
+        payload = json.dumps([model.model_dump() for model in credential.models])
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO provider_credentials
+                  (provider_id, api_key, base_url, npm, models, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (provider_id) DO UPDATE SET
+                  api_key = excluded.api_key,
+                  base_url = excluded.base_url,
+                  npm = excluded.npm,
+                  models = excluded.models,
+                  updated_at = excluded.updated_at
+                """,
+                (
+                    credential.provider_id,
+                    self._secrets.encrypt(credential.api_key),
+                    credential.base_url,
+                    credential.npm,
+                    payload,
+                    timestamp,
+                ),
+            )
+            self._clear_selection_if_unavailable(connection, credential)
+        stored = self.get_provider(credential.provider_id)
+        if stored is None:  # pragma: no cover - the row was just written
+            raise RuntimeError("The provider row was not stored.")
+        return stored
+
+    def delete_provider(self, provider_id: str) -> None:
+        """Delete a provider and clear a selection that pointed at it.
+
+        Args:
+            provider_id: Catalog provider id.
+        """
+        with self._connection() as connection:
+            connection.execute(
+                "DELETE FROM provider_credentials WHERE provider_id = ?",
+                (provider_id,),
+            )
+            connection.execute(
+                "UPDATE settings SET model_provider = '', model_id = '', "
+                "reasoning_effort = '' WHERE model_provider = ?",
+                (provider_id,),
+            )
+
+    def _clear_selection_if_unavailable(
+        self, connection: sqlite3.Connection, credential: ProviderCredential
+    ) -> None:
+        """Clear the selection when its provider or model is no longer usable.
+
+        Args:
+            connection: Open connection inside the caller's transaction.
+            credential: The provider row just written.
+        """
+        row = connection.execute(
+            "SELECT model_provider, model_id FROM settings WHERE id = 1"
+        ).fetchone()
+        if row is None or str(row[0]) != credential.provider_id:
+            return
+        selected = str(row[1])
+        available = credential.api_key != "" and any(
+            model.id == selected for model in credential.models
+        )
+        if not available:
+            connection.execute(
+                "UPDATE settings SET model_provider = '', model_id = '', "
+                "reasoning_effort = '' WHERE id = 1"
+            )
 
     def list_threads(
         self, page_no: int, page_size: int

@@ -154,42 +154,26 @@ class ExaWebSearch:
             raise WebSearchUnavailable("Web search failed.") from exc
 
 
-def is_deepseek_model(spec: str) -> bool:
-    """Whether a ``provider:model`` spec runs on DeepSeek.
-
-    Args:
-        spec: Agent model spec.
-
-    Returns:
-        True for ``deepseek:*`` and the DeepSeek models served through the
-        Anthropic-compatible endpoint.
-    """
-    provider, _, model_id = spec.partition(":")
-    return provider == "deepseek" or (
-        provider == "anthropic" and model_id.startswith("deepseek")
-    )
-
-
 def build_web_search(
-    model_spec: str,
-    model_api_key: str,
+    provider: str,
+    api_key: str,
     exa_api_key: str | None = None,
 ) -> WebSearch | None:
-    """Choose the search provider from the model and the available keys.
+    """Choose the search provider from the model provider and the keys.
 
     A DeepSeek model searches through DeepSeek using the same model key.
     Every other model uses Exa when its key is configured.
 
     Args:
-        model_spec: Agent ``provider:model`` spec.
-        model_api_key: Key for the agent model.
+        provider: Catalog provider id.
+        api_key: Key for the selected provider.
         exa_api_key: Exa key, when present.
 
     Returns:
-        A searcher, or ``None`` when nothing is configured.
+        A searcher, or None when nothing is configured.
     """
-    if is_deepseek_model(model_spec) and model_api_key:
-        return DeepSeekWebSearch(model_api_key)
+    if provider == "deepseek" and api_key:
+        return DeepSeekWebSearch(api_key)
     if exa_api_key:
         return ExaWebSearch(exa_api_key)
     return None

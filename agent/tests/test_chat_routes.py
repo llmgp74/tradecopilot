@@ -40,7 +40,7 @@ class StubGraph:
 
 def _client(tmp_path: Path, graph: StubGraph) -> TestClient:
     settings = Settings(db_path=tmp_path / "data.db")
-    app = create_app(settings, graph_factory=lambda _app: graph)
+    app = create_app(settings, graph_factory=lambda _app, _reasoning: graph)
     return TestClient(app)
 
 

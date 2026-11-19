@@ -13,8 +13,6 @@ from tradecopilot_agent.sources.feeds import FmpSource
 
 def _settings(**overrides: object) -> AppSettings:
     values: dict = {
-        "agent_model": "",
-        "model_api_key": "",
         "alpaca_api_key": "key",
         "alpaca_api_secret": "secret",
         "alpaca_base_url": "https://paper-api.alpaca.markets",

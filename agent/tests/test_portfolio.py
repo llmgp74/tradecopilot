@@ -1,7 +1,7 @@
 """Portfolio history request parameters."""
 
 import pytest
-from tradecopilot_agent.portfolio import history_params
+from tradecopilot_agent.portfolio import history_params, trading_base_url
 
 
 @pytest.mark.parametrize(
@@ -25,3 +25,11 @@ def test_history_params_use_supported_values(
 def test_history_params_fall_back_to_one_month() -> None:
     """An unknown range uses the one-month window."""
     assert history_params("unknown") == {"period": "1M", "timeframe": "1D"}
+
+
+def test_missing_base_url_defaults_to_the_paper_host() -> None:
+    """An empty stored URL uses the paper host, matching the previous default."""
+    assert trading_base_url("") == "https://paper-api.alpaca.markets"
+    assert trading_base_url("https://api.alpaca.markets/v2") == (
+        "https://api.alpaca.markets"
+    )
