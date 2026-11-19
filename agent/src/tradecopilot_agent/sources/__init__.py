@@ -96,6 +96,10 @@ class LiveSource:
         """Return Alpaca's working orders."""
         return await self.alpaca.open_orders()
 
+    async def order_book(self) -> ToolOutput:
+        """Return recent order states from Alpaca, keyed by client order id."""
+        return await self.alpaca.order_book()
+
     async def cancel_order(self, order_id: str) -> ToolOutput:
         """Cancel one working order through Alpaca."""
         return await self.alpaca.cancel_order(order_id)

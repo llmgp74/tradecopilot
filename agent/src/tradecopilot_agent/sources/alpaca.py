@@ -238,6 +238,51 @@ class AlpacaSource:
         ]
         return ToolOutput(summary=json.dumps(orders, default=str))
 
+    async def order_book(self) -> ToolOutput:
+        """Return the latest state of recent orders, keyed by client order id.
+
+        The journal reconciles its execution snapshots against this list, so a
+        fill that happens after placement reaches the stored decision. Only
+        closed and open orders from the recent window are returned.
+
+        Returns:
+            A payload with ``orders``, a client-order-id to state mapping.
+        """
+        current = self.settings()
+        try:
+            data = await fetch_json(
+                f"{trading_base_url(current.alpaca_base_url)}/v2/orders",
+                headers=self._headers(),
+                params={"status": "all", "limit": 500, "direction": "desc"},
+                client=self.client,
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            return ToolOutput(summary=f"Order list failed: {exc}", error="http")
+        orders: dict[str, dict[str, Any]] = {}
+        for item in data if isinstance(data, list) else []:
+            if not isinstance(item, dict):
+                continue
+            client_order_id = str(item.get("client_order_id", ""))
+            if not client_order_id:
+                continue
+            orders[client_order_id] = {
+                "order_id": str(item.get("id", "")),
+                "status": str(item.get("status", "")),
+                "fill_price": item.get("filled_avg_price"),
+                "fill_at": item.get("filled_at"),
+            }
+        return ToolOutput(
+            summary=json.dumps({"orders": orders}, default=str),
+            evidence=[
+                record(
+                    "order_book",
+                    {},
+                    "alpaca",
+                    {"kind": "orders", "orders": orders},
+                )
+            ],
+        )
+
     async def cancel_order(self, order_id: str) -> ToolOutput:
         """Request cancellation of one working order.
 
@@ -303,6 +348,8 @@ class AlpacaSource:
             return ToolOutput(summary=f"Order failed: {exc}", error="http")
         payload = {
             "kind": "order",
+            "order_id": str(data.get("id", "")),
+            "client_order_id": client_order_id,
             "status": str(data.get("status", "submitted")),
             "fill_price": data.get("filled_avg_price"),
             "fill_at": data.get("filled_at"),

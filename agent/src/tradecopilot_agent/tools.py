@@ -623,6 +623,7 @@ class TradingTools:
                 {
                     **leg,
                     "notional": notional,
+                    "order_id": payload.get("order_id"),
                     "status": status,
                     "fill_price": payload.get("fill_price"),
                     "fill_at": payload.get("fill_at"),
@@ -652,6 +653,7 @@ class TradingTools:
                         "qty": float(leg.get("qty", 0)),
                         "notional": _leg_notional(leg),
                         "entry_price": leg.get("entry_price"),
+                        "order_id": leg.get("order_id"),
                         "fill_price": leg.get("fill_price"),
                         "fill_at": leg.get("fill_at"),
                         "status": leg.get("status", status),
