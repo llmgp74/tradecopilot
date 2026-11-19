@@ -268,6 +268,39 @@ def test_a_new_message_auto_rejects_the_pending_ticket(tmp_path: Path) -> None:
     assert second["messages"][0].content == "never mind"
 
 
+class FailingStateGraph(StubGraph):
+    """A graph double whose state read raises a library error."""
+
+    async def aget_state(self, config: Any) -> SimpleNamespace:
+        raise RuntimeError(
+            "When there are multiple pending interrupts, you must specify the "
+            "interrupt id when resuming."
+        )
+
+
+def test_internal_errors_are_hidden_from_the_ui(tmp_path: Path, caplog: Any) -> None:
+    """A graph failure shows a general message and logs the details."""
+    graph = FailingStateGraph()
+    body = {
+        "thread_id": "t1",
+        "messages": [
+            {
+                "id": "u1",
+                "role": "user",
+                "parts": [{"type": "text", "text": "hi"}],
+            }
+        ],
+    }
+
+    with _client(tmp_path, graph) as client:
+        response = client.post("/api/chat", json=body)
+
+    assert response.status_code == 200
+    assert "unexpected error" in response.text
+    assert "multiple pending interrupts" not in response.text
+    assert "multiple pending interrupts" in caplog.text
+
+
 def test_mismatched_approval_returns_error_part(tmp_path: Path) -> None:
     """An approval for a different tool call does not resume the graph."""
     tool_call = {

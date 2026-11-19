@@ -32,6 +32,32 @@ def _parts(items: list[Event], **kwargs: Any) -> list[dict[str, Any]]:
     return asyncio.run(collect())
 
 
+async def _failing() -> AsyncIterator[Event]:
+    raise RuntimeError(
+        "When there are multiple pending interrupts, you must specify the "
+        "interrupt id when resuming."
+    )
+    yield ("values", {})
+
+
+def test_internal_error_text_is_hidden_from_the_ui(caplog: Any) -> None:
+    """Library error text is logged, not shown to the user."""
+
+    async def collect() -> list[dict[str, Any]]:
+        return [
+            part async for part in to_ui_message_stream(_failing(), message_id="a1")
+        ]
+
+    parts = asyncio.run(collect())
+    errors = [part for part in parts if part.get("type") == "error"]
+
+    assert errors
+    assert errors[0]["errorText"] == (
+        "The agent ran into an unexpected error. Try again."
+    )
+    assert "multiple pending interrupts" in caplog.text
+
+
 def test_text_round_trip() -> None:
     """Text deltas become one text part bounded by step parts."""
     parts = _parts(

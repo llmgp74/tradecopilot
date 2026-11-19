@@ -1,6 +1,7 @@
 """Graph input selection and SSE framing for the chat endpoint."""
 
 import json
+import logging
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -11,7 +12,10 @@ from langchain_core.messages.tool import ToolCall
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-from tradecopilot_agent.server.ai_sdk.adapter import to_ui_message_stream
+from tradecopilot_agent.server.ai_sdk.adapter import (
+    INTERNAL_ERROR_MESSAGE,
+    to_ui_message_stream,
+)
 from tradecopilot_agent.server.ai_sdk.convert import to_human_message
 from tradecopilot_agent.server.ai_sdk.types import (
     ApprovalDescriptor,
@@ -31,6 +35,8 @@ STREAM_HEADERS = {
 }
 
 AUTO_REJECT_REASON = "Superseded by a new message."
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -99,10 +105,17 @@ async def stream_chat(
             ):
                 pass
         turn = await _resolve_input(graph, messages, config, snapshot)
-    except Exception as exc:
+    except ValueError as exc:
         yield {"type": "start", "messageId": assistant_id}
         yield thread_part
         yield {"type": "error", "errorText": str(exc)}
+        yield {"type": "finish"}
+        return
+    except Exception:
+        logger.exception("Chat input resolution failed")
+        yield {"type": "start", "messageId": assistant_id}
+        yield thread_part
+        yield {"type": "error", "errorText": INTERNAL_ERROR_MESSAGE}
         yield {"type": "finish"}
         return
 

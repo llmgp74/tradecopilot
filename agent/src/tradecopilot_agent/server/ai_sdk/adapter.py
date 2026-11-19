@@ -37,6 +37,11 @@ from tradecopilot_agent.server.ai_sdk.utils import (
 
 logger = logging.getLogger(__name__)
 
+# User-facing text for failures whose detail belongs in the log only. Library
+# messages, such as LangGraph's interrupt-resume instructions, are not useful
+# to the person using the app.
+INTERNAL_ERROR_MESSAGE = "The agent ran into an unexpected error. Try again."
+
 _NAMESPACED_PARTS = frozenset(
     {
         "text-start",
@@ -101,9 +106,9 @@ async def to_ui_message_stream(
                 yield _with_namespace(part, namespace)
     except asyncio.CancelledError:
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Chat stream failed")
-        yield {"type": "error", "errorText": str(exc)}
+        yield {"type": "error", "errorText": INTERNAL_ERROR_MESSAGE}
 
     for part in _close_open(state):
         yield part
