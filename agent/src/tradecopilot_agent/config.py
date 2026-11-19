@@ -12,22 +12,15 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     """Configuration read from environment variables.
 
+    Credentials do not come from the environment. They are entered in the app
+    and stored in SQLite.
+
     Attributes:
-        agent_model: ``provider:model`` string for the agent graph. Required
-            before a graph can be built. A stored setting overrides it.
-        model_api_key: Provider key used when no stored setting holds one.
-        judge_model: ``provider:model`` string used by the evaluation judge.
-            Must reference a different model family from ``agent_model``.
-        db_path: SQLite file for the profile, journal, and checkpoints. Its
+        db_path: SQLite file for settings, threads, and checkpoints. Its
             parent directory is created on server startup.
         ui_dist: Directory containing the built frontend.
         host: Interface the server binds to. Loopback only by default.
         port: Port the server listens on.
-        alpaca_api_key: Alpaca key id. Portfolio reads are unavailable when
-            either credential is missing.
-        alpaca_api_secret: Alpaca secret key.
-        alpaca_base_url: Trading API base URL. The paper host selects paper
-            trading in API responses.
     """
 
     model_config = SettingsConfigDict(
@@ -37,21 +30,10 @@ class Settings(BaseSettings):
         env_file=_REPOSITORY_ROOT / ".env",
     )
 
-    agent_model: str | None = None
-    model_api_key: str | None = None
-    judge_model: str | None = None
     db_path: Path = Path.home() / ".tradecopilot" / "data.db"
     ui_dist: Path = _REPOSITORY_ROOT / "ui" / "dist"
     host: str = "127.0.0.1"
     port: int = 8000
-    alpaca_api_key: str | None = None
-    alpaca_api_secret: str | None = None
-    alpaca_base_url: str = "https://paper-api.alpaca.markets"
-    fmp_api_key: str | None = None
-    finnhub_api_key: str | None = None
-    fred_api_key: str | None = None
-    edgar_user_agent: str = ""
-    exa_api_key: str | None = None
 
     @field_validator("db_path", "ui_dist")
     @classmethod

@@ -2,18 +2,16 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import App from "./app";
-import { getHealth } from "@/lib/api";
+import { getSettings } from "@/lib/api";
 import { ThemeProvider } from "@/theme-provider";
+import { baseSettings } from "@/test/fixtures";
 
 vi.mock("@/components/chat/chat", () => ({
-  Chat: ({ setupRequired }: { setupRequired: boolean }) => (
-    <div data-setup={String(setupRequired)} data-testid="chat" />
-  ),
+  Chat: () => <div data-testid="chat" />,
 }));
 
 vi.mock("@/lib/api", () => ({
   ApiError: class extends Error {},
-  getHealth: vi.fn(async () => ({ status: "ok", agent_model: "x:y" })),
   listThreads: async () => ({ items: [], page_no: 1, page_size: 50, total: 0 }),
   getThread: async () => {
     throw new Error("not used");
@@ -33,7 +31,7 @@ vi.mock("@/lib/api", () => ({
     equity_curve: [],
   }),
   getProfile: async () => ({}),
-  getSettings: async () => ({}),
+  getSettings: vi.fn(async () => baseSettings),
   listJournal: async () => ({ items: [], page_no: 1, page_size: 20, total: 0 }),
   patchProfile: async () => ({}),
   patchSettings: async () => ({}),
@@ -53,10 +51,7 @@ it("keeps the chat mounted while a dialog is open", async () => {
   expect(screen.getByTestId("chat")).toBeInTheDocument();
 });
 
-it("refreshes the setup banner after a model is saved", async () => {
-  vi.mocked(getHealth)
-    .mockResolvedValueOnce({ status: "ok", agent_model: "" })
-    .mockResolvedValue({ status: "ok", agent_model: "x:y" });
+it("opens settings on the broker section from the status chip", async () => {
   render(
     <ThemeProvider>
       <App />
@@ -64,12 +59,27 @@ it("refreshes the setup banner after a model is saved", async () => {
   );
 
   await screen.findByTestId("chat");
-  expect(screen.getByTestId("chat")).toHaveAttribute("data-setup", "true");
+  await userEvent.click(await screen.findByRole("button", { name: "Alpaca" }));
 
+  expect(await screen.findByLabelText(/^alpaca key$/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Broker" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+});
+
+it("refreshes settings after the dialog closes", async () => {
+  render(
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>,
+  );
+
+  await screen.findByTestId("chat");
+  await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(1));
   await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(2));
   await userEvent.keyboard("{Escape}");
 
-  await waitFor(() =>
-    expect(screen.getByTestId("chat")).toHaveAttribute("data-setup", "false"),
-  );
+  await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(3));
 });

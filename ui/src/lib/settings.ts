@@ -1,8 +1,10 @@
 import type { AppSettings, AppSettingsPatch } from "./api";
 
+/** Settings sections shown in the dialog navigation. */
+export type SettingsSection = "general" | "models" | "broker" | "search" | "data";
+
 /** Fields rendered as password inputs. */
 export const SECRET_FIELDS: ReadonlySet<keyof AppSettings> = new Set<keyof AppSettings>([
-  "model_api_key",
   "alpaca_api_key",
   "alpaca_api_secret",
   "fmp_api_key",
@@ -13,8 +15,9 @@ export const SECRET_FIELDS: ReadonlySet<keyof AppSettings> = new Set<keyof AppSe
 
 /** Writable setting keys, excluding the server-managed timestamp. */
 const WRITABLE = [
-  "agent_model",
-  "model_api_key",
+  "model_provider",
+  "model_id",
+  "reasoning_effort",
   "alpaca_api_key",
   "alpaca_api_secret",
   "alpaca_base_url",

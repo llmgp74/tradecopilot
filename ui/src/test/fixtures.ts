@@ -15,8 +15,9 @@ export const baseProfile: Profile = {
 
 /** Settings fixture with non-empty values so diff tests can clear fields. */
 export const baseSettings: AppSettings = {
-  agent_model: "deepseek:deepseek-flash",
-  model_api_key: "sk-model",
+  model_provider: "deepseek",
+  model_id: "deepseek-flash",
+  reasoning_effort: "",
   alpaca_api_key: "PK-alpaca",
   alpaca_api_secret: "secret-alpaca",
   alpaca_base_url: "https://paper-api.alpaca.markets",
@@ -25,5 +26,25 @@ export const baseSettings: AppSettings = {
   fred_api_key: "fred-key",
   edgar_user_agent: "TradeCopilot test@example.com",
   exa_api_key: "exa-key",
+  providers: [
+    {
+      provider_id: "deepseek",
+      api_key: "sk-model",
+      base_url: "",
+      npm: "@ai-sdk/openai-compatible",
+      models: [
+        {
+          id: "deepseek-flash",
+          name: "DeepSeek V4.1 Flash",
+          tool_call: true,
+          reasoning_options: [
+            { type: "toggle" },
+            { type: "effort", values: ["low", "high", "max"] },
+          ],
+        },
+      ],
+      updated_at: "2026-11-01T00:00:00Z",
+    },
+  ],
   updated_at: "2026-11-01T00:00:00Z",
 };

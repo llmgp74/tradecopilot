@@ -29,7 +29,8 @@ class Health(BaseModel):
     """Readiness payload."""
 
     status: str
-    agent_model: str
+    model_provider: str
+    model_id: str
 
 
 class ExecutionSettings(BaseModel):
@@ -76,11 +77,41 @@ class ProfilePatch(BaseModel):
     execution: ExecutionSettings | None = None
 
 
+class ProviderModel(BaseModel):
+    """One model the user configured for a provider."""
+
+    id: str
+    name: str
+    tool_call: bool = True
+    reasoning_options: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ProviderCredential(BaseModel):
+    """Credentials and configured models for one catalog provider."""
+
+    provider_id: str
+    api_key: str = ""
+    base_url: str = ""
+    npm: str = ""
+    models: list[ProviderModel] = Field(default_factory=list)
+    updated_at: str = ""
+
+
+class ProviderCredentialPatch(BaseModel):
+    """Fields written to one provider row."""
+
+    api_key: str = ""
+    base_url: str = ""
+    npm: str
+    models: list[ProviderModel] = Field(default_factory=list)
+
+
 class AppSettings(BaseModel):
     """User-editable application settings."""
 
-    agent_model: str = ""
-    model_api_key: str = ""
+    model_provider: str = ""
+    model_id: str = ""
+    reasoning_effort: str = ""
     alpaca_api_key: str = ""
     alpaca_api_secret: str = ""
     alpaca_base_url: str = ""
@@ -89,14 +120,16 @@ class AppSettings(BaseModel):
     fred_api_key: str = ""
     edgar_user_agent: str = ""
     exa_api_key: str = ""
+    providers: list[ProviderCredential] = Field(default_factory=list)
     updated_at: str
 
 
 class AppSettingsPatch(BaseModel):
     """Partial settings update."""
 
-    agent_model: str | None = None
-    model_api_key: str | None = None
+    model_provider: str | None = None
+    model_id: str | None = None
+    reasoning_effort: str | None = None
     alpaca_api_key: str | None = None
     alpaca_api_secret: str | None = None
     alpaca_base_url: str | None = None

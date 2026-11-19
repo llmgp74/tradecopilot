@@ -49,8 +49,8 @@ def _client(
     graph: StubGraph | None = None,
     portfolio_fetcher: Any = None,
 ) -> TestClient:
-    settings = Settings(db_path=tmp_path / "data.db", agent_model=None)
-    factory = (lambda _app: graph) if graph is not None else None
+    settings = Settings(db_path=tmp_path / "data.db")
+    factory = (lambda _app, _reasoning: graph) if graph is not None else None
     return TestClient(create_app(settings, factory, portfolio_fetcher))
 
 
@@ -234,8 +234,6 @@ def test_settings_store_secrets_encrypted(tmp_path: Path) -> None:
         response = client.patch(
             "/api/settings",
             json={
-                "agent_model": "deepseek:deepseek-flash",
-                "model_api_key": "secret-model",
                 "alpaca_api_key": "secret-alpaca",
                 "alpaca_api_secret": "secret-broker",
             },
@@ -243,19 +241,13 @@ def test_settings_store_secrets_encrypted(tmp_path: Path) -> None:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["model_api_key"] == "secret-model"
-        assert body["alpaca_base_url"] == "https://paper-api.alpaca.markets"
+        assert body["alpaca_api_key"] == "secret-alpaca"
+        assert body["alpaca_base_url"] == ""
         assert response.headers["Cache-Control"] == "no-store"
-        assert client.get("/api/health").json()["agent_model"] == (
-            "deepseek:deepseek-flash"
-        )
 
         with sqlite3.connect(tmp_path / "data.db") as connection:
             row = connection.execute(
-                """
-                SELECT model_api_key, alpaca_api_key, alpaca_api_secret
-                FROM settings WHERE id = 1
-                """
+                "SELECT alpaca_api_key, alpaca_api_secret FROM settings WHERE id = 1"
             ).fetchone()
 
     assert row is not None
@@ -266,45 +258,60 @@ def test_settings_store_secrets_encrypted(tmp_path: Path) -> None:
     assert stat.S_IMODE(key_path.stat().st_mode) == 0o600
 
 
-def test_settings_clear_falls_back_to_environment(tmp_path: Path) -> None:
-    """Clearing a stored value restores the environment value."""
-    settings = Settings(
-        db_path=tmp_path / "data.db",
-        agent_model="env:model",
-        model_api_key=None,
-    )
-    with TestClient(create_app(settings)) as client:
-        assert client.get("/api/settings").json()["agent_model"] == "env:model"
-
+def test_settings_clear_does_not_fall_back_to_environment(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Clearing a stored value leaves it empty; the environment is not read."""
+    monkeypatch.setenv("ALPACA_API_KEY", "env-alpaca")
+    with _client(tmp_path) as client:
         stored = client.patch(
-            "/api/settings", json={"agent_model": "stored:model"}
+            "/api/settings", json={"alpaca_api_key": "stored-alpaca"}
         ).json()
-        assert stored["agent_model"] == "stored:model"
+        assert stored["alpaca_api_key"] == "stored-alpaca"
 
-        cleared = client.patch("/api/settings", json={"agent_model": ""}).json()
-        assert cleared["agent_model"] == "env:model"
+        cleared = client.patch("/api/settings", json={"alpaca_api_key": ""}).json()
+        assert cleared["alpaca_api_key"] == ""
 
 
 def test_settings_change_discards_the_graph(tmp_path: Path) -> None:
     """Changing the model invalidates the cached graph."""
     graph = StubGraph()
-    app = create_app(Settings(db_path=tmp_path / "data.db"), lambda _app: graph)
+    app = create_app(
+        Settings(db_path=tmp_path / "data.db"), lambda _app, _reasoning: graph
+    )
     with TestClient(app) as client:
-        app.state.graph = graph
-        client.patch("/api/settings", json={"agent_model": "deepseek:other"})
+        client.put(
+            "/api/providers/openai",
+            json={
+                "api_key": "k",
+                "npm": "@ai-sdk/openai",
+                "models": [
+                    {"id": "gpt-5", "name": "GPT-5"},
+                    {"id": "gpt-4", "name": "GPT-4"},
+                ],
+            },
+        )
+        client.patch(
+            "/api/settings",
+            json={"model_provider": "openai", "model_id": "gpt-5"},
+        )
+        app.state.graphs[""] = graph
+        client.patch("/api/settings", json={"model_id": "gpt-4"})
 
-    assert app.state.graph is None
+    assert app.state.graphs == {}
 
 
 def test_exa_key_change_discards_the_graph(tmp_path: Path) -> None:
     """Changing the Exa key invalidates the search provider in the graph."""
     graph = StubGraph()
-    app = create_app(Settings(db_path=tmp_path / "data.db"), lambda _app: graph)
+    app = create_app(
+        Settings(db_path=tmp_path / "data.db"), lambda _app, _reasoning: graph
+    )
     with TestClient(app) as client:
-        app.state.graph = graph
+        app.state.graphs[""] = graph
         client.patch("/api/settings", json={"exa_api_key": "exa-secret"})
 
-    assert app.state.graph is None
+    assert app.state.graphs == {}
 
 
 def test_portfolio_returns_the_injected_snapshot(tmp_path: Path) -> None:
@@ -337,12 +344,7 @@ def test_portfolio_returns_the_injected_snapshot(tmp_path: Path) -> None:
 
 def test_portfolio_without_broker_is_503(tmp_path: Path) -> None:
     """Missing broker credentials surface as 503."""
-    settings = Settings(
-        db_path=tmp_path / "data.db",
-        agent_model=None,
-        alpaca_api_key=None,
-        alpaca_api_secret=None,
-    )
+    settings = Settings(db_path=tmp_path / "data.db")
     with TestClient(create_app(settings)) as client:
         response = client.get("/api/portfolio")
     assert response.status_code == 503
@@ -490,3 +492,203 @@ def test_dismissing_a_suggestion_removes_it(tmp_path: Path) -> None:
 
     assert response.status_code == 204
     assert body["suggestions"] == []
+
+
+def test_put_provider_rejects_unsupported_npm(tmp_path: Path) -> None:
+    """A provider outside the supported integrations is rejected."""
+    with _client(tmp_path) as client:
+        response = client.put(
+            "/api/providers/vendor",
+            json={"api_key": "k", "npm": "@ai-sdk/azure", "models": []},
+        )
+    assert response.status_code == 400
+    assert "not supported" in response.json()["detail"]
+
+
+def test_put_provider_rejects_non_tool_model(tmp_path: Path) -> None:
+    """A model without tool calls cannot be configured."""
+    with _client(tmp_path) as client:
+        response = client.put(
+            "/api/providers/openai",
+            json={
+                "api_key": "k",
+                "npm": "@ai-sdk/openai",
+                "models": [{"id": "embed", "name": "Embed", "tool_call": False}],
+            },
+        )
+    assert response.status_code == 400
+    assert "tool" in response.json()["detail"]
+
+
+def test_put_provider_moves_selection_when_model_removed(tmp_path: Path) -> None:
+    """Removing the selected model through the API moves to the first one left."""
+    with _client(tmp_path) as client:
+        client.put(
+            "/api/providers/openai",
+            json={
+                "api_key": "k",
+                "npm": "@ai-sdk/openai",
+                "models": [{"id": "gpt-5", "name": "GPT-5"}],
+            },
+        )
+        client.patch(
+            "/api/settings",
+            json={"model_provider": "openai", "model_id": "gpt-5"},
+        )
+        client.put(
+            "/api/providers/openai",
+            json={
+                "api_key": "k",
+                "npm": "@ai-sdk/openai",
+                "models": [{"id": "gpt-4", "name": "GPT-4"}],
+            },
+        )
+        settings = client.get("/api/settings").json()
+    assert settings["model_provider"] == "openai"
+    assert settings["model_id"] == "gpt-4"
+
+
+def test_patch_selection_rejects_unconfigured_model(tmp_path: Path) -> None:
+    """Selecting a model without a credential row is rejected."""
+    with _client(tmp_path) as client:
+        response = client.patch(
+            "/api/settings", json={"model_provider": "openai", "model_id": "gpt-5"}
+        )
+    assert response.status_code == 400
+
+
+def test_settings_ignores_environment_keys(tmp_path: Path, monkeypatch) -> None:
+    """Provider keys come from SQLite only."""
+    monkeypatch.setenv("OPENAI_API_KEY", "from-env")
+    with _client(tmp_path) as client:
+        settings = client.get("/api/settings").json()
+    assert settings["providers"] == []
+
+
+def test_health_reports_catalog_ids(tmp_path: Path) -> None:
+    """Health exposes the catalog provider and model ids."""
+    with _client(tmp_path) as client:
+        body = client.get("/api/health").json()
+    assert body == {"status": "ok", "model_provider": "", "model_id": ""}
+
+
+def test_chat_rejects_reasoning_not_in_the_model_options(tmp_path: Path) -> None:
+    """An override outside the model's options is a 400."""
+    factory = lambda _app, _reasoning: StubGraph()  # noqa: E731
+    client = TestClient(create_app(Settings(db_path=tmp_path / "data.db"), factory))
+    with client:
+        client.put(
+            "/api/providers/openai",
+            json={
+                "api_key": "k",
+                "npm": "@ai-sdk/openai",
+                "models": [
+                    {
+                        "id": "gpt-5",
+                        "name": "GPT-5",
+                        "reasoning_options": [
+                            {"type": "effort", "values": ["low", "high"]}
+                        ],
+                    }
+                ],
+            },
+        )
+        client.patch(
+            "/api/settings",
+            json={"model_provider": "openai", "model_id": "gpt-5"},
+        )
+        response = client.post(
+            "/api/chat",
+            json={
+                "thread_id": "t1",
+                "reasoning": "max",
+                "messages": [
+                    {
+                        "id": "u1",
+                        "role": "user",
+                        "parts": [{"type": "text", "text": "hi"}],
+                    }
+                ],
+            },
+        )
+    assert response.status_code == 400
+    assert "reasoning" in response.json()["detail"].lower()
+
+
+def test_graph_is_cached_per_reasoning(tmp_path: Path) -> None:
+    """One graph is built per effective reasoning value."""
+    seen: list[str] = []
+    factory = lambda _app, reasoning: seen.append(reasoning) or StubGraph()  # noqa: E731
+    client = TestClient(create_app(Settings(db_path=tmp_path / "data.db"), factory))
+    with client:
+        client.put(
+            "/api/providers/openai",
+            json={
+                "api_key": "k",
+                "npm": "@ai-sdk/openai",
+                "models": [
+                    {
+                        "id": "gpt-5",
+                        "name": "GPT-5",
+                        "reasoning_options": [
+                            {"type": "effort", "values": ["low", "high"]}
+                        ],
+                    }
+                ],
+            },
+        )
+        client.patch(
+            "/api/settings",
+            json={"model_provider": "openai", "model_id": "gpt-5"},
+        )
+        message = {
+            "id": "u1",
+            "role": "user",
+            "parts": [{"type": "text", "text": "hi"}],
+        }
+        client.post("/api/chat", json={"reasoning": "low", "messages": [message]})
+        client.post("/api/chat", json={"reasoning": "low", "messages": [message]})
+        client.post("/api/chat", json={"reasoning": "high", "messages": [message]})
+    assert seen == ["low", "high"]
+
+
+def test_switching_models_clears_an_incompatible_reasoning_default(
+    tmp_path: Path,
+) -> None:
+    """A default that the next model does not allow is cleared, not rejected."""
+    with _client(tmp_path) as client:
+        client.put(
+            "/api/providers/openai",
+            json={
+                "api_key": "k",
+                "npm": "@ai-sdk/openai",
+                "models": [
+                    {
+                        "id": "gpt-5",
+                        "name": "GPT-5",
+                        "reasoning_options": [
+                            {"type": "effort", "values": ["low", "high"]}
+                        ],
+                    },
+                    {
+                        "id": "gpt-4",
+                        "name": "GPT-4",
+                        "reasoning_options": [{"type": "effort", "values": ["low"]}],
+                    },
+                ],
+            },
+        )
+        client.patch(
+            "/api/settings",
+            json={
+                "model_provider": "openai",
+                "model_id": "gpt-5",
+                "reasoning_effort": "high",
+            },
+        )
+        response = client.patch(
+            "/api/settings", json={"model_provider": "openai", "model_id": "gpt-4"}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["reasoning_effort"] == ""

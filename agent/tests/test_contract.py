@@ -42,12 +42,16 @@ def test_build_agent_composes_the_loop(tmp_path: Path, monkeypatch) -> None:
 
 def test_health(tmp_path: Path) -> None:
     """The server exposes a health endpoint with the configured model."""
-    settings = Settings(db_path=tmp_path / "data.db", agent_model=None)
+    settings = Settings(db_path=tmp_path / "data.db")
     with TestClient(create_app(settings)) as client:
         response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "agent_model": ""}
+    assert response.json() == {
+        "status": "ok",
+        "model_provider": "",
+        "model_id": "",
+    }
 
 
 def test_checkpointer_reuses_data_database(tmp_path: Path) -> None:

@@ -18,6 +18,8 @@ from tradecopilot_agent.store import now_iso
 
 _log = logging.getLogger(__name__)
 
+DEFAULT_ALPACA_BASE_URL = "https://paper-api.alpaca.markets"
+
 _RANGES: dict[str, tuple[str, str]] = {
     "1D": ("1D", "5Min"),
     "1W": ("1W", "15Min"),
@@ -59,7 +61,7 @@ def trading_base_url(url: str) -> str:
     Returns:
         The base URL without a trailing slash or ``/v2``.
     """
-    base = url.rstrip("/")
+    base = (url or DEFAULT_ALPACA_BASE_URL).rstrip("/")
     return base[:-3] if base.endswith("/v2") else base
 
 
@@ -146,7 +148,7 @@ def _portfolio(
 
     return Portfolio(
         as_of=now_iso(),
-        paper="paper-api" in settings.alpaca_base_url,
+        paper="paper-api" in trading_base_url(settings.alpaca_base_url),
         account=Account(
             currency=str(account["currency"]),
             equity=equity,

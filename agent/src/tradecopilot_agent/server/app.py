@@ -1,6 +1,5 @@
 """FastAPI application exposing the HTTP API."""
 
-import os
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
@@ -19,6 +18,7 @@ from pydantic import BaseModel
 from tradecopilot_agent import __version__
 from tradecopilot_agent.agent import build_agent
 from tradecopilot_agent.config import Settings, get_settings
+from tradecopilot_agent.llm import build_provider_model
 from tradecopilot_agent.memory import MemoryConfig
 from tradecopilot_agent.models import (
     AppSettings,
@@ -31,6 +31,8 @@ from tradecopilot_agent.models import (
     PortfolioRange,
     Profile,
     ProfilePatch,
+    ProviderCredential,
+    ProviderCredentialPatch,
     ThreadDetail,
     ThreadList,
     ThreadSummary,
@@ -39,6 +41,11 @@ from tradecopilot_agent.outcomes import attach_outcomes
 from tradecopilot_agent.portfolio import PortfolioUnavailable, fetch_portfolio
 from tradecopilot_agent.promotion import derive_suggestions
 from tradecopilot_agent.server.ai_sdk.convert import to_ui_messages
+from tradecopilot_agent.server.model_settings import (
+    resolve_model,
+    validate_provider_patch,
+    validate_settings_patch,
+)
 from tradecopilot_agent.server.streaming import (
     STREAM_HEADERS,
     sse,
@@ -48,14 +55,8 @@ from tradecopilot_agent.sources import LiveSource
 from tradecopilot_agent.store import Store, ThreadRecord
 from tradecopilot_agent.web import build_web_search
 
-GraphFactory = Callable[[FastAPI], Any]
+GraphFactory = Callable[[FastAPI, str], Any]
 PortfolioFetcher = Callable[[AppSettings, str], Awaitable[Portfolio]]
-
-_PROVIDER_ENV = {
-    "deepseek": "DEEPSEEK_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openai": "OPENAI_API_KEY",
-}
 
 
 class ChatRequest(BaseModel):
@@ -71,6 +72,7 @@ class ChatRequest(BaseModel):
 
     thread_id: str | None = None
     messages: list[dict[str, Any]]
+    reasoning: str | None = None
     trigger: str | None = None
     messageId: str | None = None
 
@@ -135,7 +137,7 @@ def create_app(
     app.state.settings = settings or get_settings()
     app.state.graph_factory = graph_factory
     app.state.portfolio_fetcher = portfolio_fetcher or fetch_portfolio
-    app.state.graph = None
+    app.state.graphs = {}
 
     @app.get("/api/health", response_model=Health)
     async def health() -> Health:
@@ -144,9 +146,11 @@ def create_app(
         Returns:
             The readiness payload.
         """
+        effective = _effective_settings(app)
         return Health(
             status="ok",
-            agent_model=_effective_settings(app).agent_model,
+            model_provider=effective.model_provider,
+            model_id=effective.model_id,
         )
 
     @app.post(
@@ -175,8 +179,15 @@ def create_app(
         Raises:
             HTTPException: When the agent model is not configured.
         """
+        effective = _effective_settings(app)
+        reasoning = body.reasoning or ""
+        if body.reasoning is not None:
+            try:
+                validate_settings_patch(effective, {"reasoning_effort": reasoning})
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         try:
-            graph = _get_graph(app)
+            graph = _get_graph(app, reasoning)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -236,7 +247,7 @@ def create_app(
         if record is None:
             raise HTTPException(status_code=404, detail="thread not found")
         try:
-            graph = _get_graph(app)
+            graph = _get_graph(app, "")
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
@@ -309,11 +320,77 @@ def create_app(
             for key, value in body.model_dump(exclude_unset=True).items()
             if value is not None
         }
+        # The saved reasoning default belongs to the selected model. Switching
+        # models drops it instead of rejecting the switch because the old value
+        # is missing from the new model's options.
+        if (
+            "model_provider" in changes or "model_id" in changes
+        ) and "reasoning_effort" not in changes:
+            changes["reasoning_effort"] = ""
+        try:
+            validate_settings_patch(_effective_settings(app), changes)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         app.state.store.patch_settings(changes)
-        # The graph captures the model, its key and the search provider's
-        # Exa key when it is built. Other provider keys are read per request.
-        if {"agent_model", "model_api_key", "exa_api_key"} & changes.keys():
-            app.state.graph = None
+        # The graph captures the model, its reasoning, and the search key when
+        # it is built.
+        if {
+            "model_provider",
+            "model_id",
+            "reasoning_effort",
+            "exa_api_key",
+        } & changes.keys():
+            app.state.graphs.clear()
+        response.headers["Cache-Control"] = "no-store"
+        return _effective_settings(app)
+
+    @app.put("/api/providers/{provider_id}", response_model=AppSettings)
+    async def put_provider(
+        provider_id: str, body: ProviderCredentialPatch, response: Response
+    ) -> AppSettings:
+        """Store one provider and its configured models.
+
+        Args:
+            provider_id: Catalog provider id.
+            body: Credentials and model list.
+            response: Response used to disable caching.
+
+        Returns:
+            The effective settings after the update.
+
+        Raises:
+            HTTPException: 400 when the provider payload is invalid.
+        """
+        try:
+            validate_provider_patch(body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        app.state.store.upsert_provider(
+            ProviderCredential(
+                provider_id=provider_id,
+                api_key=body.api_key,
+                base_url=body.base_url,
+                npm=body.npm,
+                models=body.models,
+            )
+        )
+        app.state.graphs.clear()
+        response.headers["Cache-Control"] = "no-store"
+        return _effective_settings(app)
+
+    @app.delete("/api/providers/{provider_id}", response_model=AppSettings)
+    async def delete_provider(provider_id: str, response: Response) -> AppSettings:
+        """Delete one provider and its configured models.
+
+        Args:
+            provider_id: Catalog provider id.
+            response: Response used to disable caching.
+
+        Returns:
+            The effective settings after the deletion.
+        """
+        app.state.store.delete_provider(provider_id)
+        app.state.graphs.clear()
         response.headers["Cache-Control"] = "no-store"
         return _effective_settings(app)
 
@@ -456,92 +533,72 @@ def _profile_payload(app: FastAPI) -> Profile:
     return Profile.model_validate({**profile, "suggestions": suggestions})
 
 
-def _get_graph(app: FastAPI) -> Any:
-    """Return the shared graph, building it on first use.
+def _get_graph(app: FastAPI, reasoning: str) -> Any:
+    """Return the graph for the effective reasoning value, building it once.
 
     Args:
         app: Application holding the factory and checkpointer.
+        reasoning: Per-turn override, empty to use the saved default.
 
     Returns:
         The compiled graph.
     """
-    graph = app.state.graph
+    effective = reasoning or _effective_settings(app).reasoning_effort
+    graph = app.state.graphs.get(effective)
     if graph is not None:
         return graph
     factory: GraphFactory = app.state.graph_factory or _default_graph
-    graph = factory(app)
-    app.state.graph = graph
+    graph = factory(app, effective)
+    app.state.graphs[effective] = graph
     return graph
 
 
-def _default_graph(app: FastAPI) -> Any:
+def _default_graph(app: FastAPI, reasoning: str) -> Any:
     """Build the DeepAgents graph with the application checkpointer.
 
     Args:
         app: Application holding the settings and checkpointer.
+        reasoning: Effective reasoning value.
 
     Returns:
         The compiled graph.
 
     Raises:
-        RuntimeError: If `AGENT_MODEL` is not configured.
+        RuntimeError: When no model is configured.
     """
     effective = _effective_settings(app)
-    _apply_model_key(effective)
+    resolved = resolve_model(effective)
+    if resolved is None:
+        raise RuntimeError("No model is configured. Choose one in Settings.")
+    credential, model = resolved
+    chat_model = build_provider_model(
+        effective.model_provider, model.id, credential, reasoning
+    )
     config = MemoryConfig(condition="full", store=app.state.store)
     return build_agent(
         config,
         LiveSource(lambda: _effective_settings(app)),
         checkpointer=app.state.checkpointer,
-        model=effective.agent_model or None,
+        model=chat_model,
         web_search=build_web_search(
-            effective.agent_model,
-            effective.model_api_key,
+            effective.model_provider,
+            credential.api_key,
             effective.exa_api_key,
         ),
     )
 
 
 def _effective_settings(app: FastAPI) -> AppSettings:
-    """Merge stored settings over the process configuration.
+    """Return the stored settings. Credentials never come from the environment.
 
     Args:
-        app: Application holding the store and settings.
+        app: Application holding the store.
 
     Returns:
-        The effective settings. Stored values win when non-empty.
+        The stored settings with provider credentials.
     """
-    base: Settings = app.state.settings
-    stored: AppSettings = app.state.store.get_settings()
-    return AppSettings(
-        agent_model=stored.agent_model or base.agent_model or "",
-        model_api_key=stored.model_api_key or base.model_api_key or "",
-        alpaca_api_key=stored.alpaca_api_key or base.alpaca_api_key or "",
-        alpaca_api_secret=stored.alpaca_api_secret or base.alpaca_api_secret or "",
-        alpaca_base_url=stored.alpaca_base_url or base.alpaca_base_url,
-        fmp_api_key=stored.fmp_api_key or base.fmp_api_key or "",
-        finnhub_api_key=stored.finnhub_api_key or base.finnhub_api_key or "",
-        fred_api_key=stored.fred_api_key or base.fred_api_key or "",
-        edgar_user_agent=stored.edgar_user_agent or base.edgar_user_agent or "",
-        exa_api_key=stored.exa_api_key or base.exa_api_key or "",
-        updated_at=stored.updated_at,
-    )
-
-
-def _apply_model_key(settings: AppSettings) -> None:
-    """Expose the stored model key to the provider SDK.
-
-    Args:
-        settings: Effective settings holding the model and key.
-    """
-    if not settings.model_api_key:
-        return
-    provider, _, model_id = settings.agent_model.partition(":")
-    if provider == "anthropic" and model_id.startswith("deepseek"):
-        provider = "deepseek"
-    variable = _PROVIDER_ENV.get(provider)
-    if variable is not None:
-        os.environ[variable] = settings.model_api_key
+    settings: AppSettings = app.state.store.get_settings()
+    return settings
 
 
 def _approval_descriptor(

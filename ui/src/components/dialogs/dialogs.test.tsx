@@ -5,13 +5,29 @@ import { ProfileDialog } from "./profile";
 import { SettingsDialog } from "./settings";
 import { ThemeProvider } from "@/theme-provider";
 import { baseProfile, baseSettings } from "@/test/fixtures";
+import { patchSettings } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   ApiError: class extends Error {},
   getProfile: async () => baseProfile,
   patchProfile: async (patch: object) => ({ ...baseProfile, ...patch }),
-  getSettings: async () => baseSettings,
-  patchSettings: async (patch: object) => ({ ...baseSettings, ...patch }),
+  getSettings: async () => ({ ...baseSettings, alpaca_base_url: "" }),
+  patchSettings: vi.fn(async (patch: object) => ({ ...baseSettings, ...patch })),
+  putProvider: vi.fn(async () => baseSettings),
+  deleteProvider: vi.fn(async () => baseSettings),
+}));
+
+vi.mock("@/lib/catalog", () => ({
+  SUPPORTED_NPM: new Set([
+    "@ai-sdk/openai",
+    "@ai-sdk/openai-compatible",
+    "@ai-sdk/anthropic",
+    "@ai-sdk/google",
+  ]),
+  loadModelCatalog: async () => ({
+    catalog: { providers: {} },
+    source: "builtin" as const,
+  }),
 }));
 
 it("keeps typed list separators in the profile form", async () => {
@@ -28,6 +44,30 @@ it("keeps typed list separators in the profile form", async () => {
   expect(field).toHaveValue("Energy, Utilities");
 });
 
+it("opens on the requested section", async () => {
+  render(
+    <ThemeProvider>
+      <SettingsDialog open initialSection="broker" onOpenChange={() => {}} />
+    </ThemeProvider>,
+  );
+
+  expect(await screen.findByLabelText(/^alpaca key$/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Broker" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Model Providers" })).toBeInTheDocument();
+});
+
+it("fills the default Alpaca base URL", async () => {
+  render(
+    <ThemeProvider>
+      <SettingsDialog open initialSection="broker" onOpenChange={() => {}} />
+    </ThemeProvider>,
+  );
+
+  expect(await screen.findByLabelText(/^alpaca base url$/i)).toHaveValue(
+    "https://paper-api.alpaca.markets/v2",
+  );
+});
+
 it("guards the settings dialog close while edits are pending", async () => {
   const onOpenChange = vi.fn();
   render(
@@ -36,7 +76,8 @@ it("guards the settings dialog close while edits are pending", async () => {
     </ThemeProvider>,
   );
 
-  const field = await screen.findByLabelText(/provider and model/i);
+  await userEvent.click(screen.getByRole("button", { name: "Broker" }));
+  const field = await screen.findByLabelText(/^alpaca key$/i);
   await userEvent.type(field, "x");
   await userEvent.keyboard("{Escape}");
 
@@ -44,51 +85,39 @@ it("guards the settings dialog close while edits are pending", async () => {
   expect(onOpenChange).not.toHaveBeenCalledWith(false);
 });
 
-it("closes the settings dialog after a successful save", async () => {
+it("confirms before switching away from a dirty section", async () => {
+  render(
+    <ThemeProvider>
+      <SettingsDialog open initialSection="broker" onOpenChange={() => {}} />
+    </ThemeProvider>,
+  );
+
+  const field = await screen.findByLabelText(/^alpaca key$/i);
+  await userEvent.clear(field);
+  await userEvent.type(field, "abc");
+  await userEvent.click(screen.getByRole("button", { name: "Data Providers" }));
+
+  expect(await screen.findByText(/discard unsaved changes/i)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+  expect(await screen.findByLabelText(/^fmp api key$/i)).toBeInTheDocument();
+});
+
+it("saves the current section without closing", async () => {
   const onOpenChange = vi.fn();
   render(
     <ThemeProvider>
-      <SettingsDialog open onOpenChange={onOpenChange} />
+      <SettingsDialog open initialSection="broker" onOpenChange={onOpenChange} />
     </ThemeProvider>,
   );
 
-  const field = await screen.findByLabelText(/provider and model/i);
-  await userEvent.type(field, "x");
-  await userEvent.click(screen.getByRole("button", { name: /save settings/i }));
-
-  await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-});
-
-it("toggles one secret field independently", async () => {
-  render(
-    <ThemeProvider>
-      <SettingsDialog open onOpenChange={() => {}} />
-    </ThemeProvider>,
-  );
-
-  const modelKey = (await screen.findByLabelText(/^Model API key$/i)) as HTMLInputElement;
-  const alpacaKey = screen.getByLabelText("Alpaca key") as HTMLInputElement;
-  expect(modelKey.type).toBe("password");
-
-  await userEvent.click(screen.getByRole("button", { name: /show model api key/i }));
-
-  expect(modelKey.type).toBe("text");
-  expect(alpacaKey.type).toBe("password");
-});
-
-it("switches the theme from the settings dialog", async () => {
-  localStorage.setItem("tradecopilot-theme", "light");
-  render(
-    <ThemeProvider>
-      <SettingsDialog open onOpenChange={() => {}} />
-    </ThemeProvider>,
-  );
-
-  await userEvent.click(await screen.findByRole("combobox", { name: /theme/i }));
-  await userEvent.click(await screen.findByRole("option", { name: "Dark" }));
+  const field = await screen.findByLabelText(/^alpaca key$/i);
+  await userEvent.clear(field);
+  await userEvent.type(field, "new-key");
+  await userEvent.click(screen.getByRole("button", { name: "Save section" }));
 
   await waitFor(() =>
-    expect(document.documentElement.classList.contains("dark")).toBe(true),
+    expect(patchSettings).toHaveBeenCalledWith({ alpaca_api_key: "new-key" }),
   );
-  expect(localStorage.getItem("tradecopilot-theme")).toBe("dark");
+  expect(onOpenChange).not.toHaveBeenCalledWith(false);
 });

@@ -185,10 +185,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/providers/{provider_id}:
+    put:
+      summary: Put Provider
+      description: "Store one provider and its configured models.\n\nArgs:\n    provider_id:\
+        \ Catalog provider id.\n    body: Credentials and model list.\n    response:\
+        \ Response used to disable caching.\n\nReturns:\n    The effective settings\
+        \ after the update.\n\nRaises:\n    HTTPException: 400 when the provider payload\
+        \ is invalid."
+      operationId: put_provider_api_providers__provider_id__put
+      parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Provider Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderCredentialPatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Provider
+      description: "Delete one provider and its configured models.\n\nArgs:\n    provider_id:\
+        \ Catalog provider id.\n    response: Response used to disable caching.\n\n\
+        Returns:\n    The effective settings after the deletion."
+      operationId: delete_provider_api_providers__provider_id__delete
+      parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Provider Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/profile:
     get:
       summary: Get Profile
-      description: "Return the user profile.\n\nReturns:\n    The full profile."
+      description: "Return the user profile and its suggestions.\n\nReturns:\n   \
+        \ The full profile."
       operationId: get_profile_api_profile_get
       responses:
         '200':
@@ -225,7 +287,9 @@ paths:
   /api/profile/suggestions/{key}/dismiss:
     post:
       summary: Dismiss Suggestion
-      description: "Remember that the user declined a profile suggestion."
+      description: "Remember that the user declined a profile suggestion.\n\nArgs:\n\
+        \    key: Stable suggestion key from the profile response.\n\nReturns:\n \
+        \   An empty response."
       operationId: dismiss_suggestion_api_profile_suggestions__key__dismiss_post
       parameters:
       - name: key
@@ -237,6 +301,12 @@ paths:
       responses:
         '204':
           description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/journal:
     get:
       summary: List Journal
@@ -351,13 +421,17 @@ components:
       description: Broker account snapshot.
     AppSettings:
       properties:
-        agent_model:
+        model_provider:
           type: string
-          title: Agent Model
+          title: Model Provider
           default: ''
-        model_api_key:
+        model_id:
           type: string
-          title: Model Api Key
+          title: Model Id
+          default: ''
+        reasoning_effort:
+          type: string
+          title: Reasoning Effort
           default: ''
         alpaca_api_key:
           type: string
@@ -391,6 +465,11 @@ components:
           type: string
           title: Exa Api Key
           default: ''
+        providers:
+          items:
+            $ref: '#/components/schemas/ProviderCredential'
+          type: array
+          title: Providers
         updated_at:
           type: string
           title: Updated At
@@ -401,16 +480,21 @@ components:
       description: User-editable application settings.
     AppSettingsPatch:
       properties:
-        agent_model:
+        model_provider:
           anyOf:
           - type: string
           - type: 'null'
-          title: Agent Model
-        model_api_key:
+          title: Model Provider
+        model_id:
           anyOf:
           - type: string
           - type: 'null'
-          title: Model Api Key
+          title: Model Id
+        reasoning_effort:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reasoning Effort
         alpaca_api_key:
           anyOf:
           - type: string
@@ -467,6 +551,11 @@ components:
             type: object
           type: array
           title: Messages
+        reasoning:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reasoning
         trigger:
           anyOf:
           - type: string
@@ -542,13 +631,17 @@ components:
         status:
           type: string
           title: Status
-        agent_model:
+        model_provider:
           type: string
-          title: Agent Model
+          title: Model Provider
+        model_id:
+          type: string
+          title: Model Id
       type: object
       required:
       - status
-      - agent_model
+      - model_provider
+      - model_id
       title: Health
       description: Readiness payload.
     JournalEntry:
@@ -934,42 +1027,6 @@ components:
       - updated_at
       title: Profile
       description: Durable user profile.
-    Suggestion:
-      properties:
-        key:
-          type: string
-          title: Key
-        kind:
-          type: string
-          enum:
-          - cap
-          - horizon
-          - sector
-          title: Kind
-        title:
-          type: string
-          title: Title
-        rationale:
-          type: string
-          title: Rationale
-        patch:
-          type: object
-          additionalProperties: true
-          title: Patch
-        decision_ids:
-          items:
-            type: string
-          type: array
-          title: Decision Ids
-      type: object
-      required:
-      - key
-      - kind
-      - title
-      - rationale
-      - patch
-      title: Suggestion
-      description: A profile change proposed from repeated rejection reasons.
     ProfilePatch:
       properties:
         risk_band:
@@ -1026,6 +1083,120 @@ components:
       type: object
       title: ProfilePatch
       description: Partial profile update.
+    ProviderCredential:
+      properties:
+        provider_id:
+          type: string
+          title: Provider Id
+        api_key:
+          type: string
+          title: Api Key
+          default: ''
+        base_url:
+          type: string
+          title: Base Url
+          default: ''
+        npm:
+          type: string
+          title: Npm
+          default: ''
+        models:
+          items:
+            $ref: '#/components/schemas/ProviderModel'
+          type: array
+          title: Models
+        updated_at:
+          type: string
+          title: Updated At
+          default: ''
+      type: object
+      required:
+      - provider_id
+      title: ProviderCredential
+      description: Credentials and configured models for one catalog provider.
+    ProviderCredentialPatch:
+      properties:
+        api_key:
+          type: string
+          title: Api Key
+          default: ''
+        base_url:
+          type: string
+          title: Base Url
+          default: ''
+        npm:
+          type: string
+          title: Npm
+        models:
+          items:
+            $ref: '#/components/schemas/ProviderModel'
+          type: array
+          title: Models
+      type: object
+      required:
+      - npm
+      title: ProviderCredentialPatch
+      description: Fields written to one provider row.
+    ProviderModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        tool_call:
+          type: boolean
+          title: Tool Call
+          default: true
+        reasoning_options:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Reasoning Options
+      type: object
+      required:
+      - id
+      - name
+      title: ProviderModel
+      description: One model the user configured for a provider.
+    Suggestion:
+      properties:
+        key:
+          type: string
+          title: Key
+        kind:
+          type: string
+          enum:
+          - cap
+          - horizon
+          - sector
+          title: Kind
+        title:
+          type: string
+          title: Title
+        rationale:
+          type: string
+          title: Rationale
+        patch:
+          additionalProperties: true
+          type: object
+          title: Patch
+        decision_ids:
+          items:
+            type: string
+          type: array
+          title: Decision Ids
+      type: object
+      required:
+      - key
+      - kind
+      - title
+      - rationale
+      - patch
+      title: Suggestion
+      description: A profile change proposed from repeated rejection reasons.
     ThreadDetail:
       properties:
         thread_id:

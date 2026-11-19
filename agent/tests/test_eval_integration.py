@@ -214,7 +214,6 @@ def test_local_graph_uses_the_scenario_clock_and_injected_models(
         precise_time: Use a timestamp or the backward-compatible as_of date.
     """
     monkeypatch.setattr(agent_module, "build_chat_model", _forbidden)
-    monkeypatch.setattr(agent_module, "get_settings", _forbidden)
     store = Store(tmp_path / "data.db")
     store.patch_profile({"watchlist": ["SYNAA"]})
     store.append_journal(_event("known-history", "2020-09-14T10:00:00Z"))

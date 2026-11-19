@@ -8,13 +8,21 @@ import type { UIMessage } from "ai";
  *
  * @param messages - Full client history.
  * @param threadId - Current thread id, or null for a new thread.
+ * @param reasoning - Per-turn reasoning override, or null to use the default.
  * @returns The request body.
  */
 export function chatRequest(
   messages: UIMessage[],
   threadId: string | null,
-): { body: { messages: UIMessage[]; thread_id?: string } } {
+  reasoning: string | null = null,
+): {
+  body: { messages: UIMessage[]; thread_id?: string; reasoning?: string };
+} {
   return {
-    body: threadId === null ? { messages } : { messages, thread_id: threadId },
+    body: {
+      messages,
+      ...(threadId === null ? {} : { thread_id: threadId }),
+      ...(reasoning === null ? {} : { reasoning }),
+    },
   };
 }
