@@ -219,3 +219,14 @@ def test_order_history_is_unavailable() -> None:
     output = asyncio.run(source.order_history(7))
     assert output.error == "execution_disabled"
     assert output.evidence == []
+
+
+def test_order_methods_return_explicit_errors() -> None:
+    """Unimplemented protocol methods must not fall through to ``None``."""
+    source = FrozenSource([], _DECISION)
+
+    opened = asyncio.run(source.open_orders())
+    cancelled = asyncio.run(source.cancel_order("order-1"))
+
+    assert opened.error == "fixture_missing"
+    assert cancelled.error == "execution_disabled"

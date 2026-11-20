@@ -309,9 +309,34 @@ def _unique_json_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _strip_code_fence(text: str) -> str:
+    """Remove a Markdown fence around a JSON reply.
+
+    Some models wrap structured output in ```json fences even when asked for
+    raw JSON. Only a fence that opens the reply and closes at the end is
+    removed, so a stray backtick inside the payload is left alone.
+
+    Args:
+        text: The model's reply.
+
+    Returns:
+        The reply without an enclosing code fence.
+    """
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    newline = stripped.find("\n")
+    if newline == -1:
+        return stripped
+    inner = stripped[newline + 1 :]
+    if inner.rstrip().endswith("```"):
+        inner = inner.rstrip()[:-3]
+    return inner.strip()
+
+
 def _parse_judgment(text: str, candidate: JudgeInput) -> Judgment:
     judgment = Judgment.model_validate(
-        json.loads(text, object_pairs_hook=_unique_json_fields)
+        json.loads(_strip_code_fence(text), object_pairs_hook=_unique_json_fields)
     )
     if judgment.sample_id != candidate.sample_id:
         raise ValueError("The output sample_id does not match the candidate.")

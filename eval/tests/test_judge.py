@@ -137,6 +137,18 @@ def test_invalid_json_is_retried_once_and_preserved() -> None:
     assert result.attempts[1].error is None
 
 
+def test_a_markdown_fenced_reply_is_accepted() -> None:
+    """A reasoning model may wrap valid JSON in a code fence."""
+    fenced = "```json\n" + json.dumps(_judgment()) + "\n```"
+
+    async def transport(system: str, user: str) -> str:
+        return fenced
+
+    result = asyncio.run(judge_candidate(_candidate(), transport, _config()))
+    assert result.status == "ok"
+    assert result.attempts[0].raw_response == fenced
+
+
 @pytest.mark.parametrize(
     "defect",
     [

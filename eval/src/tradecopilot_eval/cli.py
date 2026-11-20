@@ -42,6 +42,8 @@ def _model_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--allow-model-calls", action="store_true")
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--max-output-tokens", type=int, default=4096)
+    parser.add_argument("--judge-max-output-tokens", type=int, default=8192)
+    parser.add_argument("--judge-timeout", type=float, default=300)
     parser.add_argument("--input-usd-per-million", type=float)
     parser.add_argument("--output-usd-per-million", type=float)
     parser.add_argument("--judge-input-usd-per-million", type=float)
@@ -144,6 +146,8 @@ def _configs(args: argparse.Namespace) -> tuple[RunConfig, JudgeConfig]:
         agent_family=config.model_family,
         judge_model=args.judge_model or "scripted:judge-control-v1",
         judge_family=args.judge_family or "scripted",
+        max_output_tokens=args.judge_max_output_tokens,
+        timeout_seconds=args.judge_timeout,
         input_usd_per_million=args.judge_input_usd_per_million,
         output_usd_per_million=args.judge_output_usd_per_million,
     )
