@@ -13,6 +13,7 @@ from tradecopilot_agent.middleware import (
     request_tickers,
 )
 from tradecopilot_agent.state import (
+    TURN_FIELDS,
     EvidenceRecord,
     ToolOutput,
     merge_tickets,
@@ -139,9 +140,9 @@ def test_concurrent_proposals_merge() -> None:
     assert set(merged) == {"t_1", "t_2"}
 
 
-def test_a_new_turn_clears_pending_tickets() -> None:
-    """The empty turn reset replaces the merged ticket map."""
-    assert merge_tickets({"t_1": {"ticket": {"id": "t_1"}}}, {}) == {}
+def test_a_new_turn_keeps_pending_tickets() -> None:
+    """A conversational approval must still find the ticket proposed last turn."""
+    assert "pending_tickets" not in TURN_FIELDS
 
 
 def test_budget_denies_after_twelve_evidence_calls() -> None:

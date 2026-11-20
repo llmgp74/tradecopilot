@@ -8,7 +8,7 @@ not configured, so the tools behave the same inside a subagent.
 
 import hashlib
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 from uuid import uuid4
 
@@ -181,6 +181,31 @@ def _leg_notional(leg: dict[str, Any]) -> float:
     if isinstance(entry_price, int | float):
         return float(leg.get("qty", 0)) * float(entry_price)
     return 0.0
+
+
+# A proposal older than this needs a fresh quote and a fresh approval.
+TICKET_TTL_MINUTES = 30
+
+
+def _ticket_expired(created_at: Any) -> bool:
+    """Report whether a pending ticket is older than its lifetime.
+
+    Args:
+        created_at: RFC 3339 timestamp stored on the ticket.
+
+    Returns:
+        True when the timestamp is unusable or past the lifetime.
+    """
+    if not isinstance(created_at, str):
+        return True
+    try:
+        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if created.tzinfo is None:
+        return True
+    age = datetime.now(tz=UTC) - created.astimezone(UTC)
+    return age > timedelta(minutes=TICKET_TTL_MINUTES)
 
 
 def _blocked(violations: list[dict[str, Any]]) -> ToolOutput:
@@ -523,6 +548,12 @@ class TradingTools:
                 return ToolOutput(
                     summary=f"Ticket rejected: {reason}", error="rejected"
                 )
+
+        if _ticket_expired(pending.get("created_at")):
+            return ToolOutput(
+                summary="This ticket has expired. Propose a new one.",
+                error="expired",
+            )
 
         results = await self._place(ticket_id, legs, prices)
         status = self._status(results)

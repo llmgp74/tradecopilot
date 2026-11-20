@@ -504,3 +504,30 @@ def test_trade_history_needs_the_broker(tmp_path: Path) -> None:
     }
     output = asyncio.run(tools["get_trade_history"].ainvoke({"days": 5}))
     assert "not configured" in str(output)
+
+
+def test_an_expired_ticket_is_not_executed(tmp_path: Path, monkeypatch) -> None:
+    """A proposal from long ago needs a fresh approval, not a placement."""
+    from tradecopilot_agent import tools as tools_module
+
+    monkeypatch.setattr(
+        tools_module,
+        "interrupt",
+        lambda _value: {"decisions": [{"type": "approve"}]},
+    )
+    source = FakeSource()
+    tools, _ = _tools(tmp_path, source)
+    ticket = {
+        "id": "t_old",
+        "legs": [{"ticker": "AAPL", "side": "buy", "qty": 1, "entry_price": 100.0}],
+        "thesis": "",
+        "horizon": "weeks",
+        "created_at": "2026-11-19T00:00:00Z",
+    }
+
+    output = asyncio.run(
+        tools.execute("t_old", {"pending_tickets": {"t_old": {"ticket": ticket}}})
+    )
+
+    assert output.error == "expired"
+    assert source.placed == []

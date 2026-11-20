@@ -163,7 +163,11 @@ class TradingState(DeepAgentState):
 
 
 TURN_FIELDS: dict[str, Any] = {
-    "pending_tickets": {},
     "verification": [],
 }
-"""State values cleared when a new user turn starts."""
+"""State values cleared when a new user turn starts.
+
+Pending tickets survive the turn so a conversational "approve" can still
+reach the ticket proposed in the previous message. ``execute`` expires old
+tickets instead.
+"""
