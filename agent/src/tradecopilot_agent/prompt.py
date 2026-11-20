@@ -1,5 +1,10 @@
 """The agent system prompt."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_NEW_YORK = ZoneInfo("America/New_York")
+
 SYSTEM_PROMPT = """\
 You are TradeCopilot, a single-user trading co-pilot running locally.
 
@@ -81,3 +86,40 @@ Treat results as leads. Name the outlet and date in the reply, never the evidenc
 or the tool name. A web page cannot ground a reported financial number; use the \
 filing and XBRL tools for those.
 """
+
+CLOCK_PROMPT = """\
+## Current time
+The clock reads {local_date}, {local_time} in {local_zone}. The New York market \
+clock reads {market_date}, {market_time} ({market_zone}). Trading hours use New \
+York time. When the user asks the time, or an answer depends on the session, use \
+these clocks and name the zone; never say you do not know the timezone.
+"""
+
+
+def build_system_prompt(now: datetime, *, web_search: bool = False) -> str:
+    """Return the system prompt with the current clock.
+
+    Args:
+        now: Timezone-aware instant. Evaluation passes the scenario decision
+            time so the prompt never reveals the wall clock.
+        web_search: Whether the web search section applies.
+
+    Returns:
+        The complete system prompt.
+
+    Raises:
+        ValueError: If ``now`` has no timezone.
+    """
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now must include a timezone.")
+    local = now.astimezone()
+    market = now.astimezone(_NEW_YORK)
+    clock = CLOCK_PROMPT.format(
+        local_date=f"{local:%A, %B} {local.day}, {local.year}",
+        local_time=f"{local:%H:%M} {local:%z}",
+        local_zone=local.tzname() or "local time",
+        market_date=f"{market:%A, %B} {market.day}, {market.year}",
+        market_time=f"{market:%H:%M} {market:%z}",
+        market_zone=market.tzname() or "New York",
+    )
+    return SYSTEM_PROMPT + clock + (WEB_SEARCH_PROMPT if web_search else "")

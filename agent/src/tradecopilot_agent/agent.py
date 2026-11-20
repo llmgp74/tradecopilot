@@ -23,7 +23,7 @@ from tradecopilot_agent.middleware import (
     TradingMemoryMiddleware,
     TurnMiddleware,
 )
-from tradecopilot_agent.prompt import SYSTEM_PROMPT, WEB_SEARCH_PROMPT
+from tradecopilot_agent.prompt import build_system_prompt
 from tradecopilot_agent.state import TradingState
 from tradecopilot_agent.tools import build_tools
 from tradecopilot_agent.web import WebSearch
@@ -91,8 +91,10 @@ def build_agent(
     return create_deep_agent(
         model=chat_model,
         tools=build_tools(source, config.store, as_of, searcher=web_search),
-        system_prompt=SYSTEM_PROMPT
-        + (WEB_SEARCH_PROMPT if web_search is not None else ""),
+        system_prompt=build_system_prompt(
+            memory_time or datetime.now().astimezone(),
+            web_search=web_search is not None,
+        ),
         middleware=middleware,
         state_schema=TradingState,
         checkpointer=checkpointer,
