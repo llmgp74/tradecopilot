@@ -28,6 +28,9 @@ _NPM_INTEGRATION = {
     "@openrouter/ai-sdk-provider": "openai",
 }
 
+SUPPORTED_NPM = frozenset(_NPM_INTEGRATION)
+"""Provider client packages the app can build. Settings validation uses it."""
+
 
 class AnthropicCompatibleChat(ChatAnthropic):
     """ChatAnthropic with forced tool choice preserved while thinking."""

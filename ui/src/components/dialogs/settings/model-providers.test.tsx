@@ -48,6 +48,22 @@ const catalog: ModelCatalog = {
         },
       },
     },
+    openrouter: {
+      name: "OpenRouter",
+      doc: "",
+      api: "https://openrouter.ai/api/v1",
+      npm: "@openrouter/ai-sdk-provider",
+      models: {
+        "openai/gpt-5.1": {
+          name: "GPT-5.1",
+          reasoning: true,
+          reasoning_options: [
+            { type: "effort", values: ["none", "low", "medium", "high"] },
+          ],
+          tool_call: true,
+        },
+      },
+    },
     azure: {
       name: "Azure OpenAI",
       doc: "",
@@ -87,6 +103,7 @@ it("lists configured providers first and disables unsupported ones", async () =>
   expect(await screen.findByRole("button", { name: "DeepSeek" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Azure OpenAI" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "OpenAI" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "OpenRouter" })).toBeEnabled();
 });
 
 it("shows a logo in each provider row", async () => {

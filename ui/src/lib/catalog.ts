@@ -29,12 +29,14 @@ export interface ModelCatalog {
   providers: Record<string, CatalogProvider>;
 }
 
-/** Provider integrations the backend can construct. */
+/** Provider integrations the backend can construct. Keep in step with the
+ * server's `SUPPORTED_NPM` in `tradecopilot_agent.llm`. */
 export const SUPPORTED_NPM: ReadonlySet<string> = new Set([
   "@ai-sdk/openai",
   "@ai-sdk/openai-compatible",
   "@ai-sdk/anthropic",
   "@ai-sdk/google",
+  "@openrouter/ai-sdk-provider",
 ]);
 
 /**

@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from tradecopilot_agent.llm import SUPPORTED_NPM
 from tradecopilot_agent.models import (
     AppSettings,
     ProviderCredential,
@@ -9,15 +10,6 @@ from tradecopilot_agent.models import (
     ProviderModel,
 )
 from tradecopilot_agent.reasoning import normalize_reasoning
-
-SUPPORTED_NPM = frozenset(
-    {
-        "@ai-sdk/openai",
-        "@ai-sdk/openai-compatible",
-        "@ai-sdk/anthropic",
-        "@ai-sdk/google",
-    }
-)
 
 
 def validate_provider_patch(patch: ProviderCredentialPatch) -> None:

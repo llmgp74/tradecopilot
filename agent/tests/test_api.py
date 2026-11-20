@@ -511,6 +511,23 @@ def test_put_provider_rejects_unsupported_npm(tmp_path: Path) -> None:
     assert "not supported" in response.json()["detail"]
 
 
+def test_put_provider_accepts_openrouter(tmp_path: Path) -> None:
+    """The OpenRouter client package is a supported integration."""
+    with _client(tmp_path) as client:
+        response = client.put(
+            "/api/providers/openrouter",
+            json={
+                "api_key": "k",
+                "base_url": "https://openrouter.ai/api/v1",
+                "npm": "@openrouter/ai-sdk-provider",
+                "models": [
+                    {"id": "openai/gpt-5.1", "name": "GPT-5.1", "tool_call": True}
+                ],
+            },
+        )
+    assert response.status_code == 200
+
+
 def test_put_provider_rejects_non_tool_model(tmp_path: Path) -> None:
     """A model without tool calls cannot be configured."""
     with _client(tmp_path) as client:
