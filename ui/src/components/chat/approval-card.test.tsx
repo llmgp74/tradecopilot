@@ -76,7 +76,7 @@ it("lays the legs out as a table with the weight change", () => {
   expect(screen.getByText("$100.00")).toBeInTheDocument();
   expect(screen.getByText("~$50.00")).toBeInTheDocument();
   expect(screen.getByText("Weight change")).toBeInTheDocument();
-  expect(screen.getByText("2 shares")).toBeInTheDocument();
+  expect(screen.getByText("2")).toBeInTheDocument();
   expect(screen.getByText("0.02% to 0.03%")).toBeInTheDocument();
   expect(screen.getByText("0.14% to 0.11%")).toBeInTheDocument();
 });

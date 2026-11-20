@@ -129,15 +129,15 @@ interface TicketTableProps {
 function TicketTable({ legs, impact }: TicketTableProps) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full table-fixed text-xs">
         <thead>
           <tr className="border-b text-[10px] uppercase tracking-wide text-muted-foreground">
-            <th className="px-4 py-1.5 text-left font-medium">Symbol</th>
-            <th className="px-2 py-1.5 text-left font-medium">Side</th>
-            <th className="px-2 py-1.5 text-right font-medium">Size</th>
-            <th className="px-2 py-1.5 text-left font-medium">Type</th>
-            <th className="px-2 py-1.5 text-right font-medium">Price</th>
-            <th className="px-4 py-1.5 text-right font-medium">Weight change</th>
+            <th className="w-[14%] px-3 py-1.5 text-left font-medium">Symbol</th>
+            <th className="w-[10%] px-3 py-1.5 text-left font-medium">Side</th>
+            <th className="w-[8%] px-3 py-1.5 text-right font-medium">Size</th>
+            <th className="w-[12%] px-3 py-1.5 text-left font-medium">Type</th>
+            <th className="w-[18%] px-3 py-1.5 text-right font-medium">Price</th>
+            <th className="w-[38%] px-3 py-1.5 text-right font-medium">Weight change</th>
           </tr>
         </thead>
         <tbody>
@@ -151,7 +151,7 @@ function TicketTable({ legs, impact }: TicketTableProps) {
                 key={`${leg.ticker}-${leg.side}-${index}`}
                 className="border-b last:border-0"
               >
-                <td className="px-4 py-1.5">
+                <td className="px-3 py-1.5">
                   <span className="font-mono font-semibold">{leg.ticker ?? "?"}</span>
                   {detail ? (
                     <span className="block text-[10px] text-muted-foreground">
@@ -159,21 +159,23 @@ function TicketTable({ legs, impact }: TicketTableProps) {
                     </span>
                   ) : null}
                 </td>
-                <td className="px-2 py-1.5">
+                <td className="px-3 py-1.5">
                   <span className="text-[10px] font-medium uppercase text-muted-foreground">
                     {leg.side ?? "?"}
                   </span>
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono">
-                  {leg.qty ?? 0} {leg.qty === 1 ? "share" : "shares"}
+                <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                  {leg.qty ?? 0}
                 </td>
-                <td className="px-2 py-1.5">
+                <td className="px-3 py-1.5">
                   <span className="text-[10px] font-medium uppercase text-muted-foreground">
                     {leg.order_type ?? "market"}
                   </span>
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono">{legPrice(leg)}</td>
-                <td className="px-4 py-1.5 text-right font-mono text-muted-foreground">
+                <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                  {legPrice(leg)}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono tabular-nums text-muted-foreground">
                   {weightChange(
                     leg.ticker ? impact?.before_pct?.[leg.ticker] : undefined,
                     leg.ticker ? impact?.after_pct?.[leg.ticker] : undefined,
