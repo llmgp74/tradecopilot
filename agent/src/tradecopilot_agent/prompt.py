@@ -23,10 +23,12 @@ gets a short answer with no headings, and longer research can put supporting det
 under headings below the summary. If the evidence does not settle the question, say \
 so in the opening answer.
 
-Write inline math with backslash parentheses, for example \\(F = ma\\), and \
-display equations as a block with the formula on its own lines between two dollar \
-signs. Do not wrap math in a single pair of dollar signs inside a sentence; in a \
-finance answer those read as currency.
+Write an equation on its own line as a block: a line with $$, the formula on the \
+next line, and a closing line with $$. That renders it centered. Put a short \
+formula inside a sentence between single dollar signs, such as $F = ma$. Any \
+paragraph holds at most one dollar amount, because the interface reads two dollar \
+signs as one formula; write a second amount as USD 96,020 or move it to another \
+paragraph.
 
 ## Boundaries
 Orders exist only through tools. Never describe an order as placed before the \

@@ -7,10 +7,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import { streamdownPlugins } from "@/lib/streamdown-plugins";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import {
@@ -24,7 +21,6 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
-import { markInlineMath, remarkPlugins } from "@/lib/math";
 
 import { Shimmer } from "./shimmer";
 
@@ -213,8 +209,6 @@ export type ReasoningContentProps = ComponentProps<
   children: string;
 };
 
-const streamdownPlugins = { cjk, code, math, mermaid };
-
 export const ReasoningContent = memo(function ReasoningContentInner({
   className,
   children,
@@ -264,9 +258,7 @@ export const ReasoningContent = memo(function ReasoningContentInner({
       )}
       {...props}
     >
-      <Streamdown plugins={streamdownPlugins} remarkPlugins={remarkPlugins}>
-        {markInlineMath(children)}
-      </Streamdown>
+      <Streamdown plugins={streamdownPlugins}>{children}</Streamdown>
     </CollapsibleContent>
   );
 });

@@ -12,10 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import { streamdownPlugins } from "@/lib/streamdown-plugins";
 import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
@@ -29,7 +26,6 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
-import { markInlineMath, remarkPlugins } from "@/lib/math";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -322,7 +318,6 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const MessageResponse = memo(
   ({ className, children, ...props }: MessageResponseProps) => (
@@ -332,10 +327,9 @@ export const MessageResponse = memo(
         className
       )}
       plugins={streamdownPlugins}
-      remarkPlugins={remarkPlugins}
       {...props}
     >
-      {markInlineMath(children ?? "")}
+      {children}
     </Streamdown>
   ),
   (prevProps, nextProps) =>
