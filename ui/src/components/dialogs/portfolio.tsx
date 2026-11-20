@@ -302,7 +302,7 @@ export function PortfolioDialog({
   onOpenChange,
   onOpenSettings,
 }: DialogProps & { onOpenSettings?: () => void }) {
-  const [range, setRange] = useState<PortfolioRange>("1M");
+  const [range, setRange] = useState<PortfolioRange>("1D");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
