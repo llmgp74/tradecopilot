@@ -85,7 +85,8 @@ export function Plan({ todos, className, defaultOpen = true, ...props }: PlanPro
                 <span
                   className={cn(
                     "min-w-0 wrap-break-word",
-                    todo.status === "completed" && "text-muted-foreground",
+                    todo.status === "completed" &&
+                      "text-muted-foreground line-through decoration-muted-foreground/50",
                   )}
                 >
                   <span className="sr-only">{status.label}: </span>

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
-import { Plan } from "@/components/ai-elements/plan";
 import {
   Reasoning,
   ReasoningContent,
@@ -9,7 +8,7 @@ import {
 } from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { ToolCall, ToolGroup, aggregateState } from "@/components/ai-elements/tool";
-import type { DisplayMessage, TodoItem, ToolPartView } from "@/lib/parts";
+import type { DisplayMessage, ToolPartView } from "@/lib/parts";
 import { ApprovalCard } from "./approval-card";
 import { groupLabel, rowLabel } from "./tool-label";
 
@@ -67,8 +66,6 @@ function purposeOf(view: ToolPartView): string | undefined {
 export interface AssistantPartsProps {
   /** Normalized message. */
   message: DisplayMessage;
-  /** Plan from the live stream, which is transient on the wire. */
-  liveTodos?: TodoItem[] | null;
   /** True while this message is the turn still being generated. */
   isStreaming?: boolean;
   /** Whether newly arriving reasoning blocks start open. */
@@ -143,23 +140,21 @@ function ToolRun({ run }: { run: ToolPartView[] }) {
 }
 
 /**
- * Renders the reasoning, plan, tool calls, and answer for one assistant turn.
+ * Renders the reasoning, tool calls, and answer for one assistant turn.
  *
  * @param props - Message and live overrides.
  * @returns The message body.
  */
 export function AssistantParts({
   message,
-  liveTodos,
   isStreaming,
   reasoningOpen = false,
   onReasoningOpenChange,
   onApproval,
   turnError,
 }: AssistantPartsProps) {
-  const todos = liveTodos ?? message.todos;
-  // The plan card shows the same steps, so the write_todos call row would
-  // repeat them.
+  // The plan card above the composer shows the same steps, so the write_todos
+  // call row would repeat them.
   const visibleParts = message.parts.filter(
     (part) => part.kind !== "tool" || (!part.hidden && part.name !== "write_todos"),
   );
@@ -217,11 +212,5 @@ export function AssistantParts({
     index += 1;
   }
 
-  return (
-    <div className="flex w-full flex-col gap-2">
-      {todos && todos.length > 0 ? <Plan todos={todos} /> : null}
-
-      {rendered}
-    </div>
-  );
+  return <div className="flex w-full flex-col gap-2">{rendered}</div>;
 }

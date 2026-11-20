@@ -98,7 +98,9 @@ PLANNING_PROMPT = """\
 `write_todos` records the plan for the current turn. Each call replaces the whole \
 list, so revise it rather than describing changes. Keep one item per step, mark an \
 item complete as soon as it is done, and never call the tool twice in parallel. \
-Give the final answer in the message after the last call.
+Mark every step complete before the final answer, and drop a step that no longer \
+applies; a step left in progress reads as unfinished. Give the final answer in the \
+message after the last call.
 """
 
 WEB_SEARCH_PROMPT = """\

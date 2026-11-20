@@ -39,6 +39,7 @@ import { reasoningChoices } from "@/lib/reasoning";
 import { ModelSelector } from "./model-selector";
 import { ReasoningSelector } from "./reasoning-selector";
 import { normalizeMessages, type TodoItem } from "@/lib/parts";
+import { Plan } from "@/components/ai-elements/plan";
 
 /** Props supplied by the shell for one conversation epoch. */
 export interface ChatProps {
@@ -189,6 +190,29 @@ export function Chat({
 
   const display = useMemo(() => normalizeMessages(messages), [messages]);
 
+  // The plan for the open turn, pinned above the composer. The live stream
+  // carries it while the turn runs; after that it comes from stored todos,
+  // which the server attaches to the last reply of the turn.
+  const currentTodos = useMemo(() => {
+    if (liveTodos && liveTodos.length > 0) {
+      return liveTodos;
+    }
+    let start = 0;
+    for (let index = display.length - 1; index >= 0; index -= 1) {
+      if (display[index].role === "user") {
+        start = index + 1;
+        break;
+      }
+    }
+    for (let index = display.length - 1; index >= start; index -= 1) {
+      const todos = display[index].todos;
+      if (todos && todos.length > 0) {
+        return todos;
+      }
+    }
+    return null;
+  }, [display, liveTodos]);
+
   const selectedModel = settings.providers
     .find((item) => item.provider_id === selection.provider)
     ?.models.find((item) => item.id === selection.model);
@@ -282,11 +306,6 @@ export function Chat({
                     <MessageContent className="w-full">
                       <AssistantParts
                         message={message}
-                        liveTodos={
-                          message.id === display[display.length - 1]?.id
-                            ? liveTodos
-                            : null
-                        }
                         isStreaming={
                           message.id === display[display.length - 1]?.id &&
                           status === "streaming"
@@ -321,6 +340,7 @@ export function Chat({
       ) : null}
 
       <div className="mx-auto w-full max-w-[min(720px,100%-3rem)] px-0 pb-4">
+        {currentTodos ? <Plan todos={currentTodos} className="mb-2 bg-card" /> : null}
         <PromptInput
           accept="image/png,image/jpeg,image/webp,image/gif"
           multiple

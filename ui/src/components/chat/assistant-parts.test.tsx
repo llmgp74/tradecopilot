@@ -31,39 +31,26 @@ it("renders reasoning, a tool card, and the answer", () => {
   expect(screen.getByText("NVDA is at 195.")).toBeInTheDocument();
 });
 
-it("renders the plan with a completion count and step status", () => {
+it("hides the write_todos row because the plan card shows the steps", () => {
   render(
     <AssistantParts
       onApproval={() => {}}
-      message={{
-        id: "a",
-        role: "assistant",
-        parts: [
-          { kind: "text", text: "Done." },
-          {
-            kind: "tool",
-            toolCallId: "c1",
-            name: "write_todos",
-            state: "output-available",
-            input: { todos: [] },
-            output: "ok",
-          },
-        ],
-        todos: [
-          { content: "Pull latest filings", status: "completed" },
-          { content: "Check the entry price", status: "in_progress" },
-          { content: "Propose the ticket", status: "pending" },
-        ],
-      }}
+      message={toolMessage([
+        { kind: "text", text: "Done." },
+        {
+          kind: "tool",
+          toolCallId: "c1",
+          name: "write_todos",
+          state: "output-available",
+          input: { todos: [] },
+          output: "ok",
+        },
+      ])}
     />,
   );
 
-  expect(screen.getByText("Plan")).toBeInTheDocument();
+  expect(screen.getByText("Done.")).toBeInTheDocument();
   expect(screen.queryByText("Update plan")).toBeNull();
-  expect(screen.getByText("1 of 3 done")).toBeInTheDocument();
-  expect(screen.getByText("Pull latest filings")).toBeInTheDocument();
-  expect(screen.getByText("Done:")).toBeInTheDocument();
-  expect(screen.getByText("In progress:")).toBeInTheDocument();
 });
 
 it("labels a tool row from its arguments and keeps it closed", () => {

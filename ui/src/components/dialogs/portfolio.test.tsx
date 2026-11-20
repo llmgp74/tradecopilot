@@ -48,7 +48,7 @@ it("lists the five largest holdings and links to Alpaca", async () => {
   expect(screen.queryByText("T2")).toBeNull();
   expect(screen.getByText(/showing the 5 largest of 7 holdings/i)).toBeInTheDocument();
 
-  const link = screen.getByRole("link", { name: /view portfolio/i });
+  const link = screen.getByRole("link", { name: /view in alpaca/i });
   expect(link).toHaveAttribute("href", "https://app.alpaca.markets/dashboard/");
 });
 

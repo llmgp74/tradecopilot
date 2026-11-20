@@ -1,3 +1,4 @@
+import type { UIMessage } from "ai";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
@@ -165,6 +166,49 @@ it("renders the live plan from a transient todos part", async () => {
   await userEvent.type(screen.getByPlaceholderText(/ask tradecopilot/i), "Hello{Enter}");
 
   expect(await screen.findByText("Pull latest filings")).toBeInTheDocument();
+});
+
+it("pins a persisted plan above the composer", () => {
+  const messages = [
+    { id: "u1", role: "user", parts: [{ type: "text", text: "Rebalance" }] },
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [{ type: "text", text: "First step." }],
+    },
+    {
+      id: "a2",
+      role: "assistant",
+      parts: [
+        { type: "text", text: "Final answer." },
+        {
+          type: "data-todos",
+          data: {
+            type: "todos",
+            todos: [{ content: "Pull quotes", status: "completed" }],
+          },
+        },
+      ],
+    },
+  ] as UIMessage[];
+
+  render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={messages}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      settings={baseSettings}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  const plan = screen.getByText("Plan");
+  const composer = screen.getByPlaceholderText(/ask tradecopilot/i);
+  expect(
+    plan.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });
 
 it("shows a request error with the settings escape hatch", async () => {
