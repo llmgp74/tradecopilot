@@ -50,6 +50,12 @@ export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   duration?: number;
+  /**
+   * Open the panel while reasoning streams and close it once done.
+   *
+   * Set false for a stable one-line row that only the reader opens.
+   */
+  autoOpen?: boolean;
 };
 
 const AUTO_CLOSE_DELAY = 1000;
@@ -63,10 +69,11 @@ export const Reasoning = memo(
     defaultOpen,
     onOpenChange,
     duration: durationProp,
+    autoOpen = true,
     children,
     ...props
   }: ReasoningProps) => {
-    const resolvedDefaultOpen = defaultOpen ?? isStreaming;
+    const resolvedDefaultOpen = defaultOpen ?? (autoOpen && isStreaming);
     // Track if defaultOpen was explicitly set to false (to prevent auto-open)
     const isExplicitlyClosed = defaultOpen === false;
 
@@ -99,14 +106,15 @@ export const Reasoning = memo(
 
     // Auto-open when streaming starts (unless explicitly closed)
     useEffect(() => {
-      if (isStreaming && !isOpen && !isExplicitlyClosed) {
+      if (autoOpen && isStreaming && !isOpen && !isExplicitlyClosed) {
         setIsOpen(true);
       }
-    }, [isStreaming, isOpen, setIsOpen, isExplicitlyClosed]);
+    }, [autoOpen, isStreaming, isOpen, setIsOpen, isExplicitlyClosed]);
 
     // Auto-close when streaming ends (once only, and only if it ever streamed)
     useEffect(() => {
       if (
+        autoOpen &&
         hasEverStreamedRef.current &&
         !isStreaming &&
         isOpen &&
@@ -119,7 +127,7 @@ export const Reasoning = memo(
 
         return () => clearTimeout(timer);
       }
-    }, [isStreaming, isOpen, setIsOpen, hasAutoClosed]);
+    }, [autoOpen, isStreaming, isOpen, setIsOpen, hasAutoClosed]);
 
     const handleOpenChange = useCallback(
       (newOpen: boolean) => {
@@ -210,7 +218,7 @@ export const ReasoningContent = memo(
   ({ className, children, ...props }: ReasoningContentProps) => (
     <CollapsibleContent
       className={cn(
-        "mt-4 text-sm",
+        "mt-4 max-h-80 overflow-y-auto pr-1 text-sm",
         "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
         className
       )}

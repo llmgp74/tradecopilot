@@ -191,6 +191,7 @@ export function AssistantParts({
         <Reasoning
           key={`reasoning-${index}`}
           isStreaming={part.streaming && isStreaming === true}
+          autoOpen={false}
         >
           <ReasoningTrigger getThinkingMessage={thinkingLabel} />
           <ReasoningContent>{part.text}</ReasoningContent>

@@ -270,6 +270,43 @@ it("does not render an approval card for an already executed ticket", () => {
   expect(screen.queryByRole("button", { name: /approve ticket/i })).toBeNull();
 });
 
+it("keeps reasoning closed while streaming and after it ends", async () => {
+  const streaming = toolMessage([
+    { kind: "reasoning", text: "Checking prices", streaming: true },
+  ]);
+  const done = toolMessage([
+    { kind: "reasoning", text: "Checking prices", streaming: false },
+  ]);
+
+  const { rerender } = render(
+    <AssistantParts message={streaming} isStreaming onApproval={() => {}} />,
+  );
+  expect(screen.queryByText("Checking prices")).toBeNull();
+
+  rerender(<AssistantParts message={done} isStreaming={false} onApproval={() => {}} />);
+  expect(screen.queryByText("Checking prices")).toBeNull();
+});
+
+it("keeps a reasoning block open when the stream ends", async () => {
+  const streaming = toolMessage([
+    { kind: "reasoning", text: "Checking prices", streaming: true },
+  ]);
+  const done = toolMessage([
+    { kind: "reasoning", text: "Checking prices", streaming: false },
+  ]);
+
+  const { rerender } = render(
+    <AssistantParts message={streaming} isStreaming onApproval={() => {}} />,
+  );
+  await userEvent.click(screen.getByText("Thinking..."));
+
+  rerender(<AssistantParts message={done} isStreaming={false} onApproval={() => {}} />);
+  // The stock component closes a streaming panel 1000ms after the stream ends.
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  expect(screen.getByText("Checking prices")).toBeInTheDocument();
+});
+
 it("reveals the reasoning text when the trigger is clicked", async () => {
   render(
     <AssistantParts
