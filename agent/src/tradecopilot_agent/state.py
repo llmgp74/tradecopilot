@@ -79,6 +79,7 @@ class OrderLeg(BaseModel):
     side: Side
     qty: float
     entry_price: float | None = None
+    order_type: str = "market"
 
 
 class OrderTicket(BaseModel):

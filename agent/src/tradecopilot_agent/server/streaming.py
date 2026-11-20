@@ -349,6 +349,9 @@ def _request_call_id(
     request: dict[str, Any],
     assistant: AIMessage | None,
 ) -> str | None:
+    explicit = request.get("tool_call_id")
+    if isinstance(explicit, str) and explicit:
+        return explicit
     name = request.get("name")
     raw_args = request.get("args") or request.get("arguments")
     args = raw_args if isinstance(raw_args, dict) else {}

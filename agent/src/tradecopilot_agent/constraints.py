@@ -83,6 +83,23 @@ def session_open(now: datetime, is_open: bool, next_open: str | None) -> bool:
     return upcoming is not None and upcoming.date() == tomorrow
 
 
+def regular_hours(now: datetime) -> bool:
+    """Whether the regular session is open.
+
+    Args:
+        now: Wall clock in any time zone.
+
+    Returns:
+        True on weekdays from 09:30 up to, not including, 16:00 New York time.
+        Alpaca accepts market orders only in this window.
+    """
+    local = now.astimezone(_NEW_YORK)
+    if local.weekday() >= 5:
+        return False
+    minutes = local.hour * 60 + local.minute
+    return 9 * 60 + 30 <= minutes < 16 * 60
+
+
 def _market_open(now: datetime) -> bool:
     """Whether Alpaca's 24/5 schedule is open, without a broker clock.
 

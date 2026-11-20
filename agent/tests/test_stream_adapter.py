@@ -10,6 +10,7 @@ from tradecopilot_agent.server.ai_sdk.adapter import to_ui_message_stream
 from tradecopilot_agent.server.ai_sdk.convert import (
     to_human_message,
     to_langchain_messages,
+    to_ui_messages,
 )
 
 Event = tuple[str, Any]
@@ -406,3 +407,89 @@ def test_values_recovery_skips_history() -> None:
     )
 
     assert not any(part["type"] == "tool-input-available" for part in parts)
+
+
+def test_interrupt_matches_the_call_when_its_args_differ() -> None:
+    """The model's purpose argument must not create a phantom second call."""
+    final = AIMessage(
+        content="",
+        id="m1",
+        tool_calls=[
+            {
+                "name": "execute_ticket",
+                "args": {"ticket_id": "t1", "purpose": "Place the ticket"},
+                "id": "call_1",
+                "type": "tool_call",
+            }
+        ],
+    )
+    interrupt = Interrupt(
+        id="int-1",
+        value={
+            "action_requests": [
+                {
+                    "name": "execute_ticket",
+                    "args": {"ticket_id": "t1"},
+                    "description": "Review the ticket",
+                    "tool_call_id": "call_1",
+                }
+            ]
+        },
+    )
+
+    parts = _parts(
+        [
+            ("values", {"messages": [final]}),
+            ("values", {"messages": [final], "__interrupt__": (interrupt,)}),
+        ],
+        approval_descriptor=lambda state, request: {},
+    )
+
+    call_ids = {
+        part["toolCallId"]
+        for part in parts
+        if part["type"] in {"tool-input-start", "tool-approval-request"}
+    }
+    assert call_ids == {"call_1"}
+
+
+def test_checkpointed_interrupt_reuses_the_tool_call() -> None:
+    """A rehydrated thread keeps one part per call, with the approval on it."""
+    final = AIMessage(
+        content="",
+        id="m1",
+        tool_calls=[
+            {
+                "name": "execute_ticket",
+                "args": {"ticket_id": "t1", "purpose": "Place the ticket"},
+                "id": "call_1",
+                "type": "tool_call",
+            }
+        ],
+    )
+    interrupt = Interrupt(
+        id="int-1",
+        value={
+            "action_requests": [
+                {
+                    "name": "execute_ticket",
+                    "args": {"ticket_id": "t1"},
+                    "description": "Review the ticket",
+                    "tool_call_id": "call_1",
+                }
+            ]
+        },
+    )
+
+    messages = to_ui_messages(
+        {"messages": [final]}, [interrupt], lambda state, request: {}
+    )
+
+    tool_parts = [
+        part
+        for part in messages[-1]["parts"]
+        if str(part.get("type", "")).startswith("tool-")
+    ]
+    assert len(tool_parts) == 1
+    assert tool_parts[0]["toolCallId"] == "call_1"
+    assert tool_parts[0]["state"] == "approval-requested"

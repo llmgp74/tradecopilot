@@ -29,6 +29,8 @@ interface TicketLeg {
   qty?: number;
   status?: string;
   fill_price?: number | null;
+  entry_price?: number | null;
+  order_type?: string;
 }
 
 /** Parsed execution result carried in the tool output. */
@@ -64,6 +66,23 @@ function usd(value: number | undefined): string {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+/**
+ * Formats the order price a reader is approving.
+ *
+ * A market order shows the quote it was built from with a tilde, because the
+ * fill can differ. A limit order shows its fixed limit.
+ *
+ * @param leg - Ticket leg with a price.
+ * @returns The formatted price, or "-" when none was recorded.
+ */
+function legPrice(leg: TicketLeg): string {
+  if (leg.entry_price === null || leg.entry_price === undefined) {
+    return "-";
+  }
+  const shown = price(leg.entry_price);
+  return leg.order_type === "limit" ? shown : `~${shown}`;
 }
 
 /** Formats a share price with two decimals. */
@@ -116,6 +135,8 @@ function TicketTable({ legs, impact }: TicketTableProps) {
             <th className="px-4 py-1.5 text-left font-medium">Symbol</th>
             <th className="px-2 py-1.5 text-left font-medium">Side</th>
             <th className="px-2 py-1.5 text-right font-medium">Size</th>
+            <th className="px-2 py-1.5 text-left font-medium">Type</th>
+            <th className="px-2 py-1.5 text-right font-medium">Price</th>
             <th className="px-4 py-1.5 text-right font-medium">Weight change</th>
           </tr>
         </thead>
@@ -146,6 +167,12 @@ function TicketTable({ legs, impact }: TicketTableProps) {
                 <td className="px-2 py-1.5 text-right font-mono">
                   {leg.qty ?? 0} {leg.qty === 1 ? "share" : "shares"}
                 </td>
+                <td className="px-2 py-1.5">
+                  <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                    {leg.order_type ?? "market"}
+                  </span>
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono">{legPrice(leg)}</td>
                 <td className="px-4 py-1.5 text-right font-mono text-muted-foreground">
                   {weightChange(
                     leg.ticker ? impact?.before_pct?.[leg.ticker] : undefined,

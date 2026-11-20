@@ -355,3 +355,58 @@ def test_mismatched_approval_returns_error_part(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert '"type":"error"' in response.text.replace(" ", "")
     assert graph.calls == 0
+
+
+def test_approval_resumes_when_the_args_gained_a_purpose(tmp_path: Path) -> None:
+    """The call id, not the argument shape, matches the response."""
+    tool_call = {
+        "name": "execute_ticket",
+        "args": {"ticket_id": "t1", "purpose": "Place the ticket"},
+        "id": "call_1",
+        "type": "tool_call",
+    }
+    snapshot = SimpleNamespace(
+        values={"messages": [AIMessage(content="", id="a1", tool_calls=[tool_call])]},
+        interrupts=(
+            Interrupt(
+                id="int-1",
+                value={
+                    "action_requests": [
+                        {
+                            "name": "execute_ticket",
+                            "args": {"ticket_id": "t1"},
+                            "description": "Review",
+                            "tool_call_id": "call_1",
+                        }
+                    ]
+                },
+            ),
+        ),
+    )
+    graph = StubGraph(snapshot)
+    body = {
+        "thread_id": "t1",
+        "messages": [
+            {"id": "u1", "role": "user", "parts": [{"type": "text", "text": "buy"}]},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "parts": [
+                    {
+                        "type": "tool-execute_ticket",
+                        "toolCallId": "call_1",
+                        "state": "approval-responded",
+                        "input": {"ticket_id": "t1"},
+                        "approval": {"id": "call_1", "approved": True},
+                    }
+                ],
+            },
+        ],
+    }
+
+    with _client(tmp_path, graph) as client:
+        response = client.post("/api/chat", json=body)
+
+    assert response.status_code == 200
+    assert isinstance(graph.received, Command)
+    assert graph.received.resume == {"decisions": [{"type": "approve"}]}

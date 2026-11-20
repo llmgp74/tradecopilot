@@ -5,6 +5,8 @@ export interface TicketLeg {
   ticker: string;
   side: "buy" | "sell";
   qty: number;
+  entry_price?: number | null;
+  order_type?: string;
 }
 
 /** Order ticket carried by the approval descriptor. */

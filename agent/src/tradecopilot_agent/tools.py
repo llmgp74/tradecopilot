@@ -18,7 +18,7 @@ from langgraph.types import interrupt
 from pydantic import Field
 
 from tradecopilot_agent.claims import match_claims
-from tradecopilot_agent.constraints import check_ticket, session_open
+from tradecopilot_agent.constraints import check_ticket, regular_hours, session_open
 from tradecopilot_agent.data import DataSource, MarketClock
 from tradecopilot_agent.memory import MemoryStore
 from tradecopilot_agent.state import (
@@ -374,6 +374,9 @@ class TradingTools:
         ordered = [leg for leg in normalized if leg["side"] == "sell"] + [
             leg for leg in normalized if leg["side"] == "buy"
         ]
+        # Alpaca accepts market orders only in the regular session; outside it
+        # the entry price becomes a limit.
+        order_type = "market" if regular_hours(now) else "limit"
         ticket_id = "t_" + uuid4().hex[:12]
         ticket = OrderTicket(
             id=ticket_id,
@@ -383,6 +386,7 @@ class TradingTools:
                     side="buy" if leg["side"] == "buy" else "sell",
                     qty=float(leg["qty"]),
                     entry_price=prices[leg["ticker"]],
+                    order_type=order_type,
                 )
                 for leg in ordered
             ],
@@ -439,12 +443,16 @@ class TradingTools:
             portfolio_impact=impact,
         )
 
-    async def execute(self, ticket_id: str, state: dict[str, Any]) -> ToolOutput:
+    async def execute(
+        self, ticket_id: str, state: dict[str, Any], tool_call_id: str | None = None
+    ) -> ToolOutput:
         """Place an approved ticket.
 
         Args:
             ticket_id: Id from ``propose_ticket``.
             state: Graph state holding the pending ticket.
+            tool_call_id: Id of the call that reached the interrupt, used by
+                the UI to match the approval to its row.
 
         Returns:
             Per-leg results.
@@ -498,6 +506,7 @@ class TradingTools:
                             "name": "execute_ticket",
                             "args": {"ticket_id": ticket_id},
                             "description": "Review the order ticket",
+                            "tool_call_id": tool_call_id,
                         }
                     ],
                     "review_configs": [
@@ -960,7 +969,9 @@ def build_tools(
         ticket_id: str, runtime: ToolRuntime, purpose: Purpose = ""
     ) -> tuple[str, dict[str, Any]]:
         """Place a proposed ticket after the user approves it."""
-        output = await impl.execute(ticket_id, runtime.state or {})
+        output = await impl.execute(
+            ticket_id, runtime.state or {}, runtime.tool_call_id
+        )
         return _text(output), output.model_dump(mode="json")
 
     tools: list[BaseTool] = [

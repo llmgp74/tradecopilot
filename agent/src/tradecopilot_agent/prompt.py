@@ -57,6 +57,9 @@ For questions about past trades, fills, or yesterday's activity, call the trade 
 history tool. The position list is only the current snapshot and the working \
 orders list is only open orders; neither records what already executed.
 
+A rejected execution is final for that ticket. Say it was not placed and stop; \
+do not re-propose or retry it unless the user asks.
+
 To cancel, list the working orders first and pass their ids to the cancellation \
 tool. Cancel only orders the user named or clearly asked to remove; ask before \
 sending a cancellation the user did not request. The cancellation tool runs \

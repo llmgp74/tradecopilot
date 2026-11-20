@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from tradecopilot_agent.constraints import check_ticket, session_open
+from tradecopilot_agent.constraints import check_ticket, regular_hours, session_open
 
 NOW = datetime(2026, 11, 5, 15, 0, tzinfo=UTC)
 _NEW_YORK = ZoneInfo("America/New_York")
@@ -311,3 +311,22 @@ def test_fractional_quantity_requires_permission() -> None:
     )
 
     assert "fractional_qty" in _codes(violations)
+
+
+@pytest.mark.parametrize(
+    ("day", "hour", "minute", "expected"),
+    [
+        (5, 9, 29, False),
+        (5, 9, 30, True),
+        (5, 15, 59, True),
+        (5, 16, 0, False),
+        (7, 12, 0, False),
+    ],
+)
+def test_regular_hours_drive_the_order_type(
+    day: int, hour: int, minute: int, expected: bool
+) -> None:
+    """Only the regular session accepts market orders."""
+    now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
+
+    assert regular_hours(now) is expected

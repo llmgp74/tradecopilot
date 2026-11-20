@@ -377,7 +377,11 @@ def _approval_parts(
     raw_args = request.get("args") or request.get("arguments")
     args = raw_args if isinstance(raw_args, dict) else {}
     key = tool_args_key(name, args)
-    call_id = state.emitted_tool_calls_by_key.get(key) or f"approval-{fallback_id}"
+    explicit = request.get("tool_call_id")
+    hint = explicit if isinstance(explicit, str) and explicit else None
+    call_id = (
+        hint or state.emitted_tool_calls_by_key.get(key) or f"approval-{fallback_id}"
+    )
     if call_id in state.emitted_approvals:
         return
 

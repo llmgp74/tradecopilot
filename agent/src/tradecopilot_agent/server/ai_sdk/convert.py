@@ -229,6 +229,7 @@ def to_ui_messages(
 
     ui_messages: list[UIMessage] = []
     parts_by_key: dict[str, dict[str, Any]] = {}
+    parts_by_call: dict[str, dict[str, Any]] = {}
     for index, message in enumerate(messages):
         if isinstance(message, ToolMessage):
             continue
@@ -238,7 +239,7 @@ def to_ui_messages(
         elif isinstance(message, SystemMessage):
             ui_messages.append(_system_message(message_id, message))
         elif isinstance(message, AIMessage):
-            parts = _assistant_parts(message, outputs, parts_by_key)
+            parts = _assistant_parts(message, outputs, parts_by_key, parts_by_call)
             ui_messages.append({"id": message_id, "role": "assistant", "parts": parts})
 
     for interrupt in interrupts:
@@ -258,6 +259,7 @@ def to_ui_messages(
                 values,
                 ui_messages,
                 parts_by_key,
+                parts_by_call,
                 approval_descriptor,
             )
 
@@ -285,6 +287,7 @@ def _assistant_parts(
     message: AIMessage,
     outputs: dict[str, ToolMessage],
     parts_by_key: dict[str, dict[str, Any]],
+    parts_by_call: dict[str, dict[str, Any]],
 ) -> list[UIPart]:
     parts: list[UIPart] = []
     reasoning = message_reasoning(message)
@@ -315,6 +318,7 @@ def _assistant_parts(
                 part["output"] = output.content
         parts.append(part)
         parts_by_key[tool_args_key(name, args)] = part
+        parts_by_call[call_id] = part
     return parts
 
 
@@ -324,6 +328,7 @@ def _apply_approval(
     values: dict[str, Any],
     ui_messages: list[UIMessage],
     parts_by_key: dict[str, dict[str, Any]],
+    parts_by_call: dict[str, dict[str, Any]],
     approval_descriptor: ApprovalDescriptor | None,
 ) -> None:
     raw_name = request.get("name")
@@ -331,12 +336,17 @@ def _apply_approval(
     raw_args = request.get("args") or request.get("arguments")
     args = raw_args if isinstance(raw_args, dict) else {}
     key = tool_args_key(name, args)
-    part = parts_by_key.get(key)
+    explicit = request.get("tool_call_id")
+    hint = explicit if isinstance(explicit, str) and explicit else None
+    part = parts_by_call.get(hint) if hint is not None else None
     if part is None:
-        call_id = fallback_id
+        part = parts_by_key.get(key)
+    if part is None:
+        part = _pending_part(_last_assistant_parts(ui_messages), name)
+    if part is None:
         part = {
             "type": f"{_TOOL_PREFIX}{name}",
-            "toolCallId": call_id,
+            "toolCallId": hint or fallback_id,
             "input": args,
         }
         _last_assistant_parts(ui_messages).append(part)
@@ -347,6 +357,30 @@ def _apply_approval(
     part["state"] = "approval-requested"
     part["approval"] = {"id": call_id, **descriptor}
     parts_by_key[key] = part
+
+
+def _pending_part(parts: list[UIPart], name: str) -> dict[str, Any] | None:
+    """Return the newest unapproved part for a tool call.
+
+    Older checkpoints carry no call id in the interrupt, and the model's
+    arguments differ from the interrupt payload, so a name scan is the last
+    reliable match.
+
+    Args:
+        parts - Parts of the last assistant message.
+        name - Tool name from the interrupt.
+
+    Returns:
+        The part to attach the approval to, or None.
+    """
+    wanted = f"{_TOOL_PREFIX}{name}"
+    for part in reversed(parts):
+        if part.get("type") != wanted:
+            continue
+        if part.get("state") != "input-available" or "approval" in part:
+            continue
+        return part
+    return None
 
 
 def _append_data_part(

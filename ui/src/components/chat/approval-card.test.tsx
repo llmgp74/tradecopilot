@@ -41,8 +41,20 @@ it("lays the legs out as a table with the weight change", () => {
         ticket: {
           id: "t1",
           legs: [
-            { ticker: "NVDA", side: "buy", qty: 1 },
-            { ticker: "LLY", side: "sell", qty: 2 },
+            {
+              ticker: "NVDA",
+              side: "buy",
+              qty: 1,
+              entry_price: 100,
+              order_type: "limit",
+            },
+            {
+              ticker: "LLY",
+              side: "sell",
+              qty: 2,
+              entry_price: 50,
+              order_type: "market",
+            },
           ],
         },
         portfolio_impact: {
@@ -58,6 +70,11 @@ it("lays the legs out as a table with the weight change", () => {
   expect(screen.getByText("Symbol")).toBeInTheDocument();
   expect(screen.getByText("Side")).toBeInTheDocument();
   expect(screen.getByText("Size")).toBeInTheDocument();
+  expect(screen.getByText("Type")).toBeInTheDocument();
+  expect(screen.getByText("Price")).toBeInTheDocument();
+  expect(screen.getByText(/limit/i)).toBeInTheDocument();
+  expect(screen.getByText("$100.00")).toBeInTheDocument();
+  expect(screen.getByText("~$50.00")).toBeInTheDocument();
   expect(screen.getByText("Weight change")).toBeInTheDocument();
   expect(screen.getByText("2 shares")).toBeInTheDocument();
   expect(screen.getByText("0.02% to 0.03%")).toBeInTheDocument();
