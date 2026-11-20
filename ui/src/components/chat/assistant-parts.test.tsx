@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it } from "vitest";
 import { AssistantParts } from "./assistant-parts";
@@ -292,7 +292,7 @@ it("does not render an approval card for an already executed ticket", () => {
   expect(screen.queryByRole("button", { name: /approve ticket/i })).toBeNull();
 });
 
-it("keeps reasoning closed while streaming and after it ends", async () => {
+it("opens reasoning while it streams and collapses it when the stream ends", async () => {
   const streaming = toolMessage([
     { kind: "reasoning", text: "Checking prices", streaming: true },
   ]);
@@ -303,30 +303,38 @@ it("keeps reasoning closed while streaming and after it ends", async () => {
   const { rerender } = render(
     <AssistantParts message={streaming} isStreaming onApproval={() => {}} />,
   );
-  expect(screen.queryByText("Checking prices")).toBeNull();
+  expect(screen.getByText("Checking prices")).toBeInTheDocument();
 
   rerender(<AssistantParts message={done} isStreaming={false} onApproval={() => {}} />);
-  expect(screen.queryByText("Checking prices")).toBeNull();
+  // The stock component closes a streamed panel 1000ms after the stream ends.
+  await waitFor(() => expect(screen.queryByText("Checking prices")).toBeNull(), {
+    timeout: 2000,
+  });
 });
 
-it("keeps a reasoning block open when the stream ends", async () => {
-  const streaming = toolMessage([
-    { kind: "reasoning", text: "Checking prices", streaming: true },
+it("opens the next running block even after the reader collapsed the last one", () => {
+  const finished = toolMessage([
+    { kind: "reasoning", text: "First thought", streaming: false },
   ]);
-  const done = toolMessage([
-    { kind: "reasoning", text: "Checking prices", streaming: false },
+  const streaming = toolMessage([
+    { kind: "reasoning", text: "First thought", streaming: false },
+    { kind: "reasoning", text: "Second thought", streaming: true },
   ]);
 
   const { rerender } = render(
-    <AssistantParts message={streaming} isStreaming onApproval={() => {}} />,
+    <AssistantParts message={finished} reasoningOpen={false} onApproval={() => {}} />,
   );
-  await userEvent.click(screen.getByText("Thinking..."));
+  expect(screen.queryByText("First thought")).toBeNull();
 
-  rerender(<AssistantParts message={done} isStreaming={false} onApproval={() => {}} />);
-  // The stock component closes a streaming panel 1000ms after the stream ends.
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-
-  expect(screen.getByText("Checking prices")).toBeInTheDocument();
+  rerender(
+    <AssistantParts
+      message={streaming}
+      isStreaming
+      reasoningOpen={false}
+      onApproval={() => {}}
+    />,
+  );
+  expect(screen.getByText("Second thought")).toBeInTheDocument();
 });
 
 it("opens later reasoning blocks once the reader opens one", async () => {

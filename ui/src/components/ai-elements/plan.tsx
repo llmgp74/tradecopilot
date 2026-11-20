@@ -12,7 +12,7 @@ import {
   CircleIcon,
   ListChecksIcon,
 } from "lucide-react";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 
 /**
  * Icon, label, and colour for each plan step status.
@@ -48,21 +48,34 @@ export type PlanProps = Omit<ComponentProps<typeof Collapsible>, "children"> & {
 /**
  * Shows the agent's plan with a completion count and per-step status.
  *
+ * The card starts collapsed so it takes one line above the composer. While
+ * closed, the header names the running step, so the current work stays visible
+ * without the full list.
+ *
  * @param props - Plan props.
  * @returns The collapsible plan card.
  */
-export function Plan({ todos, className, defaultOpen = true, ...props }: PlanProps) {
+export function Plan({ todos, className, defaultOpen = false, ...props }: PlanProps) {
+  const [open, setOpen] = useState(defaultOpen);
   const done = todos.filter((todo) => todo.status === "completed").length;
+  const running = todos.find((todo) => todo.status === "in_progress");
   return (
     <Collapsible
-      defaultOpen={defaultOpen}
+      open={open}
+      onOpenChange={setOpen}
       className={cn("w-full rounded-lg border bg-muted/30", className)}
       {...props}
     >
       <CollapsibleTrigger className="group/chev flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/40">
         <ListChecksIcon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="text-sm">Plan</span>
-        <span className="flex-1" />
+        <span className="shrink-0 text-sm">Plan</span>
+        {!open && running ? (
+          <span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
+            {running.content}
+          </span>
+        ) : (
+          <span className="flex-1" />
+        )}
         <span className="text-muted-foreground text-xs tabular-nums">
           {done} of {todos.length} done
         </span>

@@ -194,12 +194,14 @@ export function AssistantParts({
       continue;
     }
     if (part.kind === "reasoning") {
+      const streaming = part.streaming && isStreaming === true;
       rendered.push(
         <Reasoning
           key={`reasoning-${index}`}
-          isStreaming={part.streaming && isStreaming === true}
-          autoOpen={false}
-          defaultOpen={reasoningOpen}
+          isStreaming={streaming}
+          // A running block always opens. A finished block follows the
+          // reader's last toggle through the default.
+          defaultOpen={streaming ? undefined : reasoningOpen}
           onOpenChange={onReasoningOpenChange}
         >
           <ReasoningTrigger getThinkingMessage={thinkingLabel} />

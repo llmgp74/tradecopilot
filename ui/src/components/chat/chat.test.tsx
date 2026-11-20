@@ -165,7 +165,8 @@ it("renders the live plan from a transient todos part", async () => {
 
   await userEvent.type(screen.getByPlaceholderText(/ask tradecopilot/i), "Hello{Enter}");
 
-  expect(await screen.findByText("Pull latest filings")).toBeInTheDocument();
+  expect(await screen.findByText("Plan")).toBeInTheDocument();
+  expect(screen.getByText("0 of 1 done")).toBeInTheDocument();
 });
 
 it("pins a persisted plan above the composer", () => {

@@ -121,9 +121,10 @@ export function Chat({
 }: ChatProps) {
   const [threadId, setThreadId] = useState<string | null>(initialThreadId);
   const [liveTodos, setLiveTodos] = useState<TodoItem[] | null>(null);
-  // Reasoning starts expanded; the reader's last toggle becomes the default
-  // for later blocks, while blocks already on screen keep their state.
-  const [reasoningOpen, setReasoningOpen] = useState(true);
+  // A running block opens on its own and collapses when it finishes. The
+  // reader's last toggle becomes the default for finished blocks, while blocks
+  // already on screen keep their state.
+  const [reasoningOpen, setReasoningOpen] = useState(false);
   const [selection, setSelection] = useState({
     provider: settings.model_provider,
     model: settings.model_id,
@@ -339,8 +340,8 @@ export function Chat({
         </div>
       ) : null}
 
-      <div className="mx-auto w-full max-w-[min(720px,100%-3rem)] px-0 pb-4">
-        {currentTodos ? <Plan todos={currentTodos} className="mb-2 bg-card" /> : null}
+      <div className="mx-auto w-full max-w-[min(720px,100%-3rem)] px-0 pt-4 pb-4">
+        {currentTodos ? <Plan todos={currentTodos} className="mb-3 bg-card" /> : null}
         <PromptInput
           accept="image/png,image/jpeg,image/webp,image/gif"
           multiple
