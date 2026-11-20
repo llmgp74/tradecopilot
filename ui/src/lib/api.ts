@@ -158,9 +158,11 @@ export interface JournalLeg {
   qty: number;
   notional: number;
   entry_price: number | null;
+  order_id?: string | null;
   fill_price: number | null;
   fill_at: string | null;
-  status: JournalStatus;
+  /** Broker order status, such as `pending_new` or `filled`. */
+  status: string;
 }
 
 export interface LegOutcome {

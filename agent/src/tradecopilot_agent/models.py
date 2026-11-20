@@ -250,9 +250,12 @@ class JournalLeg(BaseModel):
     qty: float
     notional: float
     entry_price: float | None = None
+    order_id: str | None = None
     fill_price: float | None = None
     fill_at: str | None = None
-    status: JournalStatus
+    # The broker's order status, such as pending_new or filled. It is not
+    # limited to the journal-level vocabulary, and old rows keep their value.
+    status: str
 
 
 class JournalEntry(BaseModel):

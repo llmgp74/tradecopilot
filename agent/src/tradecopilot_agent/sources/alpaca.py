@@ -345,6 +345,8 @@ class AlpacaSource:
             return ToolOutput(summary=f"Order failed: {exc}", error="http")
         payload = {
             "kind": "order",
+            "order_id": str(data.get("id", "")),
+            "client_order_id": client_order_id,
             "status": str(data.get("status", "submitted")),
             "fill_price": data.get("filled_avg_price"),
             "fill_at": data.get("filled_at"),

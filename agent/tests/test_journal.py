@@ -5,6 +5,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
+from tradecopilot_agent.models import JournalEntry
 from tradecopilot_agent.store import Store
 
 
@@ -138,6 +139,29 @@ def test_journal_persists_payload_json(tmp_path: Path) -> None:
     decoded = json.loads(payload)
     assert decoded["decision_id"] == "d1"
     assert decoded["legs"][0]["qty"] == 10.0
+
+
+def test_journal_accepts_a_broker_leg_status(tmp_path: Path) -> None:
+    """A venue order status such as pending_new must read back as a journal entry."""
+    store = _store(tmp_path)
+    legs = [
+        {
+            "ticker": "NVDA",
+            "side": "buy",
+            "qty": 10.0,
+            "notional": 1000.0,
+            "fill_price": None,
+            "fill_at": None,
+            "status": "pending_new",
+        }
+    ]
+    store.append_journal(_event("d1", created_at="2026-11-01T10:00:00Z", legs=legs))
+
+    rows, total = store.list_journal(page_no=1, page_size=20)
+
+    assert total == 1
+    entry = JournalEntry.model_validate(rows[0])
+    assert entry.legs[0].status == "pending_new"
 
 
 def test_price_observation_upserts_one_row_per_day(tmp_path: Path) -> None:

@@ -1,5 +1,6 @@
 """FastAPI application exposing the HTTP API."""
 
+import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
@@ -40,6 +41,7 @@ from tradecopilot_agent.models import (
 from tradecopilot_agent.outcomes import attach_outcomes
 from tradecopilot_agent.portfolio import PortfolioUnavailable, fetch_portfolio
 from tradecopilot_agent.promotion import derive_suggestions
+from tradecopilot_agent.reconcile import reconcile
 from tradecopilot_agent.server.ai_sdk.convert import to_ui_messages
 from tradecopilot_agent.server.model_settings import (
     resolve_model,
@@ -57,6 +59,8 @@ from tradecopilot_agent.web import build_web_search
 
 GraphFactory = Callable[[FastAPI, str], Any]
 PortfolioFetcher = Callable[[AppSettings, str], Awaitable[Portfolio]]
+
+logger = logging.getLogger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -464,6 +468,7 @@ def create_app(
             from_date=from_date,
             to_date=to_date,
         )
+        await _refresh_execution_status(app, rows)
         rows = attach_outcomes(rows, app.state.store)
         return JournalList(
             items=[JournalEntry.model_validate(row) for row in rows],
@@ -599,6 +604,36 @@ def _effective_settings(app: FastAPI) -> AppSettings:
     """
     settings: AppSettings = app.state.store.get_settings()
     return settings
+
+
+async def _refresh_execution_status(app: FastAPI, rows: list[dict[str, Any]]) -> None:
+    """Bring open journal legs up to date with the broker.
+
+    Placement records the broker's state at that moment. A fill arrives later,
+    so each read asks the broker for the recent order book and appends one
+    snapshot per changed decision. A broker outage leaves the stored rows as
+    they are.
+
+    Args:
+        app: Application holding the store and settings.
+        rows: Journal snapshots, newest first. Updated in place.
+    """
+    if not rows:
+        return
+    source = LiveSource(lambda: _effective_settings(app))
+    if "alpaca" not in source.capabilities():
+        return
+    try:
+        output = await source.order_book()
+    except Exception:
+        logger.warning("Order reconciliation failed.", exc_info=True)
+        return
+    if output.error is not None or not output.evidence:
+        return
+    orders = output.evidence[0].payload.get("orders")
+    if not isinstance(orders, dict):
+        return
+    reconcile(rows, app.state.store, orders)
 
 
 def _approval_descriptor(
