@@ -9,6 +9,7 @@ from typing import Any
 
 _ANTHROPIC_EFFORT = frozenset({"max", "xhigh", "high", "medium", "low"})
 _GOOGLE_EFFORT = frozenset({"minimal", "low", "medium", "high"})
+_OPENROUTER_EFFORT = frozenset({"minimal", "low", "medium", "high"})
 
 
 def _effort_option(options: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -92,6 +93,33 @@ def _clamp_effort(value: str, allowed: frozenset[str]) -> str:
     if value in {"max", "xhigh"}:
         return "high"
     return "low"
+
+
+def openrouter_kwargs(value: str, options: list[dict[str, Any]]) -> dict[str, Any]:
+    """Translate a choice to OpenRouter's ``reasoning`` request object.
+
+    OpenRouter normalizes reasoning across providers, so one object covers
+    every model on the service: ``enabled`` turns thinking on or off, and
+    ``effort`` or ``max_tokens`` sets how much thinking is allowed.
+
+    Args:
+        value: Normalized choice, empty for the provider default.
+        options: Catalog reasoning options for the selected model.
+
+    Returns:
+        Keyword arguments for the chat model constructor.
+    """
+    if not value:
+        return {}
+    if value == "off":
+        return {"reasoning": {"enabled": False}}
+    if value == "on":
+        return {"reasoning": {"enabled": True}}
+    if _effort_option(options) is None and _budget_option(options) is not None:
+        budget = _budget_option(options)
+        assert budget is not None
+        return {"reasoning": {"max_tokens": budget_for(value, budget)}}
+    return {"reasoning": {"effort": _clamp_effort(value, _OPENROUTER_EFFORT)}}
 
 
 def reasoning_kwargs(

@@ -76,7 +76,7 @@ def test_openai_model_uses_stored_key_base_url_and_reasoning() -> None:
     model = build_provider_model("openrouter", "m", credential, "high")
 
     assert model.model_name == "m"
-    assert model.reasoning_effort == "high"
+    assert cast(Any, model).reasoning == {"effort": "high"}
     assert str(model.openai_api_base) == "https://openrouter.ai/api/v1"
     assert model.openai_api_key.get_secret_value() == "sk-x"
 
@@ -99,6 +99,66 @@ def test_openai_compatible_model_keeps_reasoning_content() -> None:
         generation.message.additional_kwargs["reasoning_content"]
         == "weighing the trade"
     )
+
+
+def _openrouter_credential() -> Any:
+    from tradecopilot_agent.models import ProviderCredential, ProviderModel
+
+    return ProviderCredential(
+        provider_id="openrouter",
+        api_key="sk-o",
+        base_url="https://openrouter.ai/api/v1",
+        npm="@openrouter/ai-sdk-provider",
+        models=[
+            ProviderModel(
+                id="openai/gpt-5.1",
+                name="GPT-5.1",
+                reasoning_options=[
+                    {"type": "effort", "values": ["none", "low", "medium", "high"]}
+                ],
+            )
+        ],
+    )
+
+
+def test_openrouter_reasoning_off_is_sent_as_an_object() -> None:
+    """OpenRouter turns thinking off through its own reasoning field."""
+    from langchain_core.messages import HumanMessage
+
+    model = build_provider_model(
+        "openrouter", "openai/gpt-5.1", _openrouter_credential(), "off"
+    )
+
+    payload = cast(Any, model)._get_request_payload([HumanMessage("hi")])
+
+    assert payload["reasoning"] == {"enabled": False}
+
+
+def test_openrouter_effort_maps_to_the_reasoning_field() -> None:
+    """An effort level becomes OpenRouter's reasoning effort."""
+    from langchain_core.messages import HumanMessage
+
+    model = build_provider_model(
+        "openrouter", "openai/gpt-5.1", _openrouter_credential(), "high"
+    )
+
+    payload = cast(Any, model)._get_request_payload([HumanMessage("hi")])
+
+    assert payload["reasoning"] == {"effort": "high"}
+
+
+def test_openai_compatible_model_keeps_openrouter_reasoning() -> None:
+    """OpenRouter's reasoning delta becomes the chain-of-thought text."""
+    from langchain_core.messages import AIMessageChunk
+    from tradecopilot_agent.llm import OpenAICompatibleChat
+
+    model = OpenAICompatibleChat(model="m", api_key="k")
+    chunk = {"choices": [{"delta": {"reasoning": "step one"}}], "usage": None}
+
+    generation = model._convert_chunk_to_generation_chunk(chunk, AIMessageChunk, None)
+
+    assert generation is not None
+    assert generation.message.additional_kwargs["reasoning_content"] == "step one"
 
 
 def test_deepseek_uses_the_anthropic_protocol() -> None:

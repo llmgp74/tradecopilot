@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
 from tradecopilot_agent.models import ProviderCredential
-from tradecopilot_agent.reasoning import reasoning_kwargs
+from tradecopilot_agent.reasoning import openrouter_kwargs, reasoning_kwargs
 
 DEEPSEEK_ANTHROPIC_URL = "https://api.deepseek.com/anthropic"
 DEEPSEEK_API_URL = "https://api.deepseek.com"
@@ -25,6 +25,7 @@ _NPM_INTEGRATION = {
     "@ai-sdk/openai-compatible": "openai",
     "@ai-sdk/anthropic": "anthropic",
     "@ai-sdk/google": "google",
+    "@openrouter/ai-sdk-provider": "openai",
 }
 
 
@@ -81,21 +82,36 @@ class OpenAICompatibleChat(ChatOpenAI):
     def _reasoning_text(source: Any) -> str:
         """Return the reasoning text from a response message or dict.
 
+        Servers report it under different keys: DashScope sends
+        ``reasoning_content``, OpenRouter sends ``reasoning`` or a
+        ``reasoning_details`` list.
+
         Args:
             source: OpenAI message object or its dict form.
 
         Returns:
             The reasoning text, or an empty string.
         """
-        if isinstance(source, dict):
-            value = source.get("reasoning_content")
-        else:
-            value = getattr(source, "reasoning_content", None)
-            if value is None:
-                extra = getattr(source, "model_extra", None)
-                if isinstance(extra, dict):
-                    value = extra.get("reasoning_content")
-        return value if isinstance(value, str) else ""
+        if not isinstance(source, dict):
+            dump = getattr(source, "model_dump", None)
+            source = dump() if callable(dump) else {}
+        value = source.get("reasoning_content")
+        if isinstance(value, str) and value:
+            return value
+        value = source.get("reasoning")
+        if isinstance(value, str) and value:
+            return value
+        details = source.get("reasoning_details")
+        if isinstance(details, list):
+            parts = [
+                text
+                for item in details
+                if isinstance(item, dict)
+                for text in [item.get("text") or item.get("summary")]
+                if isinstance(text, str)
+            ]
+            return "".join(parts)
+        return ""
 
     def _convert_chunk_to_generation_chunk(
         self,
@@ -112,9 +128,8 @@ class OpenAICompatibleChat(ChatOpenAI):
         )
         if generation is None or not choices:
             return generation
-        delta = choices[0].get("delta") or {}
-        reasoning = delta.get("reasoning_content")
-        if isinstance(reasoning, str) and reasoning:
+        reasoning = self._reasoning_text(choices[0].get("delta") or {})
+        if reasoning:
             generation.message.additional_kwargs["reasoning_content"] = reasoning
         return generation
 
@@ -211,7 +226,10 @@ def build_provider_model(
         raise ValueError(f"Provider integration {credential.npm!r} is not supported.")
     entry = next((model for model in credential.models if model.id == model_id), None)
     options = entry.reasoning_options if entry is not None else []
-    kwargs = reasoning_kwargs(integration, reasoning, options)
+    if provider == "openrouter":
+        kwargs = openrouter_kwargs(reasoning, options)
+    else:
+        kwargs = reasoning_kwargs(integration, reasoning, options)
 
     if integration == "deepseek":
         if not reasoning:
