@@ -38,19 +38,23 @@ def _codes(violations: list[dict]) -> set[str]:
 @pytest.mark.parametrize(
     ("day", "hour", "minute", "expected_open"),
     [
-        (5, 3, 59, False),
+        (5, 3, 59, True),
         (5, 4, 0, True),
         (5, 9, 30, True),
         (5, 16, 0, True),
         (5, 19, 59, True),
-        (5, 20, 0, False),
+        (5, 20, 0, True),
+        (5, 23, 59, True),
+        (6, 3, 0, True),
+        (6, 20, 0, False),
         (7, 12, 0, False),
+        (8, 20, 0, True),
     ],
 )
 def test_market_hours_cover_the_extended_session(
     day: int, hour: int, minute: int, expected_open: bool
 ) -> None:
-    """Pre-market and after-hours are open; the weekend stays closed."""
+    """Overnight, pre-market, and after-hours follow the 24/5 schedule."""
     now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
 
     violations = check_ticket(
@@ -71,11 +75,16 @@ def test_market_hours_cover_the_extended_session(
     [
         (17, 8, 0, False, "2026-11-17T09:30:00-05:00", True),
         (17, 8, 0, False, "2026-11-18T09:30:00-05:00", False),
-        (17, 3, 0, False, "2026-11-17T09:30:00-05:00", False),
+        (17, 3, 0, False, "2026-11-17T09:30:00-05:00", True),
+        (17, 3, 0, False, "2026-11-18T09:30:00-05:00", False),
         (17, 10, 0, True, None, True),
         (17, 17, 0, False, "2026-11-18T09:30:00-05:00", True),
-        (17, 20, 30, False, "2026-11-18T09:30:00-05:00", False),
+        (17, 21, 19, False, "2026-11-18T09:30:00-05:00", True),
+        (17, 21, 19, False, "2026-11-19T09:30:00-05:00", False),
+        (20, 20, 30, False, "2026-11-23T09:30:00-05:00", False),
         (21, 10, 0, False, "2026-11-23T09:30:00-05:00", False),
+        (22, 21, 0, False, "2026-11-23T09:30:00-05:00", True),
+        (22, 3, 0, False, "2026-11-22T09:30:00-05:00", False),
         (17, 8, 0, False, None, False),
         (17, 8, 0, False, "not-a-time", False),
     ],
@@ -88,7 +97,7 @@ def test_session_open_combines_clock_and_extended_window(
     next_open: str | None,
     expected: bool,
 ) -> None:
-    """The regular clock leaves pre-market and after-hours open."""
+    """The regular clock leaves pre-market, after-hours, and overnight open."""
     now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
 
     assert session_open(now, is_open, next_open) is expected

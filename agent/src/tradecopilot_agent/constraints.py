@@ -4,7 +4,7 @@ The check simulates the legs in order, sells before buys, so a buy funded by a
 sell in the same ticket is judged on the cash that sell provides.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -26,14 +26,35 @@ def _ordered(legs: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
     return [*sells, *buys]
 
 
+def _next_open(next_open: str | None) -> datetime | None:
+    """Parse the broker's next regular open in New York time.
+
+    Args:
+        next_open: RFC 3339 timestamp, when the broker supplies one.
+
+    Returns:
+        The parsed instant, or None when missing, naive, or malformed.
+    """
+    if not next_open:
+        return None
+    try:
+        upcoming = datetime.fromisoformat(next_open)
+    except ValueError:
+        return None
+    if upcoming.tzinfo is None or upcoming.utcoffset() is None:
+        return None
+    return upcoming.astimezone(_NEW_YORK)
+
+
 def session_open(now: datetime, is_open: bool, next_open: str | None) -> bool:
     """Resolve the effective session state from the broker clock.
 
-    Alpaca reports the regular session only, so a closed clock still leaves
-    pre-market and after-hours open. Before the regular open, the day must be a
-    trading day, which shows up as ``next_open`` falling on the same New York
-    date. Holidays after the regular close are indistinguishable from a normal
-    after-hours day and are left to the broker to reject.
+    Alpaca reports the regular session only, so a closed clock still leaves its
+    24/5 schedule open: 04:00 to 20:00 on weekdays, plus overnight from 20:00
+    to 04:00 and Sunday from 20:00. Overnight needs the next regular open to
+    prove a session exists: before 04:00 it must fall on the same New York
+    date, and from 20:00 it must fall on the next day. That closes the weekend
+    and the evenings before market holidays.
 
     Args:
         now: Wall clock in any time zone.
@@ -46,37 +67,43 @@ def session_open(now: datetime, is_open: bool, next_open: str | None) -> bool:
     if is_open:
         return True
     local = now.astimezone(_NEW_YORK)
-    if local.weekday() >= 5:
-        return False
     minutes = local.hour * 60 + local.minute
-    if not 4 * 60 <= minutes < 20 * 60:
+    upcoming = _next_open(next_open)
+    if local.weekday() == 5:
         return False
-    if minutes < 9 * 60 + 30:
-        if not next_open:
-            return False
-        try:
-            upcoming = datetime.fromisoformat(next_open)
-        except ValueError:
-            return False
-        return upcoming.astimezone(_NEW_YORK).date() == local.date()
-    return True
+    if local.weekday() == 6 and minutes < 20 * 60:
+        return False
+    if 4 * 60 <= minutes < 20 * 60:
+        if minutes < 9 * 60 + 30:
+            return upcoming is not None and upcoming.date() == local.date()
+        return True
+    if minutes < 4 * 60:
+        return upcoming is not None and upcoming.date() == local.date()
+    tomorrow = local.date() + timedelta(days=1)
+    return upcoming is not None and upcoming.date() == tomorrow
 
 
 def _market_open(now: datetime) -> bool:
-    """Whether the extended-hours session is open.
+    """Whether Alpaca's 24/5 schedule is open, without a broker clock.
 
     Args:
         now: Wall clock in any time zone.
 
     Returns:
-        True on weekdays from 04:00 up to, not including, 20:00 New York
-        time, the window Alpaca accepts for pre-market and after-hours orders.
+        True from Sunday 20:00 through Friday 20:00 New York time. Holiday
+        evenings cannot be detected here; the broker rejects them.
     """
     local = now.astimezone(_NEW_YORK)
-    if local.weekday() >= 5:
-        return False
     minutes = local.hour * 60 + local.minute
-    return 4 * 60 <= minutes < 20 * 60
+    if local.weekday() == 5:
+        return False
+    if local.weekday() == 6 and minutes < 20 * 60:
+        return False
+    if 4 * 60 <= minutes < 20 * 60:
+        return True
+    if minutes < 4 * 60:
+        return True
+    return local.weekday() != 4
 
 
 def check_ticket(

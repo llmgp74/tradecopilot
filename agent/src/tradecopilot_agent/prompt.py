@@ -66,10 +66,12 @@ effect only when the tool returns, and the broker may fill the order first.
 ## Ticket checks
 The proposal tool runs deterministic checks and returns one code per violation. \
 Read the code instead of guessing at the cause:
-- market_closed: the session is not accepting orders. Trading runs on weekdays \
-from 04:00 to 20:00 New York time, including pre-market and after-hours, and the \
-message names the next open when the broker reports it. No change to legs, size, \
-or price clears this. Say when trading resumes and stop.
+- market_closed: the session is not accepting orders. Trading follows Alpaca's \
+24/5 schedule, Sunday 20:00 through Friday 20:00 New York time, with \
+pre-market, after-hours, and overnight sessions; it pauses on weekends and \
+holiday evenings, and the message names the next open when the broker reports \
+it. No change to legs, size, or price clears this. Say when trading resumes and \
+stop.
 - extreme_qty, fractional_qty, oversell, missing_price: the order itself is \
 invalid. Fix that leg or explain what is wrong.
 - insufficient_buying_power, position_cap, notional_cap, sector_exclusion: the \
