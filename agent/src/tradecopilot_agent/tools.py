@@ -337,11 +337,51 @@ class TradingTools:
             summary=json.dumps(verdicts, default=str), verification=verdicts
         )
 
+    async def _open_ticket(self, state: dict[str, Any] | None) -> ToolOutput | None:
+        """Refuse a new ticket while another one is open.
+
+        Only one ticket may be in flight. A proposal waiting for approval and
+        a ticket whose orders are working both count. The checks in
+        ``check_ticket`` see filled positions only, so without this guard a
+        second ticket can stack orders past every limit.
+
+        Args:
+            state: Graph state, holding ``pending_tickets``.
+
+        Returns:
+            The refusal, or ``None`` when no ticket is open.
+        """
+        if (state or {}).get("pending_tickets"):
+            return ToolOutput(
+                summary=(
+                    "A ticket is already waiting for approval. Execute it or "
+                    "let it expire before proposing another."
+                ),
+                error="ticket_pending",
+            )
+        orders = await self.source.open_orders()
+        if orders.error is None:
+            try:
+                working = json.loads(orders.summary)
+            except ValueError:
+                working = None
+            if isinstance(working, list) and working:
+                return ToolOutput(
+                    summary=(
+                        "A ticket is already working at the broker. Cancel "
+                        "those orders or wait for them to fill before "
+                        "proposing another."
+                    ),
+                    error="ticket_working",
+                )
+        return None
+
     async def propose(
         self,
         legs: list[dict[str, Any]],
         thesis: str,
         horizon: str,
+        state: dict[str, Any] | None = None,
     ) -> ToolOutput:
         """Build a ticket, check it, and store the proposal.
 
@@ -349,6 +389,7 @@ class TradingTools:
             legs: Legs with ticker, side, and qty.
             thesis: Rationale in prose.
             horizon: Stated holding horizon.
+            state: Graph state, used to refuse a second open ticket.
 
         Returns:
             The proposal, its evidence, and the portfolio impact.
@@ -405,6 +446,10 @@ class TradingTools:
             for leg in normalized
         ):
             return ToolOutput(summary="A leg price must be positive.", error="invalid")
+
+        open_ticket = await self._open_ticket(state)
+        if open_ticket is not None:
+            return open_ticket
 
         account_output = await self.source.portfolio()
         if account_output.error:
@@ -567,7 +612,9 @@ class TradingTools:
             next_open=clock.next_open if clock else None,
         )
         if violations:
-            return _blocked(violations)
+            # The ticket was approved but cannot be placed as written, so it no
+            # longer blocks the next proposal.
+            return _blocked(violations).model_copy(update={"ticket_done": True})
 
         if not profile.get("execution", {}).get("autonomous", False):
             decision = interrupt(
@@ -592,13 +639,16 @@ class TradingTools:
                 reason = self._rejection_reason(decision)
                 self._journal_result(pending, legs, "rejected", "reject", reason)
                 return ToolOutput(
-                    summary=f"Ticket rejected: {reason}", error="rejected"
+                    summary=f"Ticket rejected: {reason}",
+                    error="rejected",
+                    ticket_done=True,
                 )
 
         if _ticket_expired(pending.get("created_at")):
             return ToolOutput(
                 summary="This ticket has expired. Propose a new one.",
                 error="expired",
+                ticket_done=True,
             )
 
         results = await self._place(ticket_id, legs, prices)
@@ -698,7 +748,15 @@ class TradingTools:
         cash = float(self._account(account_output).get("cash", 0))
         results: list[dict[str, Any]] = []
         for index, leg in enumerate(legs):
-            notional = float(leg["qty"]) * (_leg_price(leg) or prices[leg["ticker"]])
+            quote = prices[leg["ticker"]]
+            limit_price = _leg_price(leg)
+            # A buy is sized at the higher of its limit and the quote, matching
+            # the constraint check; a sell uses its limit.
+            if leg["side"] == "buy" and limit_price is not None:
+                price = max(limit_price, quote)
+            else:
+                price = limit_price or quote
+            notional = float(leg["qty"]) * price
             if leg["side"] == "buy" and notional > cash:
                 results.append(
                     {
@@ -1039,17 +1097,23 @@ def build_tools(
     async def propose_ticket(
         legs: list[dict[str, Any]],
         thesis: str,
+        runtime: ToolRuntime,
         horizon: str = "weeks",
         purpose: Purpose = "",
     ) -> tuple[str, dict[str, Any]]:
         """Propose one ticket with one or more legs. No order is placed.
+
+        Only one ticket may be open at a time. This refuses while another
+        ticket waits for approval or while any orders are working.
 
         Each leg takes ticker, side, and qty, plus an optional price and an
         optional order type of market or limit. A leg price becomes the limit
         price sent to the broker; without one, the leg is priced from its
         quote. A limit leg needs a price.
         """
-        output = await impl.propose(legs, thesis, horizon)
+        output = await impl.propose(
+            legs, thesis, horizon, (runtime.state or {}) if runtime else {}
+        )
         return _text(output), output.model_dump(mode="json")
 
     @artifact

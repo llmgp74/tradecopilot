@@ -34,6 +34,30 @@ def _leg_price(leg: dict[str, Any]) -> float | None:
     return None
 
 
+def _checked_price(
+    side: Any, limit_price: float | None, quote: float | None
+) -> float | None:
+    """Return the price used to size and check a leg.
+
+    A buy is checked at the higher of its limit and the quote, so a limit far
+    below the market cannot shrink the position under the cap. A sell is
+    checked at the lower, so its proceeds are not overstated.
+
+    Args:
+        side: Leg side, buy or sell.
+        limit_price: The leg's own price, or ``None``.
+        quote: The quote price, or ``None``.
+
+    Returns:
+        The checked price, or ``None`` when neither price is known.
+    """
+    if limit_price is not None and quote is not None:
+        return max(limit_price, quote) if side == "buy" else min(limit_price, quote)
+    if limit_price is not None:
+        return limit_price
+    return quote
+
+
 def _ordered(legs: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
     indexed = list(enumerate(legs))
     sells = [item for item in indexed if item[1].get("side") == "sell"]
@@ -205,9 +229,7 @@ def check_ticket(
         ticker = str(leg.get("ticker", "")).upper()
         side = leg.get("side")
         qty = float(leg.get("qty", 0))
-        # A priced leg is checked at its own limit price; an unpriced leg uses
-        # the quote.
-        price = _leg_price(leg) or position_values.get(ticker)
+        price = _checked_price(side, _leg_price(leg), position_values.get(ticker))
 
         if qty <= 0 or qty > MAX_LEG_QTY:
             violations.append(
@@ -279,8 +301,12 @@ def check_ticket(
     buy_notional = sum(
         float(leg.get("qty", 0))
         * (
-            _leg_price(leg)
-            or position_values.get(str(leg.get("ticker", "")).upper(), 0)
+            _checked_price(
+                "buy",
+                _leg_price(leg),
+                position_values.get(str(leg.get("ticker", "")).upper(), 0),
+            )
+            or 0
         )
         for leg in legs
         if leg.get("side") == "buy"

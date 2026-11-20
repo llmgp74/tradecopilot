@@ -36,6 +36,7 @@ class FakeSource:
         prices: dict[str, float] | None = None,
         place_status: str = "filled",
         positions: list[dict] | None = None,
+        open_order_list: list[dict] | None = None,
     ) -> None:
         self._capabilities = capabilities or {
             "alpaca",
@@ -50,6 +51,7 @@ class FakeSource:
         self.prices = prices or {"AAPL": 1000.0, "NVDA": 1000.0}
         self.place_status = place_status
         self.positions = positions or []
+        self.open_order_list = open_order_list or []
         self.placed: list[tuple[dict, str]] = []
         self.cancelled: list[str] = []
 
@@ -128,19 +130,7 @@ class FakeSource:
         )
 
     async def open_orders(self) -> ToolOutput:
-        return ToolOutput(
-            summary=json.dumps(
-                [
-                    {
-                        "order_id": "o1",
-                        "ticker": "AAPL",
-                        "side": "buy",
-                        "qty": "1",
-                        "status": "accepted",
-                    }
-                ]
-            )
-        )
+        return ToolOutput(summary=json.dumps(self.open_order_list))
 
     async def order_history(self, days: int = 7) -> ToolOutput:
         return ToolOutput(
@@ -259,12 +249,48 @@ def test_a_ticket_beyond_one_thousand_legs_is_rejected(tmp_path: Path) -> None:
 
 def test_open_orders_are_listed(tmp_path: Path) -> None:
     """The listing carries the ids the model needs to cancel."""
-    tools, _ = _tools(tmp_path, FakeSource())
+    order = {
+        "order_id": "o1",
+        "ticker": "AAPL",
+        "side": "buy",
+        "qty": "1",
+        "status": "accepted",
+    }
+    tools, _ = _tools(tmp_path, FakeSource(open_order_list=[order]))
 
     output = asyncio.run(tools.open_orders())
 
     assert output.error is None
     assert json.loads(output.summary)[0]["order_id"] == "o1"
+
+
+def test_a_second_proposal_is_refused_while_one_waits(tmp_path: Path) -> None:
+    """One ticket waiting for approval blocks the next proposal."""
+    tools, _ = _tools(tmp_path, FakeSource())
+    state = {"pending_tickets": {"t_1": {"ticket": {"id": "t_1"}}}}
+
+    output = asyncio.run(
+        tools.propose(
+            [{"ticker": "AAPL", "side": "buy", "qty": 1}], "x", "weeks", state
+        )
+    )
+
+    assert output.error == "ticket_pending"
+
+
+def test_a_proposal_is_refused_while_orders_work(tmp_path: Path) -> None:
+    """Working broker orders block a new ticket, closing the split bypass."""
+    source = FakeSource(
+        open_order_list=[{"order_id": "o1", "ticker": "XOM", "status": "new"}]
+    )
+    tools, _ = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 1}], "x", "weeks")
+    )
+
+    assert output.error == "ticket_working"
+    assert source.placed == []
 
 
 def test_cancellation_does_not_pause_for_approval(tmp_path: Path, monkeypatch) -> None:

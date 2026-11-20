@@ -145,6 +145,15 @@ def test_a_new_turn_keeps_pending_tickets() -> None:
     assert "pending_tickets" not in TURN_FIELDS
 
 
+def test_a_finished_ticket_clears_the_pending_slot() -> None:
+    """A placed or abandoned ticket no longer blocks the next proposal."""
+    output = ToolOutput(summary="placed", ticket_done=True)
+
+    updates = artifact_updates(output, None)
+
+    assert updates["pending_tickets"] == {}
+
+
 def test_budget_denies_after_twelve_evidence_calls() -> None:
     """The gather budget refuses evidence tools past its limit."""
     calls = [

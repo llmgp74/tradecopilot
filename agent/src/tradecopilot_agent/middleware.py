@@ -145,6 +145,10 @@ def artifact_updates(output: ToolOutput, as_of: date | None) -> dict[str, Any]:
         }
     if output.verification:
         updates["verification"] = output.verification
+    if output.ticket_done:
+        # A placed, rejected, blocked, or expired ticket is no longer pending,
+        # so the next proposal is free to replace it.
+        updates["pending_tickets"] = {}
     return updates
 
 

@@ -193,6 +193,48 @@ def test_position_cap_applies_to_the_resulting_position() -> None:
     assert "position_cap" in _codes(violations)
 
 
+def test_a_cheap_limit_cannot_shrink_a_buy_under_the_cap() -> None:
+    """A buy limit far below the quote is checked at the quote price."""
+    violations = check_ticket(
+        [
+            {
+                "ticker": "AAPL",
+                "side": "buy",
+                "qty": 20,
+                "entry_price": 1.0,
+            }
+        ],
+        _profile(position_cap_pct=10.0),
+        _account(),
+        prices={"AAPL": 1000.0},
+        sectors={"AAPL": "Technology"},
+        now=NOW,
+    )
+
+    assert "position_cap" in _codes(violations)
+
+
+def test_a_cheap_limit_cannot_shrink_buying_power() -> None:
+    """A buy limit below the quote does not gain extra buying power."""
+    violations = check_ticket(
+        [
+            {
+                "ticker": "AAPL",
+                "side": "buy",
+                "qty": 200,
+                "entry_price": 1.0,
+            }
+        ],
+        _profile(position_cap_pct=100.0),
+        _account(cash=10_000.0, buying_power=10_000.0),
+        prices={"AAPL": 1000.0},
+        sectors={"AAPL": "Technology"},
+        now=NOW,
+    )
+
+    assert "insufficient_buying_power" in _codes(violations)
+
+
 def test_a_sell_is_never_blocked_by_the_cap() -> None:
     """Reducing exposure cannot break the cap."""
     account = _account(
