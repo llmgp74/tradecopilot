@@ -214,11 +214,50 @@ export type ReasoningContentProps = ComponentProps<
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
-export const ReasoningContent = memo(
-  ({ className, children, ...props }: ReasoningContentProps) => (
+export const ReasoningContent = memo(function ReasoningContentInner({
+  className,
+  children,
+  ...props
+}: ReasoningContentProps) {
+  const { isStreaming } = useReasoning();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Follow the tail of the stream unless the reader scrolled up to read.
+  const follow = useRef(true);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) {
+      return;
+    }
+    const onScroll = () => {
+      follow.current =
+        panel.scrollHeight - panel.scrollTop - panel.clientHeight < 32;
+    };
+    panel.addEventListener("scroll", onScroll);
+    return () => panel.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || !isStreaming) {
+      return;
+    }
+    const stick = () => {
+      if (follow.current) {
+        panel.scrollTop = panel.scrollHeight;
+      }
+    };
+    stick();
+    // Markdown finishes rendering after the effect, which grows the panel.
+    const frame = requestAnimationFrame(stick);
+    return () => cancelAnimationFrame(frame);
+  }, [children, isStreaming]);
+
+  return (
     <CollapsibleContent
+      ref={panelRef}
       className={cn(
-        "mt-4 max-h-80 overflow-y-auto pr-1 text-sm",
+        "mt-4 max-h-80 overflow-y-auto overscroll-contain pr-1 text-sm [scrollbar-width:thin]",
         "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
         className
       )}
@@ -226,8 +265,8 @@ export const ReasoningContent = memo(
     >
       <Streamdown plugins={streamdownPlugins}>{children}</Streamdown>
     </CollapsibleContent>
-  )
-);
+  );
+});
 
 Reasoning.displayName = "Reasoning";
 ReasoningTrigger.displayName = "ReasoningTrigger";
