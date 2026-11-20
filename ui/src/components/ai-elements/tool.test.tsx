@@ -20,6 +20,22 @@ it("starts closed and opens the parameters with the camelCase name", async () =>
   expect(screen.getByText("550.12")).toBeInTheDocument();
 });
 
+it("hides the purpose argument from the parameters", async () => {
+  const { container } = render(
+    <ToolCall
+      label="Check SPY price"
+      name="get_quote"
+      state="output-available"
+      input={{ ticker: "SPY", purpose: "Check the entry" }}
+      output="550.12"
+    />,
+  );
+  await userEvent.click(screen.getByText("Check SPY price"));
+  const text = container.textContent ?? "";
+  expect(text).toContain("ticker");
+  expect(text).not.toContain("purpose");
+});
+
 it("renders an object result as JSON", async () => {
   render(
     <ToolCall

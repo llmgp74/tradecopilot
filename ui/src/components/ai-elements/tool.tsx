@@ -157,6 +157,25 @@ function ToolRow({
 }
 
 /**
+ * Copies the call arguments without the row label argument.
+ *
+ * The purpose exists for the row text; showing it as a parameter only adds
+ * noise to the panel.
+ *
+ * @param input - Raw tool arguments.
+ * @returns The arguments without `purpose`, or the value unchanged when it is
+ *   not an object.
+ */
+function parametersOf(input: unknown): unknown {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+  const parameters = { ...(input as Record<string, unknown>) };
+  delete parameters.purpose;
+  return parameters;
+}
+
+/**
  * Renders parameters and the result in a fixed-width two-column panel.
  *
  * Every block keeps `min-width: 0`, so wide content scrolls inside its own
@@ -176,7 +195,7 @@ function ToolPanel({
   output?: unknown;
   errorText?: string;
 }) {
-  const parameters = input === undefined ? {} : input;
+  const parameters = input === undefined ? {} : parametersOf(input);
   const text = typeof output === "string" ? output : null;
   return (
     <div className="grid w-full min-w-0 gap-3 border-t px-2 py-2 sm:grid-cols-2">
