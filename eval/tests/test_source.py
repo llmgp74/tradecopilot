@@ -212,3 +212,10 @@ def test_direct_order_calls_are_disabled() -> None:
     assert output.evidence == []
     assert output.proposal is None
     assert output.ticket_done is False
+
+def test_order_history_is_unavailable() -> None:
+    """Refuse broker history during a frozen replay."""
+    source = FrozenSource([_quote_fixture()], _DECISION)
+    output = asyncio.run(source.order_history(7))
+    assert output.error == "execution_disabled"
+    assert output.evidence == []

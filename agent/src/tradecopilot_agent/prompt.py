@@ -48,6 +48,10 @@ The proposal tool builds a ticket from one or more legs. A single order is a tic
 with one leg. Put every leg of a rebalance in one ticket. The execution tool places \
 it after approval.
 
+For questions about past trades, fills, or yesterday's activity, call the trade \
+history tool. The position list is only the current snapshot and the working \
+orders list is only open orders; neither records what already executed.
+
 To cancel, list the working orders first and pass their ids to the cancellation \
 tool. Cancel only orders the user named or clearly asked to remove; ask before \
 sending a cancellation the user did not request. The cancellation tool runs \

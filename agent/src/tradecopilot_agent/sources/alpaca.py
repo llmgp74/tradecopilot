@@ -238,6 +238,48 @@ class AlpacaSource:
         ]
         return ToolOutput(summary=json.dumps(orders, default=str))
 
+    async def order_history(self, days: int = 7) -> ToolOutput:
+        """List the account's recent orders, including closed and filled ones.
+
+        Args:
+            days: Lookback window in days.
+
+        Returns:
+            A JSON summary of each order with its fill details and timestamps.
+        """
+        current = self.settings()
+        after = (datetime.now(UTC) - timedelta(days=max(1, days))).isoformat()
+        try:
+            data = await fetch_json(
+                f"{trading_base_url(current.alpaca_base_url)}/v2/orders",
+                headers=self._headers(),
+                params={
+                    "status": "all",
+                    "after": after,
+                    "limit": 500,
+                    "direction": "desc",
+                },
+                client=self.client,
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            return ToolOutput(summary=f"Order history failed: {exc}", error="http")
+        orders = [
+            {
+                "ticker": str(item.get("symbol", "")),
+                "side": str(item.get("side", "")),
+                "qty": str(item.get("qty", "")),
+                "filled_qty": str(item.get("filled_qty", "")),
+                "filled_avg_price": item.get("filled_avg_price"),
+                "status": str(item.get("status", "")),
+                "submitted_at": item.get("submitted_at"),
+                "filled_at": item.get("filled_at"),
+                "canceled_at": item.get("canceled_at"),
+            }
+            for item in data
+            if isinstance(item, dict)
+        ]
+        return ToolOutput(summary=json.dumps(orders, default=str))
+
     async def cancel_order(self, order_id: str) -> ToolOutput:
         """Request cancellation of one working order.
 

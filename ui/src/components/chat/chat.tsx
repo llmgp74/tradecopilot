@@ -120,9 +120,9 @@ export function Chat({
 }: ChatProps) {
   const [threadId, setThreadId] = useState<string | null>(initialThreadId);
   const [liveTodos, setLiveTodos] = useState<TodoItem[] | null>(null);
-  // The reader's last reasoning toggle becomes the default for later blocks;
-  // blocks already on screen keep whatever state they have.
-  const [reasoningOpen, setReasoningOpen] = useState(false);
+  // Reasoning starts expanded; the reader's last toggle becomes the default
+  // for later blocks, while blocks already on screen keep their state.
+  const [reasoningOpen, setReasoningOpen] = useState(true);
   const [selection, setSelection] = useState({
     provider: settings.model_provider,
     model: settings.model_id,

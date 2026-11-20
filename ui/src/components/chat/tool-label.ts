@@ -192,6 +192,8 @@ export function rowLabel(name: string, input: unknown, purpose?: string): string
       return "Cross-check claims";
     case "get_open_orders":
       return "List working orders";
+    case "get_trade_history":
+      return "List recent trades";
     case "cancel_orders":
       return "Cancel orders";
     case "execute_ticket":

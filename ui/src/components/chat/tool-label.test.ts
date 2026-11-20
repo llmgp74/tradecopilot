@@ -34,6 +34,7 @@ it.each([
   ["get_positions", {}, "List open positions"],
   ["verify_claims", {}, "Cross-check claims"],
   ["get_open_orders", {}, "List working orders"],
+  ["get_trade_history", {}, "List recent trades"],
   ["cancel_orders", {}, "Cancel orders"],
   ["execute_ticket", {}, "Place the ticket"],
   ["write_todos", {}, "Update plan"],

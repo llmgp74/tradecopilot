@@ -52,6 +52,7 @@ TOOL_CAPABILITIES: dict[str, str] = {
     "get_news": "finnhub",
     "get_macro": "fred",
     "get_open_orders": "alpaca",
+    "get_trade_history": "alpaca",
     "cancel_orders": "order_execution",
     "propose_ticket": "alpaca",
     "execute_ticket": "order_execution",
@@ -535,6 +536,20 @@ class TradingTools:
             return guard
         return await self.source.open_orders()
 
+    async def trade_history(self, days: int) -> ToolOutput:
+        """Fetch the account's recent orders and fills.
+
+        Args:
+            days: Lookback window in days.
+
+        Returns:
+            The broker's orders, including filled and canceled ones.
+        """
+        guard = self._guard("alpaca")
+        if guard is not None:
+            return guard
+        return await self.source.order_history(max(1, min(days, 90)))
+
     async def cancel(self, orders: list[dict[str, Any]]) -> ToolOutput:
         """Cancel working orders.
 
@@ -912,6 +927,14 @@ def build_tools(
         return _text(output), output.model_dump(mode="json")
 
     @artifact
+    async def get_trade_history(
+        days: int = 7, purpose: Purpose = ""
+    ) -> tuple[str, dict[str, Any]]:
+        """Return the account's recent orders and fills for the last days."""
+        output = await impl.trade_history(days)
+        return _text(output), output.model_dump(mode="json")
+
+    @artifact
     async def cancel_orders(
         orders: list[dict[str, Any]], purpose: Purpose = ""
     ) -> tuple[str, dict[str, Any]]:
@@ -950,6 +973,7 @@ def build_tools(
         get_macro,
         verify_claims,
         get_open_orders,
+        get_trade_history,
         cancel_orders,
         propose_ticket,
         execute_ticket,

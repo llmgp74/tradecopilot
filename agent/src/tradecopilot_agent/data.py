@@ -85,6 +85,10 @@ class DataSource(Protocol):
         """Return the broker's working orders."""
         ...
 
+    async def order_history(self, days: int = 7) -> ToolOutput:
+        """Return the account's recent orders, including filled ones."""
+        ...
+
     async def cancel_order(self, order_id: str) -> ToolOutput:
         """Request cancellation of one working order."""
         ...

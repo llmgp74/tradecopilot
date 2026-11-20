@@ -142,6 +142,21 @@ class FakeSource:
             )
         )
 
+    async def order_history(self, days: int = 7) -> ToolOutput:
+        return ToolOutput(
+            summary=json.dumps(
+                [
+                    {
+                        "ticker": "AAPL",
+                        "side": "buy",
+                        "qty": "2",
+                        "status": "filled",
+                        "filled_at": FETCHED,
+                    }
+                ]
+            )
+        )
+
     async def cancel_order(self, order_id: str) -> ToolOutput:
         self.cancelled.append(order_id)
         return ToolOutput(summary=f"Cancel requested for order {order_id}.")
@@ -466,3 +481,26 @@ def test_purpose_is_not_forwarded_to_the_data_source() -> None:
         tools["get_quote"].ainvoke({"ticker": "AAPL", "purpose": "Check the price"})
     )
     assert "AAPL" in str(output)
+
+
+def test_trade_history_returns_broker_orders(tmp_path: Path) -> None:
+    """Past fills come from the broker, not from the current positions."""
+    tools = {
+        tool.name: tool
+        for tool in build_tools(FakeSource(), Store(tmp_path / "data.db"), None)
+    }
+    output = asyncio.run(tools["get_trade_history"].ainvoke({"days": 5}))
+    text = str(output)
+    assert "AAPL" in text
+    assert "filled" in text
+
+
+def test_trade_history_needs_the_broker(tmp_path: Path) -> None:
+    """Without Alpaca the tool reports the missing capability."""
+    source = FakeSource(capabilities={"edgar"})
+    tools = {
+        tool.name: tool
+        for tool in build_tools(source, Store(tmp_path / "data.db"), None)
+    }
+    output = asyncio.run(tools["get_trade_history"].ainvoke({"days": 5}))
+    assert "not configured" in str(output)

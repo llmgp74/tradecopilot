@@ -223,6 +223,13 @@ class FrozenSource(DataSource):
             "execution_disabled", "Order execution is disabled for frozen fixtures."
         )
 
+    async def order_history(self, days: int = 7) -> ToolOutput:
+        """Fail explicitly: a frozen run has no broker order history."""
+        return _failure(
+            "execution_disabled",
+            "Order history is unavailable in evaluation.",
+        )
+
     async def clock(self) -> MarketClock | None:
         """Report no session state; fixtures replay offline.
 
