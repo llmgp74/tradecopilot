@@ -18,6 +18,8 @@ export interface ApprovalCardProps {
   view: ToolPartView;
   /** Sends the decision to the chat. */
   onRespond: (id: string, approved: boolean, reason?: string) => void;
+  /** Error that stopped the approved ticket from executing. */
+  failure?: string | null;
 }
 
 /** One ticket leg, from the descriptor, the execution result, or both. */
@@ -285,7 +287,7 @@ function TicketBody({ legs, rationale, impact }: TicketBodyProps) {
  * @param props - Tool view and decision callback.
  * @returns The approval card.
  */
-export function ApprovalCard({ view, onRespond }: ApprovalCardProps) {
+export function ApprovalCard({ view, onRespond, failure }: ApprovalCardProps) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const approval = view.approval;
@@ -353,13 +355,31 @@ export function ApprovalCard({ view, onRespond }: ApprovalCardProps) {
     return (
       <div className="overflow-hidden rounded-xl border bg-card text-sm">
         <div className="flex items-center gap-2 border-b px-4 py-2.5">
-          <ShieldAlertIcon className="size-4 text-muted-foreground" />
-          <span className="font-medium">Approval sent</span>
-          <span className="ml-auto text-xs text-muted-foreground">
-            Waiting for execution...
+          {failure ? (
+            <XCircleIcon className="size-4" style={{ color: "var(--negative)" }} />
+          ) : (
+            <ShieldAlertIcon className="size-4 text-muted-foreground" />
+          )}
+          <span className="font-medium">
+            {failure ? "Execution did not start" : "Approval sent"}
           </span>
+          {failure ? null : (
+            <span className="ml-auto text-xs text-muted-foreground">
+              Waiting for execution...
+            </span>
+          )}
         </div>
         <TicketBody legs={ticket?.legs ?? []} rationale={rationale} impact={impact} />
+        {failure ? (
+          <div className="space-y-2 px-4 pb-3">
+            <p className="text-xs" style={{ color: "var(--negative)" }}>
+              {failure}
+            </p>
+            <Button size="sm" onClick={() => onRespond(approvalId, true)}>
+              Retry approval
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }

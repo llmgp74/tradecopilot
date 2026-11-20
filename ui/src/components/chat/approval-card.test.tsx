@@ -99,6 +99,22 @@ it("rejects with a reason", async () => {
   expect(onRespond).toHaveBeenCalledWith("c1", false, "Too large");
 });
 
+it("shows a retry when execution never started", async () => {
+  const onRespond = vi.fn();
+  const approved: ToolPartView = {
+    ...view,
+    approval: { ...view.approval!, approved: true },
+  };
+  render(
+    <ApprovalCard view={approved} onRespond={onRespond} failure="Failed to fetch" />,
+  );
+
+  expect(screen.queryByText("Waiting for execution...")).toBeNull();
+  expect(screen.getByText("Failed to fetch")).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: /retry approval/i }));
+  expect(onRespond).toHaveBeenCalledWith("c1", true);
+});
+
 it("shows the execution result instead of buttons when present", () => {
   render(
     <ApprovalCard

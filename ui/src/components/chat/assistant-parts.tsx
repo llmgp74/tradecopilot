@@ -77,6 +77,8 @@ export interface AssistantPartsProps {
   onReasoningOpenChange?: (open: boolean) => void;
   /** Answered tool calls, where the caller needs the raw ids. */
   onApproval: (id: string, approved: boolean, reason?: string) => void;
+  /** Error that stopped the turn, shown on a pending approval. */
+  turnError?: string | null;
 }
 
 /**
@@ -153,6 +155,7 @@ export function AssistantParts({
   reasoningOpen = false,
   onReasoningOpenChange,
   onApproval,
+  turnError,
 }: AssistantPartsProps) {
   const todos = liveTodos ?? message.todos;
   const visibleParts = message.parts.filter(
@@ -170,6 +173,7 @@ export function AssistantParts({
             key={part.toolCallId || `approval-${index}`}
             view={part}
             onRespond={onApproval}
+            failure={turnError}
           />,
         );
         index += 1;

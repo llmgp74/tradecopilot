@@ -293,6 +293,7 @@ export function Chat({
                         }
                         reasoningOpen={reasoningOpen}
                         onReasoningOpenChange={setReasoningOpen}
+                        turnError={error?.message ?? null}
                         onApproval={respond}
                       />
                     </MessageContent>
