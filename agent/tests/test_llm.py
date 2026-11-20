@@ -81,6 +81,26 @@ def test_openai_model_uses_stored_key_base_url_and_reasoning() -> None:
     assert model.openai_api_key.get_secret_value() == "sk-x"
 
 
+def test_openai_compatible_model_keeps_reasoning_content() -> None:
+    """Qwen-style reasoning_content survives into the streamed chunk."""
+    from langchain_core.messages import AIMessageChunk
+    from tradecopilot_agent.llm import OpenAICompatibleChat
+
+    model = OpenAICompatibleChat(model="qwen3.8-flash", api_key="k")
+    chunk = {
+        "choices": [{"delta": {"reasoning_content": "weighing the trade"}}],
+        "usage": None,
+    }
+
+    generation = model._convert_chunk_to_generation_chunk(chunk, AIMessageChunk, None)
+
+    assert generation is not None
+    assert (
+        generation.message.additional_kwargs["reasoning_content"]
+        == "weighing the trade"
+    )
+
+
 def test_deepseek_uses_the_anthropic_protocol() -> None:
     """The deepseek provider id maps to the Anthropic-compatible client."""
     from tradecopilot_agent.models import ProviderCredential, ProviderModel

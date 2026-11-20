@@ -7,6 +7,7 @@ from typing import Any, cast
 from langchain.chat_models import init_chat_model
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
+from langchain_core.outputs import ChatGenerationChunk, ChatResult
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -65,6 +66,77 @@ class AnthropicCompatibleChat(ChatAnthropic):
             if isinstance(forced, dict) and forced.get("type") in ("any", "tool"):
                 bound = bound.bind(tool_choice=forced)
         return bound
+
+
+class OpenAICompatibleChat(ChatOpenAI):
+    """ChatOpenAI that keeps the reasoning text compatible servers return.
+
+    OpenAI reports reasoning through its Responses API, but compatible servers
+    such as Qwen on DashScope return a ``reasoning_content`` field that
+    ChatOpenAI drops. The chat UI reads that field for the chain-of-thought
+    block, so it is copied onto each message and chunk here.
+    """
+
+    @staticmethod
+    def _reasoning_text(source: Any) -> str:
+        """Return the reasoning text from a response message or dict.
+
+        Args:
+            source: OpenAI message object or its dict form.
+
+        Returns:
+            The reasoning text, or an empty string.
+        """
+        if isinstance(source, dict):
+            value = source.get("reasoning_content")
+        else:
+            value = getattr(source, "reasoning_content", None)
+            if value is None:
+                extra = getattr(source, "model_extra", None)
+                if isinstance(extra, dict):
+                    value = extra.get("reasoning_content")
+        return value if isinstance(value, str) else ""
+
+    def _convert_chunk_to_generation_chunk(
+        self,
+        chunk: dict[str, Any],
+        default_chunk_class: type,
+        base_generation_info: dict[str, Any] | None,
+    ) -> ChatGenerationChunk | None:
+        """Keep the reasoning delta alongside the content delta."""
+        generation = super()._convert_chunk_to_generation_chunk(
+            chunk, default_chunk_class, base_generation_info
+        )
+        choices = (
+            chunk.get("choices") or (chunk.get("chunk") or {}).get("choices") or []
+        )
+        if generation is None or not choices:
+            return generation
+        delta = choices[0].get("delta") or {}
+        reasoning = delta.get("reasoning_content")
+        if isinstance(reasoning, str) and reasoning:
+            generation.message.additional_kwargs["reasoning_content"] = reasoning
+        return generation
+
+    def _create_chat_result(
+        self,
+        response: Any,
+        generation_info: dict[str, Any] | None = None,
+    ) -> ChatResult:
+        """Keep the reasoning text from a complete response."""
+        result = super()._create_chat_result(response, generation_info)
+        if isinstance(response, dict):
+            choices = response.get("choices") or []
+            message = choices[0].get("message", {}) if choices else {}
+        else:
+            choices = getattr(response, "choices", None) or []
+            message = choices[0].message if choices else None
+        reasoning = self._reasoning_text(message)
+        if reasoning and result.generations:
+            result.generations[0].message.additional_kwargs["reasoning_content"] = (
+                reasoning
+            )
+        return result
 
 
 def build_chat_model(spec: str) -> BaseChatModel:
@@ -159,7 +231,7 @@ def build_provider_model(
             ),
         )
     if integration == "openai":
-        return ChatOpenAI(
+        return OpenAICompatibleChat(
             model=model_id,
             api_key=SecretStr(credential.api_key),
             base_url=credential.base_url or None,
