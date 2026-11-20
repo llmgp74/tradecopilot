@@ -177,10 +177,29 @@ def _leg_notional(leg: dict[str, Any]) -> float:
     notional = float(leg.get("notional") or 0)
     if notional > 0:
         return notional
-    entry_price = leg.get("entry_price")
-    if isinstance(entry_price, int | float):
-        return float(leg.get("qty", 0)) * float(entry_price)
+    price = _leg_price(leg)
+    if price is not None:
+        return float(leg.get("qty", 0)) * price
     return 0.0
+
+
+def _leg_price(leg: dict[str, Any]) -> float | None:
+    """Return the price the model attached to a leg, when it set one.
+
+    A leg price becomes the limit price sent to the broker, and it is the
+    price used to size and check the order. Without one, a leg is priced from
+    the quote fetched for the ticket.
+
+    Args:
+        leg: Leg with an optional ``entry_price``.
+
+    Returns:
+        The positive price, or ``None`` when the leg carries no price.
+    """
+    value = leg.get("entry_price")
+    if isinstance(value, int | float) and value > 0:
+        return float(value)
+    return None
 
 
 # A proposal older than this needs a fresh quote and a fresh approval.
@@ -345,14 +364,23 @@ class TradingTools:
             return ToolOutput(
                 summary=f"A ticket takes at most {MAX_LEGS} legs.", error="invalid"
             )
-        normalized: list[dict[str, Any]] = [
-            {
-                "ticker": str(leg.get("ticker", "")).strip().upper(),
-                "side": str(leg.get("side", "")).lower(),
-                "qty": float(leg.get("qty", 0)),
-            }
-            for leg in legs
-        ]
+        normalized: list[dict[str, Any]] = []
+        for leg in legs:
+            price = leg.get("entry_price", leg.get("price", leg.get("limit_price")))
+            order_type = leg.get("order_type", leg.get("type"))
+            normalized.append(
+                {
+                    "ticker": str(leg.get("ticker", "")).strip().upper(),
+                    "side": str(leg.get("side", "")).lower(),
+                    "qty": float(leg.get("qty", 0)),
+                    "entry_price": float(price)
+                    if isinstance(price, int | float)
+                    else None,
+                    "order_type": str(order_type).strip().lower()
+                    if isinstance(order_type, str) and order_type.strip()
+                    else None,
+                }
+            )
         if any(not leg["ticker"] for leg in normalized):
             return ToolOutput(
                 summary="Every leg needs a ticker, for example NVDA.", error="invalid"
@@ -361,6 +389,22 @@ class TradingTools:
             return ToolOutput(
                 summary="Every leg needs side buy or sell.", error="invalid"
             )
+        if any(
+            leg["order_type"] not in {None, "market", "limit"} for leg in normalized
+        ):
+            return ToolOutput(
+                summary="Every leg order type is market or limit.", error="invalid"
+            )
+        if any(
+            leg["order_type"] == "limit" and leg["entry_price"] is None
+            for leg in normalized
+        ):
+            return ToolOutput(summary="A limit leg needs a price.", error="invalid")
+        if any(
+            leg["entry_price"] is not None and leg["entry_price"] <= 0
+            for leg in normalized
+        ):
+            return ToolOutput(summary="A leg price must be positive.", error="invalid")
 
         account_output = await self.source.portfolio()
         if account_output.error:
@@ -399,9 +443,10 @@ class TradingTools:
         ordered = [leg for leg in normalized if leg["side"] == "sell"] + [
             leg for leg in normalized if leg["side"] == "buy"
         ]
-        # Alpaca accepts market orders only in the regular session; outside it
-        # the entry price becomes a limit.
-        order_type = "market" if regular_hours(now) else "limit"
+        # A leg's own price and order type win. Without them, the quote prices
+        # the leg and the session picks the type: Alpaca accepts market orders
+        # only in the regular session, and a limit elsewhere.
+        default_type = "market" if regular_hours(now) else "limit"
         ticket_id = "t_" + uuid4().hex[:12]
         ticket = OrderTicket(
             id=ticket_id,
@@ -410,8 +455,8 @@ class TradingTools:
                     ticker=str(leg["ticker"]),
                     side="buy" if leg["side"] == "buy" else "sell",
                     qty=float(leg["qty"]),
-                    entry_price=prices[leg["ticker"]],
-                    order_type=order_type,
+                    entry_price=_leg_price(leg) or prices[leg["ticker"]],
+                    order_type=leg["order_type"] or default_type,
                 )
                 for leg in ordered
             ],
@@ -437,8 +482,9 @@ class TradingTools:
                 "legs": [
                     {
                         **leg,
-                        "notional": leg["qty"] * prices[leg["ticker"]],
-                        "entry_price": prices[leg["ticker"]],
+                        "notional": leg["qty"]
+                        * (_leg_price(leg) or prices[leg["ticker"]]),
+                        "entry_price": _leg_price(leg) or prices[leg["ticker"]],
                         "fill_price": None,
                         "fill_at": None,
                         "status": "proposed",
@@ -652,7 +698,7 @@ class TradingTools:
         cash = float(self._account(account_output).get("cash", 0))
         results: list[dict[str, Any]] = []
         for index, leg in enumerate(legs):
-            notional = float(leg["qty"]) * prices[leg["ticker"]]
+            notional = float(leg["qty"]) * (_leg_price(leg) or prices[leg["ticker"]])
             if leg["side"] == "buy" and notional > cash:
                 results.append(
                     {
@@ -815,18 +861,23 @@ class TradingTools:
             quantities[ticker] = float(position.get("qty", 0))
             before[ticker] = float(position.get("market_value", 0)) / equity * 100
         after = dict(before)
+        leg_prices = {
+            str(leg["ticker"]): _leg_price(leg)
+            for leg in legs
+            if _leg_price(leg) is not None
+        }
         for leg in legs:
             ticker = str(leg["ticker"])
             quantities[ticker] = quantities.get(ticker, 0.0) + (
                 float(leg["qty"]) if leg["side"] == "buy" else -float(leg["qty"])
             )
         for ticker, quantity in quantities.items():
-            price = prices.get(ticker)
+            price = leg_prices.get(ticker) or prices.get(ticker)
             if price is not None:
                 after[ticker] = quantity * price / equity * 100
         net = sum(
             float(leg["qty"])
-            * prices.get(leg["ticker"], 0)
+            * (_leg_price(leg) or prices.get(leg["ticker"], 0))
             * (1 if leg["side"] == "buy" else -1)
             for leg in legs
         )
@@ -991,7 +1042,13 @@ def build_tools(
         horizon: str = "weeks",
         purpose: Purpose = "",
     ) -> tuple[str, dict[str, Any]]:
-        """Propose one ticket with one or more legs. No order is placed."""
+        """Propose one ticket with one or more legs. No order is placed.
+
+        Each leg takes ticker, side, and qty, plus an optional price and an
+        optional order type of market or limit. A leg price becomes the limit
+        price sent to the broker; without one, the leg is priced from its
+        quote. A limit leg needs a price.
+        """
         output = await impl.propose(legs, thesis, horizon)
         return _text(output), output.model_dump(mode="json")
 

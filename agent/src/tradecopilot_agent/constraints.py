@@ -19,6 +19,21 @@ def _violation(
     return {"code": code, "message": message, "leg_index": leg_index, "value": value}
 
 
+def _leg_price(leg: dict[str, Any]) -> float | None:
+    """Return the price the model attached to a leg, when it set one.
+
+    Args:
+        leg: Leg with an optional ``entry_price``.
+
+    Returns:
+        The positive price, or ``None`` when the leg carries no price.
+    """
+    value = leg.get("entry_price")
+    if isinstance(value, int | float) and value > 0:
+        return float(value)
+    return None
+
+
 def _ordered(legs: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
     indexed = list(enumerate(legs))
     sells = [item for item in indexed if item[1].get("side") == "sell"]
@@ -190,7 +205,9 @@ def check_ticket(
         ticker = str(leg.get("ticker", "")).upper()
         side = leg.get("side")
         qty = float(leg.get("qty", 0))
-        price = position_values.get(ticker)
+        # A priced leg is checked at its own limit price; an unpriced leg uses
+        # the quote.
+        price = _leg_price(leg) or position_values.get(ticker)
 
         if qty <= 0 or qty > MAX_LEG_QTY:
             violations.append(
@@ -261,7 +278,10 @@ def check_ticket(
 
     buy_notional = sum(
         float(leg.get("qty", 0))
-        * position_values.get(str(leg.get("ticker", "")).upper(), 0)
+        * (
+            _leg_price(leg)
+            or position_values.get(str(leg.get("ticker", "")).upper(), 0)
+        )
         for leg in legs
         if leg.get("side") == "buy"
     )

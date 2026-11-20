@@ -308,11 +308,14 @@ class AlpacaSource:
     ) -> ToolOutput:
         """Place one order on the configured Alpaca account.
 
-        Outside the regular session Alpaca accepts only limit orders flagged
-        for extended hours, so the ticket's entry price becomes the limit.
+        The ticket's order type and entry price are sent as given. A market
+        order is only valid in the regular session, so outside it the entry
+        price is sent as a limit flagged for extended hours. Without an order
+        type, the session picks: market when regular, limit otherwise.
 
         Args:
-            leg: Ticket leg with ticker, side, qty, and entry_price.
+            leg: Ticket leg with ticker, side, qty, entry_price, and
+                order_type.
             client_order_id: Idempotency key for the order.
             now: Wall clock, injected by tests.
 
@@ -321,6 +324,9 @@ class AlpacaSource:
         """
         current = self.settings()
         moment = now if now is not None else datetime.now(tz=UTC)
+        regular = _in_regular_hours(moment)
+        entry_price = leg.get("entry_price")
+        wanted = str(leg.get("order_type") or "").lower()
         body: dict[str, Any] = {
             "symbol": leg["ticker"],
             "qty": str(leg["qty"]),
@@ -329,11 +335,14 @@ class AlpacaSource:
             "time_in_force": "day",
             "client_order_id": client_order_id,
         }
-        entry_price = leg.get("entry_price")
-        if not _in_regular_hours(moment) and isinstance(entry_price, int | float):
+        if not regular:
+            if isinstance(entry_price, int | float):
+                body["type"] = "limit"
+                body["limit_price"] = f"{float(entry_price):.2f}"
+                body["extended_hours"] = True
+        elif wanted == "limit" and isinstance(entry_price, int | float):
             body["type"] = "limit"
             body["limit_price"] = f"{float(entry_price):.2f}"
-            body["extended_hours"] = True
         try:
             data = await post_json(
                 f"{trading_base_url(current.alpaca_base_url)}/v2/orders",

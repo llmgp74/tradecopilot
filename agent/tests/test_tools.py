@@ -451,6 +451,89 @@ def test_proposal_records_the_entry_price(tmp_path: Path) -> None:
     assert row["legs"][0]["entry_price"] == 100.0
 
 
+def test_a_priced_limit_leg_keeps_the_model_price(tmp_path: Path) -> None:
+    """A leg price and order type reach the ticket and the journal."""
+    source = FakeSource(
+        prices={"AAPL": 100.0},
+        positions=[{"ticker": "AAPL", "qty": 5, "market_value": 500.0}],
+    )
+    tools, store = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.propose(
+            [
+                {
+                    "ticker": "AAPL",
+                    "side": "sell",
+                    "qty": 5,
+                    "price": 95.0,
+                    "type": "limit",
+                }
+            ],
+            "exit",
+            "immediate",
+        )
+    )
+
+    assert output.proposal is not None, output.summary
+    leg = output.proposal["legs"][0]
+    assert leg["entry_price"] == 95.0
+    assert leg["order_type"] == "limit"
+    row = store.list_journal(page_no=1, page_size=10)[0][0]
+    assert row["legs"][0]["entry_price"] == 95.0
+    assert row["legs"][0]["notional"] == 475.0
+
+
+def test_a_limit_leg_needs_a_price(tmp_path: Path) -> None:
+    """A limit order without a price is rejected instead of repriced."""
+    tools, _ = _tools(tmp_path, FakeSource())
+
+    output = asyncio.run(
+        tools.propose(
+            [{"ticker": "AAPL", "side": "buy", "qty": 1, "type": "limit"}],
+            "x",
+            "weeks",
+        )
+    )
+
+    assert output.error == "invalid"
+    assert "needs a price" in output.summary
+
+
+def test_execution_sends_the_leg_price_to_the_broker(tmp_path: Path) -> None:
+    """The limit price survives execute_ticket and reaches place_leg."""
+    source = FakeSource(prices={"AAPL": 100.0})
+    tools, store = _tools(tmp_path, source)
+    store.patch_profile(
+        {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
+    )
+    proposed = asyncio.run(
+        tools.propose(
+            [
+                {
+                    "ticker": "AAPL",
+                    "side": "buy",
+                    "qty": 1,
+                    "price": 95.0,
+                    "type": "limit",
+                }
+            ],
+            "x",
+            "weeks",
+        )
+    )
+    assert proposed.proposal is not None, proposed.summary
+
+    pending = {
+        proposed.proposal["id"]: {"ticket": proposed.proposal},
+    }
+    asyncio.run(tools.execute(proposed.proposal["id"], {"pending_tickets": pending}))
+
+    placed, _ = source.placed[0]
+    assert placed["entry_price"] == 95.0
+    assert placed["order_type"] == "limit"
+
+
 def test_the_pending_ticket_records_the_entry_price(tmp_path: Path) -> None:
     """Execution snapshots copy the entry price from the pending ticket."""
     source = FakeSource(prices={"AAPL": 100.0})

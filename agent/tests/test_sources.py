@@ -210,6 +210,56 @@ def test_alpaca_places_a_market_order_in_regular_hours() -> None:
     assert "extended_hours" not in seen
 
 
+def test_alpaca_places_a_limit_order_in_regular_hours() -> None:
+    """A limit leg keeps its type and price inside the regular session."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"status": "accepted"})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    leg = {
+        "ticker": "SPY",
+        "side": "sell",
+        "qty": 1,
+        "entry_price": 612.34,
+        "order_type": "limit",
+    }
+    asyncio.run(
+        source.place_leg(leg, "order-3", now=datetime(2026, 11, 17, 15, 0, tzinfo=UTC))
+    )
+
+    assert seen["type"] == "limit"
+    assert seen["limit_price"] == "612.34"
+    assert "extended_hours" not in seen
+
+
+def test_alpaca_turns_a_market_leg_into_a_limit_outside_regular_hours() -> None:
+    """A market order cannot be sent in extended hours, so the price is a limit."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"status": "accepted"})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    leg = {
+        "ticker": "SPY",
+        "side": "sell",
+        "qty": 1,
+        "entry_price": 612.34,
+        "order_type": "market",
+    }
+    asyncio.run(
+        source.place_leg(leg, "order-4", now=datetime(2026, 11, 17, 12, 0, tzinfo=UTC))
+    )
+
+    assert seen["type"] == "limit"
+    assert seen["limit_price"] == "612.34"
+    assert seen["extended_hours"] is True
+
+
 def test_alpaca_lists_open_orders() -> None:
     """Open orders are normalized to the fields the agent needs."""
     seen: dict = {}
