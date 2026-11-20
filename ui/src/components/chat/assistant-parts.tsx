@@ -1,13 +1,13 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
+import { Plan } from "@/components/ai-elements/plan";
 import {
   Reasoning,
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Task, TaskContent, TaskItem, TaskTrigger } from "@/components/ai-elements/task";
 import { ToolCall, ToolGroup, aggregateState } from "@/components/ai-elements/tool";
 import type { DisplayMessage, TodoItem, ToolPartView } from "@/lib/parts";
 import { ApprovalCard } from "./approval-card";
@@ -158,8 +158,10 @@ export function AssistantParts({
   turnError,
 }: AssistantPartsProps) {
   const todos = liveTodos ?? message.todos;
+  // The plan card shows the same steps, so the write_todos call row would
+  // repeat them.
   const visibleParts = message.parts.filter(
-    (part) => part.kind !== "tool" || !part.hidden,
+    (part) => part.kind !== "tool" || (!part.hidden && part.name !== "write_todos"),
   );
 
   const rendered: ReactNode[] = [];
@@ -217,24 +219,7 @@ export function AssistantParts({
 
   return (
     <div className="flex w-full flex-col gap-2">
-      {todos && todos.length > 0 ? (
-        <Task defaultOpen>
-          <TaskTrigger title="Plan" />
-          <TaskContent>
-            {todos.map((todo) => (
-              <TaskItem
-                key={todo.content}
-                className="flex items-center justify-between gap-2"
-              >
-                <span>{todo.content}</span>
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {todo.status.replace("_", " ")}
-                </span>
-              </TaskItem>
-            ))}
-          </TaskContent>
-        </Task>
-      ) : null}
+      {todos && todos.length > 0 ? <Plan todos={todos} /> : null}
 
       {rendered}
     </div>
