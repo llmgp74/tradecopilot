@@ -122,10 +122,13 @@ filing and XBRL tools for those.
 WORKSPACE_PROMPT = """\
 
 ## Workspace
-Your file and shell tools work inside {workspace}. Attachments are stored under \
-uploads/<thread id>/; read them with the file tools, and run python (not python3) \
-through the shell for PDFs, CSV analysis, and calculations. The file tools cannot \
-leave the workspace. The shell can, so ask before touching anything outside it.
+Your file tools treat the workspace as their root, so attachment paths start \
+with a slash, for example /uploads/<thread id>/pnl.csv. The shell's working \
+directory is that same workspace, so the shell uses the relative form, \
+uploads/<thread id>/pnl.csv; never pass a host path to the file tools. Run \
+python (not python3) through the shell for PDFs, CSV analysis, and \
+calculations. The file tools cannot leave the workspace. The shell can, so \
+ask before touching anything outside it.
 """
 
 CLOCK_PROMPT = """\
@@ -171,5 +174,5 @@ def build_system_prompt(
     if web_search:
         sections += WEB_SEARCH_PROMPT
     if workspace is not None:
-        sections += WORKSPACE_PROMPT.format(workspace=workspace)
+        sections += WORKSPACE_PROMPT
     return sections

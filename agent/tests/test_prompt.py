@@ -48,16 +48,17 @@ def test_build_agent_uses_the_decision_clock(tmp_path: Path) -> None:
     assert "09:00 -0500" in prompt
 
 
-def test_workspace_section_names_the_root_and_python() -> None:
-    """The prompt points the model at the workspace and the app interpreter."""
+def test_workspace_section_names_both_path_forms() -> None:
+    """File tools use a virtual root; the shell uses relative paths."""
     prompt = build_system_prompt(
         datetime(2026, 11, 20, tzinfo=UTC),
         workspace="/home/u/.tradecopilot/workspace",
     )
 
-    assert "/home/u/.tradecopilot/workspace" in prompt
     assert "uploads/" in prompt
+    assert "working directory" in prompt
     assert "python" in prompt
+    assert "/home/u/.tradecopilot/workspace" not in prompt
 
 
 def test_no_workspace_section_without_a_root() -> None:
