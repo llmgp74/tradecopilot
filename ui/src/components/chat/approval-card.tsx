@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { CheckCircle2Icon, ShieldAlertIcon, XCircleIcon } from "lucide-react";
+import {
+  CheckCircle2Icon,
+  CircleHelpIcon,
+  ShieldAlertIcon,
+  XCircleIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +15,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import type { ToolPartView } from "@/lib/parts";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { PortfolioImpact, ToolPartView } from "@/lib/parts";
+import { nettingNote } from "@/lib/parts";
 
 /** Props for the approval card. */
 export interface ApprovalCardProps {
@@ -160,8 +167,26 @@ function TicketTable({ legs, impact }: TicketTableProps) {
                   ) : null}
                 </td>
                 <td className="px-3 py-1.5">
-                  <span className="text-[10px] font-medium uppercase text-muted-foreground">
-                    {leg.side ?? "?"}
+                  <span className="flex items-center gap-1">
+                    <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                      {leg.side ?? "?"}
+                    </span>
+                    <Tooltip>
+                      <TooltipTrigger
+                        aria-label="What this order does"
+                        className="text-muted-foreground/70 hover:text-foreground"
+                      >
+                        <CircleHelpIcon className="size-3" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {nettingNote(
+                          leg,
+                          impact?.before_qty && leg.ticker
+                            ? (impact.before_qty[leg.ticker] ?? 0)
+                            : undefined,
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
                   </span>
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono tabular-nums">
@@ -243,12 +268,7 @@ interface TicketBodyProps {
   /** Ticket thesis or draft recommendation. */
   rationale?: string;
   /** Portfolio impact from the descriptor. */
-  impact?: {
-    before_pct?: Record<string, number>;
-    after_pct?: Record<string, number>;
-    net_notional?: number;
-    equity?: number;
-  } | null;
+  impact?: PortfolioImpact | null;
 }
 
 /**

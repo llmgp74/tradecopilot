@@ -155,6 +155,7 @@ def _portfolio(
             cash=float(str(account["cash"])),
             buying_power=float(str(account["buying_power"])),
             long_market_value=float(str(account["long_market_value"])),
+            shorting_enabled=account.get("shorting_enabled") is True,
         ),
         day=DayPnl(pnl=pnl, pnl_pct=pnl_pct),
         positions=positions,

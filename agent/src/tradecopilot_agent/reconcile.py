@@ -37,9 +37,54 @@ def client_order_id(ticket_id: str, leg_index: int) -> str:
         leg_index: Position of the leg in the ticket.
 
     Returns:
-        The client order id sent to the broker.
+        The base client order id. A leg that crossed zero was placed with a
+        ``-close`` and an ``-open`` suffix on this base.
     """
     return f"{ticket_id}-{leg_index}"
+
+
+def _order_match(
+    orders: dict[str, dict[str, Any]], ticket_id: str, leg_index: int
+) -> dict[str, Any] | None:
+    """Merge the broker states for one leg.
+
+    A leg that crossed zero is placed as two orders, a close then an open, so
+    both ids are checked in placement order. The legacy unsuffixed id is
+    checked too, for rows written before the split.
+
+    Args:
+        orders: Broker order states keyed by client order id.
+        ticket_id: Ticket id stored as the journal decision id.
+        leg_index: Position of the leg in the ticket.
+
+    Returns:
+        One merged state, or ``None`` when no order matches.
+    """
+    base = client_order_id(ticket_id, leg_index)
+    matches = [
+        orders[key] for key in (f"{base}-close", f"{base}-open", base) if key in orders
+    ]
+    if not matches:
+        return None
+    merged: dict[str, Any] = {}
+    statuses: list[str] = []
+    for match in matches:
+        if match.get("order_id"):
+            merged["order_id"] = match["order_id"]
+        if match.get("fill_price") is not None:
+            merged["fill_price"] = match["fill_price"]
+        if match.get("fill_at"):
+            merged["fill_at"] = match["fill_at"]
+        statuses.append(str(match.get("status") or ""))
+    if len(statuses) == 1:
+        merged["status"] = statuses[0]
+    elif any(status in FAILED_STATUSES for status in statuses):
+        merged["status"] = "failed"
+    elif all(status == "filled" for status in statuses):
+        merged["status"] = "filled"
+    else:
+        merged["status"] = "submitted"
+    return merged
 
 
 def _decision_status(statuses: list[str]) -> str:
@@ -93,7 +138,7 @@ def reconcile(
             if not _needs_refresh(leg):
                 updated.append(leg)
                 continue
-            match = orders.get(client_order_id(str(row["id"]), index))
+            match = _order_match(orders, str(row["id"]), index)
             if match is None:
                 updated.append(leg)
                 continue

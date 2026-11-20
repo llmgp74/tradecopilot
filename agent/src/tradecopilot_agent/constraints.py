@@ -9,6 +9,10 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 MAX_LEG_QTY = 100_000.0
+SHORT_MARGIN_RATE = 0.5
+"""Margin a short must supply. Reg T requires 150 percent of the short value;
+the other 100 percent is the withheld proceeds, which never fund a buy here."""
+
 _EPSILON = 1e-9
 _NEW_YORK = ZoneInfo("America/New_York")
 
@@ -250,43 +254,59 @@ def check_ticket(
             )
             continue
 
-        notional = qty * price
         held = holdings.get(ticker, 0.0)
+        limit_price = _leg_price(leg)
+        market_price = position_values.get(ticker)
+        low_price = _checked_price("sell", limit_price, market_price) or 0.0
+        high_price = _checked_price("buy", limit_price, market_price) or 0.0
+
         if side == "sell":
-            if qty > held + _EPSILON:
+            new_qty = held - qty
+            if new_qty < -_EPSILON and not account.get("shorting_enabled", False):
                 violations.append(
                     _violation(
-                        "oversell", "The sell exceeds the held quantity.", index, qty
+                        "oversell",
+                        "The sell exceeds the held quantity and shorting is not "
+                        "enabled.",
+                        index,
+                        qty,
                     )
                 )
                 continue
-            holdings[ticker] = held - qty
-            available += notional
-            continue
+            closing = min(qty, max(held, 0.0))
+            opening = qty - closing
+            available += closing * low_price
+            available -= opening * high_price * SHORT_MARGIN_RATE
+        else:
+            new_qty = held + qty
+            available -= qty * high_price
 
-        sector = sectors.get(ticker)
-        if exclusions and (sector is None or sector in exclusions):
-            violations.append(
-                _violation(
-                    "sector_exclusion",
-                    "The sector is excluded or unknown.",
-                    index,
-                    sector,
+        # A leg that reduces, closes, or flips to a smaller exposure is never
+        # blocked by the profile; only growth is checked.
+        if abs(new_qty) > abs(held) + _EPSILON:
+            sector = sectors.get(ticker)
+            if exclusions and (sector is None or sector in exclusions):
+                violations.append(
+                    _violation(
+                        "sector_exclusion",
+                        "The sector is excluded or unknown.",
+                        index,
+                        sector,
+                    )
                 )
-            )
-        holdings[ticker] = held + qty
-        available -= notional
-
-        resulting_value = holdings[ticker] * price
-        if equity > 0 and resulting_value / equity * 100 > cap_pct + _EPSILON:
-            violations.append(
-                _violation(
-                    "position_cap",
-                    "The position would exceed the cap.",
-                    index,
-                    resulting_value / equity * 100,
+            if (
+                equity > 0
+                and abs(new_qty) * high_price / equity * 100 > cap_pct + _EPSILON
+            ):
+                violations.append(
+                    _violation(
+                        "position_cap",
+                        "The position would exceed the cap.",
+                        index,
+                        abs(new_qty) * high_price / equity * 100,
+                    )
                 )
-            )
+        holdings[ticker] = new_qty
 
     if available < -_EPSILON:
         violations.append(

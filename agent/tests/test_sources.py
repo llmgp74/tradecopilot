@@ -368,3 +368,69 @@ def test_account_summary_states_the_environment(monkeypatch) -> None:
     assert output.summary.startswith("Live account.")
     assert "Positions: NVDA 1.0 shares worth 311.0." in output.summary
     assert output.evidence[0].payload["paper"] is False
+
+
+def test_account_payload_reports_capability_and_signs_shorts(monkeypatch) -> None:
+    """The tool payload carries the flag and a negative short quantity."""
+    from tradecopilot_agent import portfolio as portfolio_module
+    from tradecopilot_agent import sources
+
+    snapshot = portfolio_module._portfolio(
+        _settings(),
+        {
+            "currency": "USD",
+            "equity": "100000",
+            "last_equity": "99000",
+            "cash": "50000",
+            "buying_power": "100000",
+            "long_market_value": "50000",
+            "shorting_enabled": True,
+        },
+        [
+            {
+                "symbol": "AMD",
+                "side": "short",
+                "qty": "5",
+                "market_value": "-500",
+                "avg_entry_price": "120",
+                "current_price": "100",
+                "unrealized_pl": "-100",
+                "unrealized_plpc": "-0.1667",
+            }
+        ],
+        {},
+    )
+
+    async def fake_fetch(settings: object, range_: str) -> object:
+        return snapshot
+
+    monkeypatch.setattr(sources.alpaca, "fetch_portfolio", fake_fetch)
+    source = AlpacaSource(lambda: _settings())
+
+    output = asyncio.run(source.portfolio())
+
+    payload = output.evidence[0].payload
+    assert payload["shorting_enabled"] is True
+    assert payload["positions"][0]["qty"] == -5.0
+
+
+def test_alpaca_sends_the_position_intent() -> None:
+    """An explicit intent reaches the order body."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"status": "accepted"})
+
+    source = AlpacaSource(lambda: _settings(), client=_client(handler))
+    leg = {"ticker": "SPY", "side": "sell", "qty": 5}
+    asyncio.run(
+        source.place_leg(
+            leg,
+            "order-1",
+            "sell_to_open",
+            now=datetime(2026, 11, 17, 15, 0, tzinfo=UTC),
+        )
+    )
+
+    assert seen["position_intent"] == "sell_to_open"

@@ -1,7 +1,12 @@
 """Portfolio history request parameters."""
 
 import pytest
-from tradecopilot_agent.portfolio import history_params, trading_base_url
+from tradecopilot_agent.models import AppSettings
+from tradecopilot_agent.portfolio import (
+    _portfolio,
+    history_params,
+    trading_base_url,
+)
 
 
 @pytest.mark.parametrize(
@@ -32,4 +37,52 @@ def test_missing_base_url_defaults_to_the_paper_host() -> None:
     assert trading_base_url("") == "https://paper-api.alpaca.markets"
     assert trading_base_url("https://api.alpaca.markets/v2") == (
         "https://api.alpaca.markets"
+    )
+
+
+def test_account_reports_shorting_enabled() -> None:
+    """The broker's shorting capability survives the snapshot."""
+    snapshot = _portfolio(
+        _settings(),
+        {
+            "currency": "USD",
+            "equity": "100000",
+            "last_equity": "99000",
+            "cash": "50000",
+            "buying_power": "100000",
+            "long_market_value": "50000",
+            "shorting_enabled": True,
+        },
+        [],
+        {},
+    )
+
+    assert snapshot.account.shorting_enabled is True
+
+
+def test_account_defaults_to_no_shorting() -> None:
+    """A missing flag leaves the account long-only."""
+    snapshot = _portfolio(
+        _settings(),
+        {
+            "currency": "USD",
+            "equity": "100000",
+            "last_equity": "99000",
+            "cash": "50000",
+            "buying_power": "100000",
+            "long_market_value": "50000",
+        },
+        [],
+        {},
+    )
+
+    assert snapshot.account.shorting_enabled is False
+
+
+def _settings() -> AppSettings:
+    """Return settings with the broker fields the snapshot needs."""
+    return AppSettings(
+        alpaca_api_key="key",
+        alpaca_api_secret="secret",
+        updated_at="2026-11-05T00:00:00Z",
     )

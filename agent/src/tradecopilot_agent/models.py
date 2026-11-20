@@ -195,6 +195,7 @@ class Account(BaseModel):
     cash: float
     buying_power: float
     long_market_value: float
+    shorting_enabled: bool = False
 
 
 class DayPnl(BaseModel):

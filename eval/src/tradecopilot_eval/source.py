@@ -232,12 +232,18 @@ class FrozenSource(DataSource):
             "execution_disabled", "Order execution is disabled for frozen fixtures."
         )
 
-    async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:
+    async def place_leg(
+        self,
+        leg: dict[str, Any],
+        client_order_id: str,
+        position_intent: str | None = None,
+    ) -> ToolOutput:
         """Refuse every order without inspecting or submitting it.
 
         Args:
             leg: Order details, ignored.
             client_order_id: Order identifier, ignored.
+            position_intent: Broker position intent, ignored.
 
         Returns:
             An execution-disabled error with no order side effect.

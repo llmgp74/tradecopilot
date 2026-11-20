@@ -161,10 +161,13 @@ class AlpacaSource:
             "equity": snapshot.account.equity,
             "cash": snapshot.account.cash,
             "buying_power": snapshot.account.buying_power,
+            "shorting_enabled": snapshot.account.shorting_enabled,
             "positions": [
                 {
                     "ticker": position.ticker,
-                    "qty": position.qty,
+                    "qty": (
+                        -position.qty if position.side == "short" else position.qty
+                    ),
                     "market_value": position.market_value,
                 }
                 for position in snapshot.positions
@@ -304,6 +307,7 @@ class AlpacaSource:
         self,
         leg: dict[str, Any],
         client_order_id: str,
+        position_intent: str | None = None,
         now: datetime | None = None,
     ) -> ToolOutput:
         """Place one order on the configured Alpaca account.
@@ -317,6 +321,8 @@ class AlpacaSource:
             leg: Ticket leg with ticker, side, qty, entry_price, and
                 order_type.
             client_order_id: Idempotency key for the order.
+            position_intent: Alpaca intent such as ``sell_to_open``. Sent only
+                when set, so the broker never has to infer it from quantity.
             now: Wall clock, injected by tests.
 
         Returns:
@@ -335,6 +341,8 @@ class AlpacaSource:
             "time_in_force": "day",
             "client_order_id": client_order_id,
         }
+        if position_intent is not None:
+            body["position_intent"] = position_intent
         if not regular:
             if isinstance(entry_price, int | float):
                 body["type"] = "limit"

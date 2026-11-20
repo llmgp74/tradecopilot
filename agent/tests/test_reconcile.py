@@ -91,3 +91,53 @@ def test_a_terminal_leg_is_not_queried_again() -> None:
     changed = reconcile(rows, store, {})
 
     assert changed == 0
+
+
+def test_split_order_ids_update_the_leg() -> None:
+    """A leg placed as close then open reconciles from both order ids."""
+    rows = [_row("pending_new")]
+    store = RecordingStore()
+    orders = {
+        "ticket-1-0-close": {
+            "order_id": "close-1",
+            "status": "filled",
+            "fill_price": "100.00",
+            "fill_at": "2026-11-19T14:30:00Z",
+        },
+        "ticket-1-0-open": {
+            "order_id": "open-1",
+            "status": "filled",
+            "fill_price": "101.00",
+            "fill_at": "2026-11-19T14:31:00Z",
+        },
+    }
+
+    changed = reconcile(rows, store, orders)
+
+    assert changed == 1
+    assert rows[0]["legs"][0]["status"] == "filled"
+    assert rows[0]["legs"][0]["fill_price"] == "101.00"
+
+
+def test_a_rejected_open_fails_the_leg() -> None:
+    """A close that filled and an open that was rejected is a failed leg."""
+    rows = [_row("pending_new")]
+    store = RecordingStore()
+    orders = {
+        "ticket-1-0-close": {
+            "order_id": "close-1",
+            "status": "filled",
+            "fill_price": "100.00",
+            "fill_at": "2026-11-19T14:30:00Z",
+        },
+        "ticket-1-0-open": {
+            "order_id": "open-1",
+            "status": "rejected",
+            "fill_price": None,
+            "fill_at": None,
+        },
+    }
+
+    reconcile(rows, store, orders)
+
+    assert rows[0]["legs"][0]["status"] == "failed"

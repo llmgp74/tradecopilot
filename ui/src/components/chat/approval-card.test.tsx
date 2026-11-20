@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApprovalCard } from "./approval-card";
 import type { ToolPartView } from "@/lib/parts";
 
@@ -189,5 +190,63 @@ it("shows the reason after a rejection and disables the actions", () => {
   expect(screen.getByText("Ticket rejected")).toBeInTheDocument();
   expect(screen.getByText(/too early/i)).toBeInTheDocument();
   expect(screen.getAllByText("NVDA").length).toBeGreaterThan(0);
-  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.queryByRole("button", { name: /approve ticket/i })).toBeNull();
+  expect(screen.queryByRole("button", { name: /reject/i })).toBeNull();
+});
+
+it("explains a netting sell in the tooltip", async () => {
+  const shortView: ToolPartView = {
+    ...view,
+    approval: {
+      ...view.approval!,
+      descriptor: {
+        ticket: { id: "t1", legs: [{ ticker: "NVDA", side: "sell", qty: 30 }] },
+        portfolio_impact: {
+          before_pct: { NVDA: 1 },
+          after_pct: { NVDA: -2 },
+          before_qty: { NVDA: 10 },
+          after_qty: { NVDA: -20 },
+          equity: 100000,
+        },
+      },
+    },
+  };
+  render(
+    <TooltipProvider>
+      <ApprovalCard view={shortView} onRespond={() => {}} />
+    </TooltipProvider>,
+  );
+
+  const info = screen.getByRole("button", { name: /what this order does/i });
+  await userEvent.hover(info);
+
+  expect(await screen.findByText("Closes 10 long, opens 20 short.")).toBeInTheDocument();
+});
+
+it("treats an absent ticker in before_qty as a flat position", async () => {
+  const newShort: ToolPartView = {
+    ...view,
+    approval: {
+      ...view.approval!,
+      descriptor: {
+        ticket: { id: "t1", legs: [{ ticker: "SPY", side: "sell", qty: 1 }] },
+        portfolio_impact: {
+          before_pct: {},
+          after_pct: { SPY: -0.07 },
+          before_qty: {},
+          after_qty: { SPY: -1 },
+          equity: 990592,
+        },
+      },
+    },
+  };
+  render(
+    <TooltipProvider>
+      <ApprovalCard view={newShort} onRespond={() => {}} />
+    </TooltipProvider>,
+  );
+
+  await userEvent.hover(screen.getByRole("button", { name: /what this order does/i }));
+
+  expect(await screen.findByText("Opens 1 short.")).toBeInTheDocument();
 });

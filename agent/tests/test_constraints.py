@@ -372,3 +372,141 @@ def test_regular_hours_drive_the_order_type(
     now = datetime(2026, 11, day, hour, minute, tzinfo=_NEW_YORK)
 
     assert regular_hours(now) is expected
+
+
+def test_sell_beyond_long_opens_a_short_when_enabled() -> None:
+    """A sell above the holding leaves a negative position on a short account."""
+    account = _account(
+        shorting_enabled=True,
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+    )
+
+    violations = check_ticket(
+        [{"ticker": "NVDA", "side": "sell", "qty": 100}],
+        _profile(position_cap_pct=10.0),
+        account,
+        prices={"NVDA": 100.0},
+        sectors={"NVDA": "Technology"},
+        now=NOW,
+    )
+
+    assert violations == []
+
+
+def test_sell_beyond_long_is_oversell_without_shorting() -> None:
+    """The same sell is refused when the account cannot short."""
+    account = _account(
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+    )
+
+    violations = check_ticket(
+        [{"ticker": "NVDA", "side": "sell", "qty": 11}],
+        _profile(),
+        account,
+        prices={"NVDA": 100.0},
+        sectors={"NVDA": "Technology"},
+        now=NOW,
+    )
+
+    assert "oversell" in _codes(violations)
+    assert "shorting" in violations[0]["message"].lower()
+
+
+def test_sell_exactly_the_holding_is_not_a_short() -> None:
+    """Closing the position leaves zero and needs no shorting capability."""
+    account = _account(
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+    )
+
+    violations = check_ticket(
+        [{"ticker": "NVDA", "side": "sell", "qty": 10}],
+        _profile(),
+        account,
+        prices={"NVDA": 100.0},
+        sectors={"NVDA": "Technology"},
+        now=NOW,
+    )
+
+    assert violations == []
+
+
+def test_buy_beyond_short_covers_and_opens_a_long() -> None:
+    """A buy above the short leaves a smaller long."""
+    account = _account(
+        shorting_enabled=True,
+        positions=[{"ticker": "NVDA", "qty": -20, "market_value": -2000.0}],
+    )
+
+    violations = check_ticket(
+        [{"ticker": "NVDA", "side": "buy", "qty": 30}],
+        _profile(position_cap_pct=10.0),
+        account,
+        prices={"NVDA": 100.0},
+        sectors={"NVDA": "Technology"},
+        now=NOW,
+    )
+
+    assert violations == []
+
+
+def test_cap_applies_to_short_exposure() -> None:
+    """A short past the cap is refused like an oversized long."""
+    violations = check_ticket(
+        [{"ticker": "NVDA", "side": "sell", "qty": 101}],
+        _profile(position_cap_pct=10.0),
+        _account(shorting_enabled=True),
+        prices={"NVDA": 100.0},
+        sectors={"NVDA": "Technology"},
+        now=NOW,
+    )
+
+    assert "position_cap" in _codes(violations)
+
+
+def test_exit_is_allowed_in_an_excluded_sector() -> None:
+    """Reducing exposure is never blocked by a sector exclusion."""
+    account = _account(
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+    )
+
+    violations = check_ticket(
+        [{"ticker": "NVDA", "side": "sell", "qty": 10}],
+        _profile(sector_exclusions=["Technology"]),
+        account,
+        prices={"NVDA": 100.0},
+        sectors={"NVDA": "Technology"},
+        now=NOW,
+    )
+
+    assert violations == []
+
+
+def test_short_proceeds_do_not_fund_a_buy() -> None:
+    """A short reserves margin and adds no spendable cash."""
+    violations = check_ticket(
+        [
+            {"ticker": "NVDA", "side": "sell", "qty": 10},
+            {"ticker": "AAPL", "side": "buy", "qty": 8},
+        ],
+        _profile(position_cap_pct=100.0),
+        _account(shorting_enabled=True, buying_power=1_000.0),
+        prices={"NVDA": 100.0, "AAPL": 100.0},
+        sectors={"NVDA": "Technology", "AAPL": "Technology"},
+        now=NOW,
+    )
+
+    assert "insufficient_buying_power" in _codes(violations)
+
+
+def test_short_opening_uses_the_higher_price() -> None:
+    """A low limit cannot shrink a short under the cap."""
+    violations = check_ticket(
+        [{"ticker": "NVDA", "side": "sell", "qty": 10, "entry_price": 50.0}],
+        _profile(position_cap_pct=0.9),
+        _account(shorting_enabled=True),
+        prices={"NVDA": 100.0},
+        sectors={"NVDA": "Technology"},
+        now=NOW,
+    )
+
+    assert "position_cap" in _codes(violations)

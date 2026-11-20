@@ -8,7 +8,12 @@ from unittest.mock import MagicMock
 
 from tradecopilot_agent.state import EvidenceRecord, ToolOutput
 from tradecopilot_agent.store import Store
-from tradecopilot_agent.tools import PURPOSE_DESCRIPTION, TradingTools, build_tools
+from tradecopilot_agent.tools import (
+    PURPOSE_DESCRIPTION,
+    TradingTools,
+    build_tools,
+    split_orders,
+)
 
 FETCHED = "2026-11-05T14:00:00Z"
 
@@ -37,6 +42,8 @@ class FakeSource:
         place_status: str = "filled",
         positions: list[dict] | None = None,
         open_order_list: list[dict] | None = None,
+        shorting_enabled: bool = False,
+        fail_intents: set[str] | None = None,
     ) -> None:
         self._capabilities = capabilities or {
             "alpaca",
@@ -52,6 +59,8 @@ class FakeSource:
         self.place_status = place_status
         self.positions = positions or []
         self.open_order_list = open_order_list or []
+        self.shorting_enabled = shorting_enabled
+        self.fail_intents = fail_intents or set()
         self.placed: list[tuple[dict, str]] = []
         self.cancelled: list[str] = []
 
@@ -83,6 +92,7 @@ class FakeSource:
                         "equity": 100_000.0,
                         "cash": self.cash,
                         "buying_power": self.buying_power,
+                        "shorting_enabled": self.shorting_enabled,
                         "positions": self.positions,
                     },
                 )
@@ -112,8 +122,13 @@ class FakeSource:
     async def macro(self, series: str, period: str) -> ToolOutput:
         return ToolOutput(summary="macro")
 
-    async def place_leg(self, leg: dict, client_order_id: str) -> ToolOutput:
-        self.placed.append((leg, client_order_id))
+    async def place_leg(
+        self, leg: dict, client_order_id: str, position_intent: str | None = None
+    ) -> ToolOutput:
+        order = {**leg, "position_intent": position_intent}
+        self.placed.append((order, client_order_id))
+        if position_intent in self.fail_intents:
+            return ToolOutput(summary="order rejected", error="http")
         return ToolOutput(
             summary="placed",
             evidence=[
@@ -498,8 +513,8 @@ def test_rejection_keeps_the_decision_time_and_notional(
     assert row["legs"][0]["notional"] == 2000.0
 
 
-def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
-    """A buy without cash is skipped and nothing is placed."""
+def test_execution_rechecks_affordability(tmp_path: Path) -> None:
+    """A ticket is blocked at execution when buying power fell since the proposal."""
     source = FakeSource(cash=100.0, buying_power=100_000.0)
     tools, store = _tools(tmp_path, source)
     store.patch_profile(
@@ -509,6 +524,8 @@ def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
         tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 1}], "thesis", "weeks")
     )
     assert proposed.proposal is not None, proposed.summary
+    # The broker lowers the account between the proposal and execution.
+    source.buying_power = 100.0
 
     output = asyncio.run(
         tools.execute(
@@ -521,11 +538,9 @@ def test_unfunded_buy_is_skipped(tmp_path: Path) -> None:
         )
     )
 
-    assert output.error is None
+    assert output.error == "blocked"
+    assert "insufficient_buying_power" in output.summary
     assert source.placed == []
-    rows, _ = store.list_journal(page_no=1, page_size=10)
-    assert rows[0]["status"] == "failed"
-    assert rows[0]["legs"][0]["status"] == "skipped_unfunded"
 
 
 def test_proposal_records_the_entry_price(tmp_path: Path) -> None:
@@ -704,3 +719,175 @@ def test_an_expired_ticket_is_not_executed(tmp_path: Path, monkeypatch) -> None:
 
     assert output.error == "expired"
     assert source.placed == []
+
+
+def test_impact_reports_signed_quantities() -> None:
+    """The card needs the signed position before and after the leg."""
+    impact = TradingTools._impact(
+        {
+            "equity": 100_000.0,
+            "positions": [{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+        },
+        {"NVDA": 100.0},
+        [{"ticker": "NVDA", "side": "sell", "qty": 30}],
+    )
+
+    assert impact["before_qty"]["NVDA"] == 10.0
+    assert impact["after_qty"]["NVDA"] == -20.0
+    assert impact["after_pct"]["NVDA"] < 0
+
+
+def test_split_orders_covers_every_shape() -> None:
+    """A leg is split into its close and open portions, close first."""
+    assert split_orders("sell", 100, 10) == [
+        ("sell_to_close", 10),
+        ("sell_to_open", 90),
+    ]
+    assert split_orders("buy", 50, -20) == [
+        ("buy_to_close", 20),
+        ("buy_to_open", 30),
+    ]
+    assert split_orders("sell", 30, 0) == [("sell_to_open", 30)]
+    assert split_orders("buy", 30, 0) == [("buy_to_open", 30)]
+    assert split_orders("sell", 10, 10) == [("sell_to_close", 10)]
+
+
+def test_propose_allows_a_short_on_an_enabled_account(tmp_path: Path) -> None:
+    """A sell above the holding builds a ticket when shorting is enabled."""
+    source = FakeSource(
+        shorting_enabled=True,
+        prices={"NVDA": 100.0},
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+    )
+    tools, _ = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.propose([{"ticker": "NVDA", "side": "sell", "qty": 30}], "short", "weeks")
+    )
+
+    assert output.error is None
+    assert output.proposal is not None
+    assert output.proposal["portfolio_impact"]["after_qty"]["NVDA"] == -20.0
+
+
+def test_propose_refuses_a_short_on_a_long_only_account(tmp_path: Path) -> None:
+    """The same ticket is blocked without the capability."""
+    source = FakeSource(
+        prices={"NVDA": 100.0},
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+    )
+    tools, _ = _tools(tmp_path, source)
+
+    output = asyncio.run(
+        tools.propose([{"ticker": "NVDA", "side": "sell", "qty": 30}], "short", "weeks")
+    )
+
+    assert output.error == "blocked"
+
+
+def test_execute_splits_a_flipping_sell(tmp_path: Path) -> None:
+    """A sell past the holding closes first, then opens the short."""
+    source = FakeSource(
+        shorting_enabled=True,
+        prices={"NVDA": 100.0},
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+    )
+    tools, store = _tools(tmp_path, source)
+    store.patch_profile(
+        {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
+    )
+    proposed = asyncio.run(
+        tools.propose([{"ticker": "NVDA", "side": "sell", "qty": 30}], "short", "weeks")
+    )
+    assert proposed.proposal is not None
+    pending = {proposed.proposal["id"]: {"ticket": proposed.proposal}}
+
+    asyncio.run(tools.execute(proposed.proposal["id"], {"pending_tickets": pending}))
+
+    intents = [order[0]["position_intent"] for order in source.placed]
+    quantities = [order[0]["qty"] for order in source.placed]
+    assert intents == ["sell_to_close", "sell_to_open"]
+    assert quantities == [10.0, 20.0]
+
+
+def test_a_failed_close_suppresses_the_open(tmp_path: Path) -> None:
+    """A rejected close never sends the opening order."""
+    source = FakeSource(
+        shorting_enabled=True,
+        prices={"NVDA": 100.0},
+        positions=[{"ticker": "NVDA", "qty": 10, "market_value": 1000.0}],
+        fail_intents={"sell_to_close"},
+    )
+    tools, store = _tools(tmp_path, source)
+    store.patch_profile(
+        {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
+    )
+    proposed = asyncio.run(
+        tools.propose([{"ticker": "NVDA", "side": "sell", "qty": 30}], "short", "weeks")
+    )
+    assert proposed.proposal is not None
+    pending = {proposed.proposal["id"]: {"ticket": proposed.proposal}}
+
+    result = asyncio.run(
+        tools.execute(proposed.proposal["id"], {"pending_tickets": pending})
+    )
+
+    assert [order[0]["position_intent"] for order in source.placed] == ["sell_to_close"]
+    assert json.loads(result.summary)["legs"][0]["status"] == "failed"
+
+
+def test_split_orders_track_earlier_legs(tmp_path: Path) -> None:
+    """A second leg on the same ticker sees the first leg's resulting position."""
+    source = FakeSource(shorting_enabled=True, prices={"NVDA": 100.0})
+    tools, store = _tools(tmp_path, source)
+    store.patch_profile(
+        {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
+    )
+    proposed = asyncio.run(
+        tools.propose(
+            [
+                {"ticker": "NVDA", "side": "sell", "qty": 2},
+                {"ticker": "NVDA", "side": "buy", "qty": 5},
+            ],
+            "flip",
+            "weeks",
+        )
+    )
+    assert proposed.proposal is not None
+    pending = {proposed.proposal["id"]: {"ticket": proposed.proposal}}
+
+    asyncio.run(tools.execute(proposed.proposal["id"], {"pending_tickets": pending}))
+
+    placed = [(order[0]["position_intent"], order[0]["qty"]) for order in source.placed]
+    assert placed == [
+        ("sell_to_open", 2.0),
+        ("buy_to_close", 2.0),
+        ("buy_to_open", 3.0),
+    ]
+
+
+def test_a_cover_does_not_need_cash(tmp_path: Path) -> None:
+    """Closing a short releases collateral, so it is not an unfunded buy."""
+    source = FakeSource(
+        shorting_enabled=True,
+        cash=0.0,
+        buying_power=100_000.0,
+        prices={"NVDA": 100.0},
+        positions=[{"ticker": "NVDA", "qty": -3, "market_value": -300.0}],
+    )
+    tools, store = _tools(tmp_path, source)
+    store.patch_profile(
+        {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
+    )
+    proposed = asyncio.run(
+        tools.propose([{"ticker": "NVDA", "side": "buy", "qty": 3}], "cover", "weeks")
+    )
+    assert proposed.proposal is not None
+    pending = {proposed.proposal["id"]: {"ticket": proposed.proposal}}
+
+    result = asyncio.run(
+        tools.execute(proposed.proposal["id"], {"pending_tickets": pending})
+    )
+
+    assert json.loads(result.summary)["legs"][0]["status"] == "filled"
+    assert source.placed[0][0]["position_intent"] == "buy_to_close"

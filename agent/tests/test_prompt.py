@@ -147,3 +147,12 @@ def test_build_agent_with_every_tool_auto_adds_no_interrupts(tmp_path: Path) -> 
         )
 
     assert captured["interrupt_on"] is None
+
+
+def test_prompt_explains_netting_and_shorting() -> None:
+    """The order rules state how a leg nets against the position."""
+    prompt = build_system_prompt(datetime(2026, 11, 20, tzinfo=UTC))
+
+    assert "opens a short" in prompt
+    assert "covers" in prompt
+    assert "shorting" in prompt

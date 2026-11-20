@@ -77,8 +77,13 @@ class DataSource(Protocol):
         """Return one macro series."""
         ...
 
-    async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:
-        """Place one order leg."""
+    async def place_leg(
+        self,
+        leg: dict[str, Any],
+        client_order_id: str,
+        position_intent: str | None = None,
+    ) -> ToolOutput:
+        """Place one order leg with an optional broker position intent."""
         ...
 
     async def open_orders(self) -> ToolOutput:

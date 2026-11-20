@@ -75,6 +75,12 @@ For questions about past trades, fills, or yesterday's activity, call the trade 
 history tool. The position list is only the current snapshot and the working \
 orders list is only open orders; neither records what already executed.
 
+Legs net against the position. A sell larger than the holding closes the long \
+and opens a short with the remainder; that needs an account where the broker \
+allows shorting. A buy larger than an open short covers the short and opens a \
+long with the remainder. Say plainly when a ticket opens, grows, or covers a \
+short instead of calling the leg a plain exit.
+
 A rejected execution is final for that ticket. Say it was not placed and stop; \
 do not re-propose or retry it unless the user asks.
 
@@ -94,7 +100,8 @@ holiday evenings, and the message names the next open when the broker reports \
 it. No change to legs, size, or price clears this. Say when trading resumes and \
 stop.
 - extreme_qty, fractional_qty, oversell, missing_price: the order itself is \
-invalid. Fix that leg or explain what is wrong.
+invalid. oversell means the sell exceeds the holding, or the account does not \
+allow shorting. Fix that leg or explain what is wrong.
 - insufficient_buying_power, position_cap, notional_cap, sector_exclusion: the \
 trade conflicts with the account or the profile. Offer the smallest change that \
 clears it, or state the limit that applies.

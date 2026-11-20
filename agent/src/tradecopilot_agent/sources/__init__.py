@@ -84,9 +84,16 @@ class LiveSource:
         """Return a macro series from FRED."""
         return await self.fred.macro(series, period)
 
-    async def place_leg(self, leg: dict[str, Any], client_order_id: str) -> ToolOutput:
+    async def place_leg(
+        self,
+        leg: dict[str, Any],
+        client_order_id: str,
+        position_intent: str | None = None,
+    ) -> ToolOutput:
         """Place one order leg through Alpaca."""
-        return await self.alpaca.place_leg(leg, client_order_id)
+        return await self.alpaca.place_leg(
+            leg, client_order_id, position_intent=position_intent
+        )
 
     async def clock(self) -> MarketClock | None:
         """Return Alpaca's session state."""

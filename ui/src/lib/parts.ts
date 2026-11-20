@@ -22,8 +22,46 @@ export interface Ticket {
 export interface PortfolioImpact {
   before_pct?: Record<string, number>;
   after_pct?: Record<string, number>;
+  before_qty?: Record<string, number>;
+  after_qty?: Record<string, number>;
   net_notional?: number;
   equity?: number;
+}
+
+/**
+ * Explains how one leg changes the net position.
+ *
+ * @param leg - Ticket leg, from the proposal or the execution result.
+ * @param before - Signed quantity held before the ticket, when known.
+ * @returns The tooltip sentence.
+ */
+export function nettingNote(
+  leg: { side?: string; qty?: number },
+  before?: number,
+): string {
+  if (before === undefined) {
+    return "Position change unknown.";
+  }
+  const qty = typeof leg.qty === "number" ? leg.qty : 0;
+  const closing =
+    leg.side === "buy"
+      ? Math.min(qty, Math.max(-before, 0))
+      : Math.min(qty, Math.max(before, 0));
+  const opening = qty - closing;
+  const closeLabel =
+    leg.side === "buy" ? `Covers ${closing} short` : `Closes ${closing} long`;
+  const openLabel =
+    leg.side === "buy" ? `opens ${opening} long` : `opens ${opening} short`;
+  if (closing > 0 && opening > 0) {
+    return `${closeLabel}, ${openLabel}.`;
+  }
+  if (closing > 0) {
+    return `${closeLabel}.`;
+  }
+  if (opening > 0) {
+    return leg.side === "buy" ? `Opens ${opening} long.` : `Opens ${opening} short.`;
+  }
+  return "No position change.";
 }
 
 /** Payload rendered by the approval card. */

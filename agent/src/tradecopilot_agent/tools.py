@@ -246,6 +246,38 @@ def _ticket_expired(created_at: Any) -> bool:
     return age > timedelta(minutes=TICKET_TTL_MINUTES)
 
 
+def split_orders(side: str, qty: float, held: float) -> list[tuple[str, float]]:
+    """Split one leg into the orders Alpaca needs, close first.
+
+    A sell above a long holding is two orders: one closes the long, one opens
+    the short. A buy above a short is the mirror. The position intent is
+    explicit so the broker never has to infer it from the net quantity.
+
+    Args:
+        side: Leg side, buy or sell.
+        qty: Leg quantity.
+        held: Signed quantity held before the leg.
+
+    Returns:
+        Pairs of position intent and quantity, close before open. A leg that
+        only closes or only opens returns one pair.
+
+    Raises:
+        ValueError: When the side is neither buy nor sell.
+    """
+    if side not in {"buy", "sell"}:
+        raise ValueError(f"Unknown side {side!r}.")
+    closing = min(qty, max(held if side == "sell" else -held, 0.0))
+    opening = qty - closing
+    prefix = "sell" if side == "sell" else "buy"
+    orders: list[tuple[str, float]] = []
+    if closing > 0:
+        orders.append((f"{prefix}_to_close", closing))
+    if opening > 0:
+        orders.append((f"{prefix}_to_open", opening))
+    return orders
+
+
 def _blocked(violations: list[dict[str, Any]]) -> ToolOutput:
     lines = [f"{item['code']}: {item['message']}" for item in violations]
     return ToolOutput(
@@ -836,8 +868,13 @@ class TradingTools:
     async def _place(
         self, ticket_id: str, legs: list[dict[str, Any]], prices: dict[str, float]
     ) -> list[dict[str, Any]]:
-        account_output = await self.source.portfolio()
-        cash = float(self._account(account_output).get("cash", 0))
+        account = self._account(await self.source.portfolio())
+        buying_power = float(account.get("buying_power", 0))
+        holdings = {
+            str(position.get("ticker", "")).upper(): float(position.get("qty", 0))
+            for position in account.get("positions", [])
+            if isinstance(position, dict)
+        }
         results: list[dict[str, Any]] = []
         for index, leg in enumerate(legs):
             quote = prices[leg["ticker"]]
@@ -849,7 +886,14 @@ class TradingTools:
             else:
                 price = limit_price or quote
             notional = float(leg["qty"]) * price
-            if leg["side"] == "buy" and notional > cash:
+            ticker = str(leg["ticker"]).upper()
+            pieces = split_orders(
+                leg["side"], float(leg["qty"]), holdings.get(ticker, 0.0)
+            )
+            # Only the portion that opens exposure needs buying power; a cover
+            # releases collateral instead of consuming it.
+            opening = sum(qty for intent, qty in pieces if intent.endswith("_to_open"))
+            if leg["side"] == "buy" and opening * price > buying_power:
                 results.append(
                     {
                         **leg,
@@ -857,33 +901,66 @@ class TradingTools:
                         "status": "skipped_unfunded",
                         "fill_price": None,
                         "fill_at": None,
+                        "orders": [],
                     }
                 )
                 continue
-            placed = await self.source.place_leg(leg, f"{ticket_id}-{index}")
-            if placed.error:
-                results.append(
+            orders: list[dict[str, Any]] = []
+            failed = False
+            for intent, piece_qty in pieces:
+                suffix = "close" if intent.endswith("_to_close") else "open"
+                placed = await self.source.place_leg(
+                    {**leg, "qty": piece_qty},
+                    f"{ticket_id}-{index}-{suffix}",
+                    intent,
+                )
+                if placed.error:
+                    orders.append(
+                        {
+                            "position_intent": intent,
+                            "qty": piece_qty,
+                            "status": "failed",
+                            "order_id": None,
+                            "fill_price": None,
+                            "fill_at": None,
+                        }
+                    )
+                    failed = True
+                    # The close failed, so the open would change exposure
+                    # without an approved exit.
+                    break
+                payload = placed.evidence[0].payload if placed.evidence else {}
+                status = str(payload.get("status", "submitted"))
+                orders.append(
                     {
-                        **leg,
-                        "notional": notional,
-                        "status": "failed",
-                        "fill_price": None,
-                        "fill_at": None,
+                        "position_intent": intent,
+                        "qty": piece_qty,
+                        "status": status,
+                        "order_id": payload.get("order_id"),
+                        "fill_price": payload.get("fill_price"),
+                        "fill_at": payload.get("fill_at"),
                     }
                 )
-                continue
-            payload = placed.evidence[0].payload if placed.evidence else {}
-            status = str(payload.get("status", "submitted"))
-            if status == "filled":
-                cash -= notional if leg["side"] == "buy" else -notional
+                holdings[ticker] = holdings.get(ticker, 0.0) + (
+                    piece_qty if leg["side"] == "buy" else -piece_qty
+                )
+            statuses = {order["status"] for order in orders}
+            if failed or "failed" in statuses:
+                status = "failed"
+            elif statuses == {"filled"}:
+                status = "filled"
+            else:
+                status = "submitted"
+            last = orders[-1] if orders else {}
             results.append(
                 {
                     **leg,
                     "notional": notional,
-                    "order_id": payload.get("order_id"),
+                    "order_id": last.get("order_id"),
                     "status": status,
-                    "fill_price": payload.get("fill_price"),
-                    "fill_at": payload.get("fill_at"),
+                    "fill_price": last.get("fill_price"),
+                    "fill_at": last.get("fill_at"),
+                    "orders": orders,
                 }
             )
         return results
@@ -1016,8 +1093,9 @@ class TradingTools:
             for leg in legs
             if _leg_price(leg) is not None
         }
+        before_qty = dict(quantities)
         for leg in legs:
-            ticker = str(leg["ticker"])
+            ticker = str(leg["ticker"]).upper()
             quantities[ticker] = quantities.get(ticker, 0.0) + (
                 float(leg["qty"]) if leg["side"] == "buy" else -float(leg["qty"])
             )
@@ -1034,6 +1112,8 @@ class TradingTools:
         return {
             "before_pct": before,
             "after_pct": after,
+            "before_qty": before_qty,
+            "after_qty": dict(quantities),
             "net_notional": net,
             "equity": equity,
         }
@@ -1202,6 +1282,10 @@ def build_tools(
         optional order type of market or limit. A leg price becomes the limit
         price sent to the broker; without one, the leg is priced from its
         quote. A limit leg needs a price.
+
+        Legs net against the position. A sell above the holding closes the
+        long and opens a short when the account allows shorting; a buy above
+        an open short covers it and opens a long.
         """
         output = await impl.propose(
             legs,
