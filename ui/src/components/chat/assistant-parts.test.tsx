@@ -307,6 +307,40 @@ it("keeps a reasoning block open when the stream ends", async () => {
   expect(screen.getByText("Checking prices")).toBeInTheDocument();
 });
 
+it("opens later reasoning blocks once the reader opens one", async () => {
+  const first = toolMessage([
+    { kind: "reasoning", text: "First thought", streaming: false },
+  ]);
+  const later = toolMessage([
+    { kind: "reasoning", text: "First thought", streaming: false },
+    { kind: "reasoning", text: "Second thought", streaming: false },
+  ]);
+  const onReasoningOpenChange = () => {};
+
+  const { rerender } = render(
+    <AssistantParts
+      message={first}
+      reasoningOpen={false}
+      onReasoningOpenChange={onReasoningOpenChange}
+      onApproval={() => {}}
+    />,
+  );
+  await userEvent.click(screen.getByText(/thought for/i));
+  expect(screen.getByText("First thought")).toBeInTheDocument();
+
+  rerender(
+    <AssistantParts
+      message={later}
+      reasoningOpen
+      onReasoningOpenChange={onReasoningOpenChange}
+      onApproval={() => {}}
+    />,
+  );
+
+  expect(screen.getByText("First thought")).toBeInTheDocument();
+  expect(screen.getByText("Second thought")).toBeInTheDocument();
+});
+
 it("reveals the reasoning text when the trigger is clicked", async () => {
   render(
     <AssistantParts

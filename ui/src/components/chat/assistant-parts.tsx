@@ -71,6 +71,10 @@ export interface AssistantPartsProps {
   liveTodos?: TodoItem[] | null;
   /** True while this message is the turn still being generated. */
   isStreaming?: boolean;
+  /** Whether newly arriving reasoning blocks start open. */
+  reasoningOpen?: boolean;
+  /** Records the reader's latest reasoning toggle as the new default. */
+  onReasoningOpenChange?: (open: boolean) => void;
   /** Answered tool calls, where the caller needs the raw ids. */
   onApproval: (id: string, approved: boolean, reason?: string) => void;
 }
@@ -146,6 +150,8 @@ export function AssistantParts({
   message,
   liveTodos,
   isStreaming,
+  reasoningOpen = false,
+  onReasoningOpenChange,
   onApproval,
 }: AssistantPartsProps) {
   const todos = liveTodos ?? message.todos;
@@ -192,6 +198,8 @@ export function AssistantParts({
           key={`reasoning-${index}`}
           isStreaming={part.streaming && isStreaming === true}
           autoOpen={false}
+          defaultOpen={reasoningOpen}
+          onOpenChange={onReasoningOpenChange}
         >
           <ReasoningTrigger getThinkingMessage={thinkingLabel} />
           <ReasoningContent>{part.text}</ReasoningContent>

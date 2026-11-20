@@ -120,6 +120,9 @@ export function Chat({
 }: ChatProps) {
   const [threadId, setThreadId] = useState<string | null>(initialThreadId);
   const [liveTodos, setLiveTodos] = useState<TodoItem[] | null>(null);
+  // The reader's last reasoning toggle becomes the default for later blocks;
+  // blocks already on screen keep whatever state they have.
+  const [reasoningOpen, setReasoningOpen] = useState(false);
   const [selection, setSelection] = useState({
     provider: settings.model_provider,
     model: settings.model_id,
@@ -259,10 +262,14 @@ export function Chat({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-6 py-6">
-              {display.map((message) =>
+            <div className="flex flex-col gap-2 py-6">
+              {display.map((message, position) =>
                 message.role === "user" ? (
-                  <Message key={message.id} from="user">
+                  <Message
+                    key={message.id}
+                    from="user"
+                    className={position > 0 ? "mt-4" : undefined}
+                  >
                     <MessageContent className="rounded-2xl bg-muted px-3 py-2 text-[13px]">
                       {message.parts
                         .filter((part) => part.kind === "text")
@@ -284,6 +291,8 @@ export function Chat({
                           message.id === display[display.length - 1]?.id &&
                           status === "streaming"
                         }
+                        reasoningOpen={reasoningOpen}
+                        onReasoningOpenChange={setReasoningOpen}
                         onApproval={respond}
                       />
                     </MessageContent>
