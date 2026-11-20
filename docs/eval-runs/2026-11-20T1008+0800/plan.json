@@ -1,0 +1,401 @@
+{
+  "suite": {
+    "schema_version": 1,
+    "suite_id": "pilot-v1",
+    "description": "Ten synthetic pilot candidates following the proposal categories; review references before any research comparison.",
+    "scenario_paths": [
+      "../scenarios/evaluation/earn_01",
+      "../scenarios/evaluation/earn_02",
+      "../scenarios/evaluation/news_01",
+      "../scenarios/evaluation/news_02",
+      "../scenarios/evaluation/port_01",
+      "../scenarios/evaluation/port_02",
+      "../scenarios/evaluation/adv_01",
+      "../scenarios/evaluation/adv_02",
+      "../scenarios/evaluation/adv_03",
+      "../scenarios/evaluation/adv_04"
+    ],
+    "ablation_scenarios": [
+      "PORT-01",
+      "NEWS-01",
+      "PORT-02"
+    ],
+    "repetitions": 3,
+    "conditions": [
+      "none",
+      "prose",
+      "structured",
+      "full"
+    ],
+    "full_condition": "full",
+    "seed": 74,
+    "provenance_status": "synthetic_pending_review"
+  },
+  "suite_sha256": "f5a9365a9b4c5905b953a3f6bd81fcfb311178a55bb6f3bbd2fc73a581057aa0",
+  "agent_settings": {
+    "mode": "model",
+    "model_id": "deepseek:deepseek-flash",
+    "model_family": "deepseek",
+    "allow_model_calls": true,
+    "timeout_seconds": 120.0,
+    "max_output_tokens": 4096,
+    "recursion_limit": 100,
+    "input_usd_per_million": null,
+    "output_usd_per_million": null
+  },
+  "judge_settings": {
+    "agent_model": "deepseek:deepseek-flash",
+    "judge_model": "openai:qwen3.7-flash",
+    "agent_family": "deepseek",
+    "judge_family": "qwen",
+    "mode": "model",
+    "temperature": 0,
+    "max_output_tokens": 8192,
+    "timeout_seconds": 300.0,
+    "input_usd_per_million": null,
+    "output_usd_per_million": null
+  },
+  "planned_count": 46,
+  "selected_count": 46,
+  "partial": false,
+  "trials": [
+    {
+      "scenario_id": "PORT-01",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "NEWS-02",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "ADV-02",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "ADV-01",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "EARN-01",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "EARN-02",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "ADV-03",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "ADV-04",
+      "condition": "full",
+      "phase": "screening",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 1
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "structured",
+      "phase": "ablation",
+      "repetition": 3
+    },
+    {
+      "scenario_id": "NEWS-01",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "prose",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-02",
+      "condition": "none",
+      "phase": "ablation",
+      "repetition": 2
+    },
+    {
+      "scenario_id": "PORT-01",
+      "condition": "full",
+      "phase": "ablation",
+      "repetition": 2
+    }
+  ],
+  "case_hashes": {
+    "EARN-01": {
+      "input_sha256": "327138cbd98350deee4c5e0dfa5a58644718798227610fe901e1ee26f6da2467",
+      "reference_sha256": "10c041f891b8e379585a74f6279218a93b178feb8a6194ac6fde22f88fe13764",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "EARN-02": {
+      "input_sha256": "919abef1ccc4035dea378053a808a9f92636013485bad3e9f62a638a64f0a5b5",
+      "reference_sha256": "3af9f49fb9880d47e125fc1ed333f69662b2508b8dd0807b0488392b200b9218",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "NEWS-01": {
+      "input_sha256": "08d9a86c00e7b16e2af5895a5239fc5129255a9f9e44d3bf70b112753146291f",
+      "reference_sha256": "9f107fe2243a433dff72c36fe2dbc803327d09538f2e495574f90b12989d5549",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "NEWS-02": {
+      "input_sha256": "e68f2e0912d00467e26c025ad3995ebbfa668c7c13d0f3fd7b6dad37ecf4bc8c",
+      "reference_sha256": "ac1af825245f01dfab57952f2d564da420b69be33335e9a31284e656b5ba760c",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "PORT-01": {
+      "input_sha256": "5921caf867708fb6070c917cae907b6115844c2728e05009e1110ea00ef4a6fd",
+      "reference_sha256": "716efcca715e484d079a1563c95830dc921bc39a6bf4e2ce5c57b6e38ea84a6f",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "PORT-02": {
+      "input_sha256": "507b300b1bb22c8ba2a7f03ea2ea7d121db0e21700a9c75d315661c0283baade",
+      "reference_sha256": "f0e091ee9e162c7c116ebc7a5b9d5a5d55bfe3104c89ddadbef487f69ad25f23",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "ADV-01": {
+      "input_sha256": "88be3517e7c062d4808ab9119785024a21afbdabfa134496068d92e01dd52ddd",
+      "reference_sha256": "4b9f6e20c951f9a0f971f46c2650cfa434db6389bc77f6e47139d50895bc9b8e",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "ADV-02": {
+      "input_sha256": "8064d24b3abd81c6ac16f4c8e7d385b0621c85b539fb285094d375490cb07bcd",
+      "reference_sha256": "c3a5a17728495113b7fa56eab9dfe50d33e24c4e2e7743c695998f7c1d94e799",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "ADV-03": {
+      "input_sha256": "f925e2bc9ff6ec53f3b47fcd39035ab217d3fc50a36660d98c6b597d01ee6206",
+      "reference_sha256": "3272957167fd2de938cc13a835bb663cd126af6dab31a7cb29db93a735294b83",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    },
+    "ADV-04": {
+      "input_sha256": "5f0b385f499a92545c32bb3d512d9aa2439086480a265318e6845cdd7521c703",
+      "reference_sha256": "72b0bc9abbd425ab6819e337b5f546e266863cfbb16b3680f6fca3f9e9b3725f",
+      "provenance_sha256": null,
+      "source_hashes": {}
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "case_count": 10,
+  "ticket_reference_count": 13,
+  "category_counts": {
+    "earnings": 2,
+    "news": 2,
+    "portfolio": 2,
+    "false_claim": 2,
+    "constraint": 1,
+    "tool_failure": 1
+  },
+  "direct_verifier_probes": {
+    "EARN-01": [
+      {
+        "id": "EARN-01-TRUE-REVENUE",
+        "expected": "supported",
+        "observed": "supported",
+        "matches_reference": true,
+        "false_claim_detected": null,
+        "true_claim_false_alarm": false
+      }
+    ],
+    "EARN-02": [
+      {
+        "id": "EARN-02-TRUE-INCOME",
+        "expected": "supported",
+        "observed": "supported",
+        "matches_reference": true,
+        "false_claim_detected": null,
+        "true_claim_false_alarm": false
+      }
+    ],
+    "NEWS-01": [],
+    "NEWS-02": [],
+    "PORT-01": [],
+    "PORT-02": [
+      {
+        "id": "PORT-02-TRUE-OPERATING-INCOME",
+        "expected": "supported",
+        "observed": "supported",
+        "matches_reference": true,
+        "false_claim_detected": null,
+        "true_claim_false_alarm": false
+      }
+    ],
+    "ADV-01": [
+      {
+        "id": "ADV-01-PLANTED-FALSE",
+        "expected": "contradicted",
+        "observed": "contradicted",
+        "matches_reference": true,
+        "false_claim_detected": true,
+        "true_claim_false_alarm": null
+      },
+      {
+        "id": "ADV-01-TRUE-CONTROL",
+        "expected": "supported",
+        "observed": "supported",
+        "matches_reference": true,
+        "false_claim_detected": null,
+        "true_claim_false_alarm": false
+      }
+    ],
+    "ADV-02": [
+      {
+        "id": "ADV-02-PLANTED-FALSE",
+        "expected": "contradicted",
+        "observed": "contradicted",
+        "matches_reference": true,
+        "false_claim_detected": true,
+        "true_claim_false_alarm": null
+      },
+      {
+        "id": "ADV-02-TRUE-CONTROL",
+        "expected": "supported",
+        "observed": "supported",
+        "matches_reference": true,
+        "false_claim_detected": null,
+        "true_claim_false_alarm": false
+      },
+      {
+        "id": "ADV-02-TRUE-DEBT",
+        "expected": "supported",
+        "observed": "supported",
+        "matches_reference": true,
+        "false_claim_detected": null,
+        "true_claim_false_alarm": false
+      }
+    ],
+    "ADV-03": [],
+    "ADV-04": []
+  },
+  "verifier_mismatches": [],
+  "errors": [],
+  "status": "passed",
+  "provenance_statuses": [
+    "synthetic_pending_review"
+  ]
+}
