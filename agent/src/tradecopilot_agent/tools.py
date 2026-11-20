@@ -6,6 +6,7 @@ proposals and verdicts in graph state. It also refuses calls whose provider is
 not configured, so the tools behave the same inside a subagent.
 """
 
+import asyncio
 import hashlib
 import json
 from datetime import UTC, date, datetime, timedelta
@@ -116,6 +117,24 @@ def _text(output: ToolOutput) -> str:
         return output.summary
     ids = [record.id for record in output.evidence]
     return output.summary + (f"\nEvidence: {', '.join(ids)}" if ids else "")
+
+
+def _thread_id(runtime: ToolRuntime) -> str:
+    """Return the conversation id from the run config.
+
+    The proposal reservation is keyed by this id, so one conversation's open
+    ticket never blocks another.
+
+    Args:
+        runtime: Injected tool runtime.
+
+    Returns:
+        The thread id, or an empty string when the config has none.
+    """
+    config = runtime.config or {}
+    configurable = config.get("configurable") or {}
+    value = configurable.get("thread_id")
+    return str(value) if value else ""
 
 
 def web_output(query: str, results: list[WebResult]) -> ToolOutput:
@@ -254,6 +273,12 @@ class TradingTools:
         self.source = source
         self.store = store
         self.as_of = as_of
+        # The single-ticket rule also has to hold when the model proposes in
+        # parallel: both calls read the same graph state, so the proposal that
+        # is still being built is tracked here instead. The tool instance is
+        # shared by every thread, so the reservation is keyed by thread.
+        self._propose_lock = asyncio.Lock()
+        self._reservations: dict[str, tuple[str, str]] = {}
 
     def capabilities(self) -> set[str]:
         """Return the source capabilities available to the tools."""
@@ -337,7 +362,9 @@ class TradingTools:
             summary=json.dumps(verdicts, default=str), verification=verdicts
         )
 
-    async def _open_ticket(self, state: dict[str, Any] | None) -> ToolOutput | None:
+    async def _open_ticket(
+        self, state: dict[str, Any] | None, thread_id: str
+    ) -> ToolOutput | None:
         """Refuse a new ticket while another one is open.
 
         Only one ticket may be in flight. A proposal waiting for approval and
@@ -347,10 +374,23 @@ class TradingTools:
 
         Args:
             state: Graph state, holding ``pending_tickets``.
+            thread_id: Conversation the call belongs to. A reservation in
+                another conversation must not block this one.
 
         Returns:
             The refusal, or ``None`` when no ticket is open.
         """
+        reservation = self._reservations.get(thread_id)
+        if reservation is not None:
+            if not _ticket_expired(reservation[1]):
+                return ToolOutput(
+                    summary=(
+                        "A ticket is already waiting for approval. Execute it "
+                        "or let it expire before proposing another."
+                    ),
+                    error="ticket_pending",
+                )
+            self._release_reservation(thread_id)
         if (state or {}).get("pending_tickets"):
             return ToolOutput(
                 summary=(
@@ -376,12 +416,59 @@ class TradingTools:
                 )
         return None
 
+    def _release_reservation(self, thread_id: str) -> None:
+        """Free the in-process proposal slot for one conversation."""
+        self._reservations.pop(thread_id, None)
+
     async def propose(
         self,
         legs: list[dict[str, Any]],
         thesis: str,
         horizon: str,
         state: dict[str, Any] | None = None,
+        thread_id: str = "",
+    ) -> ToolOutput:
+        """Propose a ticket, with at most one open ticket per conversation.
+
+        The reservation is taken before the work starts and released when the
+        proposal fails. A successful proposal keeps it until ``execute``
+        resolves the ticket, or until it expires. This closes the parallel
+        case, where two calls in one model step read the same graph state.
+
+        Args:
+            legs: Legs with ticker, side, and qty.
+            thesis: Rationale in prose.
+            horizon: Stated holding horizon.
+            state: Graph state, used to refuse a second open ticket.
+            thread_id: Conversation the call belongs to.
+
+        Returns:
+            The proposal, its evidence, and the portfolio impact.
+        """
+        async with self._propose_lock:
+            refusal = await self._open_ticket(state, thread_id)
+            if refusal is not None:
+                return refusal
+            self._reservations[thread_id] = ("", now_iso())
+        try:
+            output = await self._build_proposal(legs, thesis, horizon)
+        except BaseException:
+            self._release_reservation(thread_id)
+            raise
+        if output.proposal is None:
+            self._release_reservation(thread_id)
+        else:
+            self._reservations[thread_id] = (
+                str(output.proposal.get("id") or "open"),
+                now_iso(),
+            )
+        return output
+
+    async def _build_proposal(
+        self,
+        legs: list[dict[str, Any]],
+        thesis: str,
+        horizon: str,
     ) -> ToolOutput:
         """Build a ticket, check it, and store the proposal.
 
@@ -389,7 +476,6 @@ class TradingTools:
             legs: Legs with ticker, side, and qty.
             thesis: Rationale in prose.
             horizon: Stated holding horizon.
-            state: Graph state, used to refuse a second open ticket.
 
         Returns:
             The proposal, its evidence, and the portfolio impact.
@@ -446,10 +532,6 @@ class TradingTools:
             for leg in normalized
         ):
             return ToolOutput(summary="A leg price must be positive.", error="invalid")
-
-        open_ticket = await self._open_ticket(state)
-        if open_ticket is not None:
-            return open_ticket
 
         account_output = await self.source.portfolio()
         if account_output.error:
@@ -560,7 +642,11 @@ class TradingTools:
         )
 
     async def execute(
-        self, ticket_id: str, state: dict[str, Any], tool_call_id: str | None = None
+        self,
+        ticket_id: str,
+        state: dict[str, Any],
+        tool_call_id: str | None = None,
+        thread_id: str = "",
     ) -> ToolOutput:
         """Place an approved ticket.
 
@@ -569,6 +655,8 @@ class TradingTools:
             state: Graph state holding the pending ticket.
             tool_call_id: Id of the call that reached the interrupt, used by
                 the UI to match the approval to its row.
+            thread_id: Conversation the call belongs to, so its proposal
+                reservation is released.
 
         Returns:
             Per-leg results.
@@ -614,6 +702,7 @@ class TradingTools:
         if violations:
             # The ticket was approved but cannot be placed as written, so it no
             # longer blocks the next proposal.
+            self._release_reservation(thread_id)
             return _blocked(violations).model_copy(update={"ticket_done": True})
 
         if not profile.get("execution", {}).get("autonomous", False):
@@ -638,6 +727,7 @@ class TradingTools:
             if not self._approved(decision):
                 reason = self._rejection_reason(decision)
                 self._journal_result(pending, legs, "rejected", "reject", reason)
+                self._release_reservation(thread_id)
                 return ToolOutput(
                     summary=f"Ticket rejected: {reason}",
                     error="rejected",
@@ -645,6 +735,7 @@ class TradingTools:
                 )
 
         if _ticket_expired(pending.get("created_at")):
+            self._release_reservation(thread_id)
             return ToolOutput(
                 summary="This ticket has expired. Propose a new one.",
                 error="expired",
@@ -654,6 +745,7 @@ class TradingTools:
         results = await self._place(ticket_id, legs, prices)
         status = self._status(results)
         self._journal_result(pending, results, status, "approve", None)
+        self._release_reservation(thread_id)
         return ToolOutput(
             summary=json.dumps(
                 {"ticket_id": ticket_id, "status": status, "legs": results}
@@ -1112,7 +1204,11 @@ def build_tools(
         quote. A limit leg needs a price.
         """
         output = await impl.propose(
-            legs, thesis, horizon, (runtime.state or {}) if runtime else {}
+            legs,
+            thesis,
+            horizon,
+            (runtime.state or {}) if runtime else {},
+            _thread_id(runtime),
         )
         return _text(output), output.model_dump(mode="json")
 
@@ -1122,7 +1218,10 @@ def build_tools(
     ) -> tuple[str, dict[str, Any]]:
         """Place a proposed ticket after the user approves it."""
         output = await impl.execute(
-            ticket_id, runtime.state or {}, runtime.tool_call_id
+            ticket_id,
+            runtime.state or {},
+            runtime.tool_call_id,
+            _thread_id(runtime),
         )
         return _text(output), output.model_dump(mode="json")
 

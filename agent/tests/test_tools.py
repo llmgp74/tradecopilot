@@ -278,6 +278,70 @@ def test_a_second_proposal_is_refused_while_one_waits(tmp_path: Path) -> None:
     assert output.error == "ticket_pending"
 
 
+def test_an_open_ticket_does_not_block_another_conversation(tmp_path: Path) -> None:
+    """A reservation belongs to its thread, not to the shared tool instance."""
+    tools, _ = _tools(tmp_path, FakeSource())
+    first = asyncio.run(
+        tools.propose(
+            [{"ticker": "AAPL", "side": "buy", "qty": 1}], "a", "weeks", {}, "thread-a"
+        )
+    )
+    assert first.proposal is not None, first.summary
+
+    second = asyncio.run(
+        tools.propose(
+            [{"ticker": "AAPL", "side": "buy", "qty": 1}], "b", "weeks", {}, "thread-b"
+        )
+    )
+
+    assert second.error is None
+    assert second.proposal is not None
+
+
+def test_parallel_proposals_leave_one_ticket(tmp_path: Path) -> None:
+    """Two proposals in one model step cannot both become tickets."""
+    tools, _ = _tools(tmp_path, FakeSource())
+
+    async def propose_twice() -> list[ToolOutput]:
+        return await asyncio.gather(
+            tools.propose(
+                [{"ticker": "AAPL", "side": "buy", "qty": 1}], "a", "weeks", {}
+            ),
+            tools.propose(
+                [{"ticker": "AAPL", "side": "buy", "qty": 1}], "b", "weeks", {}
+            ),
+        )
+
+    outputs = asyncio.run(propose_twice())
+
+    errors = [output.error for output in outputs if output.error]
+    proposals = [output for output in outputs if output.proposal is not None]
+    assert errors == ["ticket_pending"]
+    assert len(proposals) == 1
+
+
+def test_execution_releases_the_proposal_slot(tmp_path: Path) -> None:
+    """After a ticket resolves, the next proposal is allowed."""
+    source = FakeSource()
+    tools, store = _tools(tmp_path, source)
+    store.patch_profile(
+        {"execution": {"autonomous": True, "max_order_notional": 100_000.0}}
+    )
+    first = asyncio.run(
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 1}], "a", "weeks")
+    )
+    assert first.proposal is not None, first.summary
+    pending = {first.proposal["id"]: {"ticket": first.proposal}}
+    asyncio.run(tools.execute(first.proposal["id"], {"pending_tickets": pending}))
+
+    second = asyncio.run(
+        tools.propose([{"ticker": "AAPL", "side": "buy", "qty": 1}], "b", "weeks")
+    )
+
+    assert second.error is None
+    assert second.proposal is not None
+
+
 def test_a_proposal_is_refused_while_orders_work(tmp_path: Path) -> None:
     """Working broker orders block a new ticket, closing the split bypass."""
     source = FakeSource(
