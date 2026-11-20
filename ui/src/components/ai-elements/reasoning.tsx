@@ -257,7 +257,7 @@ export const ReasoningContent = memo(function ReasoningContentInner({
     <CollapsibleContent
       ref={panelRef}
       className={cn(
-        "mt-4 max-h-80 overflow-y-auto overscroll-contain pr-1 text-sm [scrollbar-width:thin]",
+        "mt-2 ml-2 max-h-80 overflow-y-auto overscroll-contain border-border/70 border-l py-1 pl-4 pr-1 text-sm [scrollbar-width:thin]",
         "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
         className
       )}
