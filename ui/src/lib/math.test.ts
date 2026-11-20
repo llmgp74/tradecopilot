@@ -2,7 +2,8 @@ import { expect, it } from "vitest";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
-import { markInlineMath, remarkInlineMath } from "./math";
+import { defaultRemarkPlugins } from "streamdown";
+import { markInlineMath, remarkInlineMath, remarkPlugins } from "./math";
 
 /** One hast node shape, narrowed to what the assertions read. */
 interface HastNode {
@@ -34,6 +35,20 @@ it("renders bracket math as a display equation", async () => {
   const code = paragraph.children?.find((node) => node.tagName === "code");
 
   expect(code?.properties?.className).toEqual(["language-math", "math-display"]);
+});
+
+it("keeps the Streamdown defaults so GFM tables still parse", () => {
+  expect(remarkPlugins).toEqual([
+    ...Object.values(defaultRemarkPlugins),
+    remarkInlineMath,
+  ]);
+});
+
+it("parses GFM tables with the plugin list", () => {
+  const processor = unified().use(remarkParse).use(remarkPlugins).use(remarkRehype);
+  const mdast = processor.parse("| Ticker | Cost |\n|---|---|\n| SGOV | $96,020 |");
+
+  expect(mdast.children[0].type).toBe("table");
 });
 
 it("leaves currency amounts untouched", () => {

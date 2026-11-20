@@ -1,4 +1,13 @@
 import type { Root, RootContent } from "mdast";
+import { defaultRemarkPlugins } from "streamdown";
+
+/**
+ * Streamdown's default remark plugins plus inline math.
+ *
+ * Passing `remarkPlugins` to Streamdown replaces its defaults, so the
+ * defaults must be included or GFM tables and code metadata stop parsing.
+ */
+export const remarkPlugins = [...Object.values(defaultRemarkPlugins), remarkInlineMath];
 
 /** Marker pairs that survive markdown parsing for inline and display math. */
 const MARKS = {

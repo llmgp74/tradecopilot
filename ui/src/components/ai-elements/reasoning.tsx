@@ -24,7 +24,7 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
-import { markInlineMath, remarkInlineMath } from "@/lib/math";
+import { markInlineMath, remarkPlugins } from "@/lib/math";
 
 import { Shimmer } from "./shimmer";
 
@@ -264,7 +264,7 @@ export const ReasoningContent = memo(function ReasoningContentInner({
       )}
       {...props}
     >
-      <Streamdown plugins={streamdownPlugins} remarkPlugins={[remarkInlineMath]}>
+      <Streamdown plugins={streamdownPlugins} remarkPlugins={remarkPlugins}>
         {markInlineMath(children)}
       </Streamdown>
     </CollapsibleContent>

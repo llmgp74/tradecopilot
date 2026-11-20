@@ -29,7 +29,7 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
-import { markInlineMath, remarkInlineMath } from "@/lib/math";
+import { markInlineMath, remarkPlugins } from "@/lib/math";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -332,7 +332,7 @@ export const MessageResponse = memo(
         className
       )}
       plugins={streamdownPlugins}
-      remarkPlugins={[remarkInlineMath]}
+      remarkPlugins={remarkPlugins}
       {...props}
     >
       {markInlineMath(children ?? "")}
