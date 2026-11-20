@@ -272,7 +272,7 @@ export function Chat({
                   </Message>
                 ) : (
                   <Message key={message.id} from="assistant">
-                    <MessageContent>
+                    <MessageContent className="w-full">
                       <AssistantParts
                         message={message}
                         liveTodos={

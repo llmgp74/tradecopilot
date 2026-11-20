@@ -1,13 +1,11 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { camelName } from "@/components/chat/tool-label";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
-import type { DynamicToolUIPart, ToolUIPart } from "ai";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
@@ -16,158 +14,257 @@ import {
   WrenchIcon,
   XCircleIcon,
 } from "lucide-react";
-import type { ComponentProps, ReactNode } from "react";
-import { isValidElement } from "react";
+import type { ReactNode } from "react";
+import { useState } from "react";
 
 import { CodeBlock } from "./code-block";
 
-export type ToolProps = ComponentProps<typeof Collapsible>;
+/** Optional controlled open state, used when a row outlives its shape. */
+interface OpenControl {
+  /** Controlled open state. */
+  open?: boolean;
+  /** Called when the user toggles the row. */
+  onOpenChange?: (open: boolean) => void;
+}
 
-export const Tool = ({ className, ...props }: ToolProps) => (
-  <Collapsible
-    className={cn("group not-prose mb-4 w-full rounded-md border", className)}
-    {...props}
-  />
-);
+/** One tool call reduced to what a compact row and its panel render. */
+export interface ToolCallProps {
+  /** One-line row text derived from the purpose or the arguments. */
+  label: string;
+  /** Raw tool name, shown in camelCase inside the panel. */
+  name: string;
+  /** AI SDK tool state. */
+  state: string;
+  /** Call arguments. */
+  input?: unknown;
+  /** Tool result. */
+  output?: unknown;
+  /** Failure text, when the call errored. */
+  errorText?: string;
+}
 
-export type ToolPart = ToolUIPart | DynamicToolUIPart;
+/** Row status presentation. */
+interface StatusTone {
+  label: string;
+  color: string;
+  icon: ReactNode;
+}
 
-export type ToolHeaderProps = {
-  title?: string;
-  className?: string;
-} & (
-  | { type: ToolUIPart["type"]; state: ToolUIPart["state"]; toolName?: never }
-  | {
-      type: DynamicToolUIPart["type"];
-      state: DynamicToolUIPart["state"];
-      toolName: string;
-    }
-);
+/**
+ * Maps a tool state to its row label, color, and icon.
+ *
+ * @param state - AI SDK tool state.
+ * @returns The status presentation.
+ */
+function statusOf(state: string): StatusTone {
+  switch (state) {
+    case "output-available":
+      return {
+        label: "Completed",
+        color: "var(--positive)",
+        icon: <CheckCircleIcon className="size-4" />,
+      };
+    case "output-error":
+    case "output-denied":
+      return {
+        label: "Failed",
+        color: "var(--negative)",
+        icon: <XCircleIcon className="size-4" />,
+      };
+    case "approval-requested":
+      return {
+        label: "Awaiting approval",
+        color: "var(--warning)",
+        icon: <ClockIcon className="size-4" />,
+      };
+    case "input-available":
+    case "approval-responded":
+      return {
+        label: "Running",
+        color: "var(--muted-foreground)",
+        icon: <CircleIcon className="size-3.5 animate-pulse" />,
+      };
+    default:
+      return {
+        label: "Pending",
+        color: "var(--muted-foreground)",
+        icon: <CircleIcon className="size-4" />,
+      };
+  }
+}
 
-const statusLabels: Record<ToolPart["state"], string> = {
-  "approval-requested": "Awaiting Approval",
-  "approval-responded": "Responded",
-  "input-available": "Running",
-  "input-streaming": "Pending",
-  "output-available": "Completed",
-  "output-denied": "Denied",
-  "output-error": "Error",
-};
+/**
+ * Aggregates the states of a tool group.
+ *
+ * @param states - Member call states.
+ * @returns Running while any call runs, else Failed, else Completed.
+ */
+export function aggregateState(states: string[]): string {
+  const running = new Set([
+    "input-available",
+    "input-streaming",
+    "approval-requested",
+    "approval-responded",
+  ]);
+  if (states.some((state) => running.has(state))) {
+    return "input-available";
+  }
+  if (states.some((state) => state === "output-error" || state === "output-denied")) {
+    return "output-error";
+  }
+  return "output-available";
+}
 
-const statusIcons: Record<ToolPart["state"], ReactNode> = {
-  "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
-  "approval-responded": <CheckCircleIcon className="size-4 text-blue-600" />,
-  "input-available": <ClockIcon className="size-4 animate-pulse" />,
-  "input-streaming": <CircleIcon className="size-4" />,
-  "output-available": <CheckCircleIcon className="size-4 text-green-600" />,
-  "output-denied": <XCircleIcon className="size-4 text-orange-600" />,
-  "output-error": <XCircleIcon className="size-4 text-red-600" />,
-};
-
-export const getStatusBadge = (status: ToolPart["state"]) => (
-  <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
-    {statusIcons[status]}
-    {statusLabels[status]}
-  </Badge>
-);
-
-export const ToolHeader = ({
-  className,
-  title,
-  type,
+/**
+ * Renders the shared row trigger for one call or one group.
+ *
+ * @param props - Row props.
+ * @returns The collapsible row.
+ */
+function ToolRow({
+  label,
   state,
-  toolName,
-  ...props
-}: ToolHeaderProps) => {
-  const derivedName =
-    type === "dynamic-tool" ? toolName : type.split("-").slice(1).join("-");
-
+  open,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  state: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const status = statusOf(state);
   return (
-    <CollapsibleTrigger
-      className={cn(
-        "flex w-full items-center justify-between gap-4 p-3",
-        className
-      )}
-      {...props}
-    >
-      <div className="flex items-center gap-2">
-        <WrenchIcon className="size-4 text-muted-foreground" />
-        <span className="font-medium text-sm">{title ?? derivedName}</span>
-        {getStatusBadge(state)}
-      </div>
-      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-    </CollapsibleTrigger>
+    <Collapsible open={open} onOpenChange={onOpenChange} className="group w-full">
+      <CollapsibleTrigger className="group/chev -mx-2 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/40">
+        <WrenchIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 wrap-break-word">{label}</span>
+        <span
+          className="flex shrink-0 items-center"
+          style={{ color: status.color }}
+          title={status.label}
+          aria-label={status.label}
+        >
+          {status.icon}
+        </span>
+        <span className="flex-1" />
+        <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/chev:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
   );
-};
+}
 
-export type ToolContentProps = ComponentProps<typeof CollapsibleContent>;
-
-export const ToolContent = ({ className, ...props }: ToolContentProps) => (
-  <CollapsibleContent
-    className={cn(
-      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 space-y-4 p-4 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
-      className
-    )}
-    {...props}
-  />
-);
-
-export type ToolInputProps = ComponentProps<"div"> & {
-  input: ToolPart["input"];
-};
-
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div className={cn("space-y-2 overflow-hidden", className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Parameters
-    </h4>
-    <div className="rounded-md bg-muted/50">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
-    </div>
-  </div>
-);
-
-export type ToolOutputProps = ComponentProps<"div"> & {
-  output: ToolPart["output"];
-  errorText: ToolPart["errorText"];
-};
-
-export const ToolOutput = ({
-  className,
+/**
+ * Renders parameters and the result in a fixed-width two-column panel.
+ *
+ * Every block keeps `min-width: 0`, so wide content scrolls inside its own
+ * box instead of widening the message column.
+ *
+ * @param props - Panel props.
+ * @returns The detail panel.
+ */
+function ToolPanel({
+  name,
+  input,
   output,
   errorText,
-  ...props
-}: ToolOutputProps) => {
-  if (!(output || errorText)) {
-    return null;
-  }
-
-  let Output = <div>{output as ReactNode}</div>;
-
-  if (typeof output === "object" && !isValidElement(output)) {
-    Output = (
-      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
-    );
-  } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />;
-  }
-
+}: {
+  name: string;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+}) {
+  const parameters = input === undefined ? {} : input;
+  const text = typeof output === "string" ? output : null;
   return (
-    <div className={cn("space-y-2", className)} {...props}>
-      <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-        {errorText ? "Error" : "Result"}
-      </h4>
-      <div
-        className={cn(
-          "overflow-x-auto rounded-md text-xs [&_table]:w-full",
-          errorText
-            ? "bg-destructive/10 text-destructive"
-            : "bg-muted/50 text-foreground"
+    <div className="grid w-full min-w-0 gap-3 border-t px-2 py-2 sm:grid-cols-2">
+      <div className="min-w-0">
+        <div className="mb-1 flex items-baseline gap-2">
+          <h4 className="font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+            Parameters
+          </h4>
+          <span className="text-[10px] text-muted-foreground/70">{camelName(name)}</span>
+        </div>
+        <div className="max-h-48 min-w-0 overflow-auto rounded-md bg-muted/40 text-xs">
+          <CodeBlock code={JSON.stringify(parameters, null, 2)} language="json" />
+        </div>
+      </div>
+      <div className="min-w-0">
+        <h4 className="mb-1 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+          {errorText ? "Error" : "Result"}
+        </h4>
+        {errorText ? (
+          <p className="text-xs" style={{ color: "var(--negative)" }}>
+            {errorText}
+          </p>
+        ) : (
+          <div className="max-h-64 min-w-0 overflow-auto rounded-md bg-muted/40 text-xs">
+            {text !== null ? (
+              <pre className="whitespace-pre-wrap wrap-break-word p-2">{text}</pre>
+            ) : output === undefined ? null : (
+              <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
+            )}
+          </div>
         )}
-      >
-        {errorText && <div>{errorText}</div>}
-        {Output}
       </div>
     </div>
   );
-};
+}
+
+/**
+ * Renders one tool call as a compact row that opens on demand.
+ *
+ * The row starts closed and only the user changes it; streaming state changes
+ * never reopen or close it.
+ *
+ * @param props - Call props.
+ * @returns The row and its panel.
+ */
+export function ToolCall({
+  label,
+  name,
+  state,
+  input,
+  output,
+  errorText,
+  open: controlledOpen,
+  onOpenChange,
+}: ToolCallProps & OpenControl) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+  return (
+    <ToolRow label={label} state={state} open={open} onOpenChange={setOpen}>
+      <ToolPanel name={name} input={input} output={output} errorText={errorText} />
+    </ToolRow>
+  );
+}
+
+/**
+ * Renders the group row and its child calls.
+ *
+ * @param props - Group props.
+ * @returns The group row and the child rows inside its panel.
+ */
+export function ToolGroup({
+  label,
+  state,
+  children,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  label: string;
+  state: string;
+  children: ReactNode;
+} & OpenControl) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+  return (
+    <ToolRow label={label} state={state} open={open} onOpenChange={setOpen}>
+      <div className="flex min-w-0 flex-col border-t py-1 pl-4">{children}</div>
+    </ToolRow>
+  );
+}

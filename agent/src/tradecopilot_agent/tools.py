@@ -9,12 +9,13 @@ not configured, so the tools behave the same inside a subagent.
 import hashlib
 import json
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
 from langchain.tools import ToolRuntime, tool
 from langchain_core.tools import BaseTool
 from langgraph.types import interrupt
+from pydantic import Field
 
 from tradecopilot_agent.claims import match_claims
 from tradecopilot_agent.constraints import check_ticket, session_open
@@ -29,6 +30,11 @@ from tradecopilot_agent.state import (
 )
 from tradecopilot_agent.store import now_iso
 from tradecopilot_agent.web import WebResult, WebSearch, WebSearchUnavailable
+
+PURPOSE_DESCRIPTION = "At most six words explaining why this call is being made."
+# The chat row shows this string as the action label. It is optional so
+# scripted callers and older stored conversations keep working.
+Purpose = Annotated[str, Field(description=PURPOSE_DESCRIPTION)]
 
 GATHER_BUDGET = 12
 # Safety bound only: the approval card previews ten rows and opens the full
@@ -808,59 +814,80 @@ def build_tools(
     artifact = tool(response_format="content_and_artifact")
 
     @artifact
-    async def get_quote(ticker: str) -> tuple[str, dict[str, Any]]:
+    async def get_quote(
+        ticker: str, purpose: Purpose = ""
+    ) -> tuple[str, dict[str, Any]]:
         """Return the latest quote for a ticker."""
         output = await impl.quote(ticker)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
     async def get_bars(
-        ticker: str, period: str = "1d", interval: str = "1d"
+        ticker: str,
+        period: str = "1d",
+        interval: str = "1d",
+        purpose: Purpose = "",
     ) -> tuple[str, dict[str, Any]]:
         """Return price bars. Period is 1d, 1w, or 1m."""
         output = await impl.bars(ticker, period, interval)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def get_portfolio() -> tuple[str, dict[str, Any]]:
+    async def get_portfolio(
+        purpose: Purpose = "",
+    ) -> tuple[str, dict[str, Any]]:
         """Return the account and its positions."""
         output = await impl.portfolio()
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def get_positions() -> tuple[str, dict[str, Any]]:
+    async def get_positions(
+        purpose: Purpose = "",
+    ) -> tuple[str, dict[str, Any]]:
         """Return the open positions only."""
         output = await impl.positions()
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def get_fundamentals(ticker: str) -> tuple[str, dict[str, Any]]:
+    async def get_fundamentals(
+        ticker: str, purpose: Purpose = ""
+    ) -> tuple[str, dict[str, Any]]:
         """Return the profile, sector, and valuation ratios for a ticker."""
         output = await impl.fundamentals(ticker)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def get_filings(ticker: str, limit: int = 10) -> tuple[str, dict[str, Any]]:
+    async def get_filings(
+        ticker: str, limit: int = 10, purpose: Purpose = ""
+    ) -> tuple[str, dict[str, Any]]:
         """Return recent SEC filings for a ticker."""
         output = await impl.filings(ticker, limit)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
     async def get_xbrl_fact(
-        ticker: str, tag: str, period: str, unit: str
+        ticker: str,
+        tag: str,
+        period: str,
+        unit: str,
+        purpose: Purpose = "",
     ) -> tuple[str, dict[str, Any]]:
         """Return one XBRL fact. This is the primary source for numbers."""
         output = await impl.xbrl_fact(ticker, tag, period, unit)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def get_news(ticker: str, limit: int = 10) -> tuple[str, dict[str, Any]]:
+    async def get_news(
+        ticker: str, limit: int = 10, purpose: Purpose = ""
+    ) -> tuple[str, dict[str, Any]]:
         """Return recent company news."""
         output = await impl.news(ticker, limit)
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def get_macro(series: str, period: str = "1y") -> tuple[str, dict[str, Any]]:
+    async def get_macro(
+        series: str, period: str = "1y", purpose: Purpose = ""
+    ) -> tuple[str, dict[str, Any]]:
         """Return one macro series from FRED."""
         output = await impl.macro(series, period)
         return _text(output), output.model_dump(mode="json")
@@ -869,6 +896,7 @@ def build_tools(
     async def verify_claims(
         claims: list[Claim],
         runtime: ToolRuntime,
+        purpose: Purpose = "",
     ) -> tuple[str, dict[str, Any]]:
         """Check claims against evidence already gathered in this session."""
         evidence = runtime.state.get("evidence", {}) if runtime.state else {}
@@ -876,13 +904,17 @@ def build_tools(
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def get_open_orders() -> tuple[str, dict[str, Any]]:
+    async def get_open_orders(
+        purpose: Purpose = "",
+    ) -> tuple[str, dict[str, Any]]:
         """List working orders with the ids needed to cancel them."""
         output = await impl.open_orders()
         return _text(output), output.model_dump(mode="json")
 
     @artifact
-    async def cancel_orders(orders: list[dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+    async def cancel_orders(
+        orders: list[dict[str, Any]], purpose: Purpose = ""
+    ) -> tuple[str, dict[str, Any]]:
         """Cancel working orders after the user approves the list."""
         output = await impl.cancel(orders)
         return _text(output), output.model_dump(mode="json")
@@ -892,6 +924,7 @@ def build_tools(
         legs: list[dict[str, Any]],
         thesis: str,
         horizon: str = "weeks",
+        purpose: Purpose = "",
     ) -> tuple[str, dict[str, Any]]:
         """Propose one ticket with one or more legs. No order is placed."""
         output = await impl.propose(legs, thesis, horizon)
@@ -899,7 +932,7 @@ def build_tools(
 
     @artifact
     async def execute_ticket(
-        ticket_id: str, runtime: ToolRuntime
+        ticket_id: str, runtime: ToolRuntime, purpose: Purpose = ""
     ) -> tuple[str, dict[str, Any]]:
         """Place a proposed ticket after the user approves it."""
         output = await impl.execute(ticket_id, runtime.state or {})
@@ -925,7 +958,9 @@ def build_tools(
     if searcher is not None:
 
         @artifact
-        async def web_search(query: str, count: int = 8) -> tuple[str, dict[str, Any]]:
+        async def web_search(
+            query: str, count: int = 8, purpose: Purpose = ""
+        ) -> tuple[str, dict[str, Any]]:
             """Search the public web for current events and general news."""
             cleaned = query.strip()
             if not cleaned:

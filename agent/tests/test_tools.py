@@ -4,10 +4,11 @@ import asyncio
 import json
 from datetime import date
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from tradecopilot_agent.state import EvidenceRecord, ToolOutput
 from tradecopilot_agent.store import Store
-from tradecopilot_agent.tools import TradingTools
+from tradecopilot_agent.tools import PURPOSE_DESCRIPTION, TradingTools, build_tools
 
 FETCHED = "2026-11-05T14:00:00Z"
 
@@ -446,3 +447,22 @@ def test_the_pending_ticket_records_the_entry_price(tmp_path: Path) -> None:
 
     assert output.proposal is not None
     assert output.proposal["legs"][0]["entry_price"] == 100.0
+
+
+def test_every_app_tool_exposes_an_optional_purpose() -> None:
+    """The model can say why it calls each tool, and the UI can label the row."""
+    tools = build_tools(MagicMock(), MagicMock(), None)
+    for built in tools:
+        schema = built.args["purpose"]
+        assert schema["description"] == PURPOSE_DESCRIPTION
+        assert "purpose" not in built.args["purpose"].get("required", [])
+
+
+def test_purpose_is_not_forwarded_to_the_data_source() -> None:
+    """The label argument never changes what a tool does."""
+    source = FakeSource()
+    tools = {tool.name: tool for tool in build_tools(source, MagicMock(), None)}
+    output = asyncio.run(
+        tools["get_quote"].ainvoke({"ticker": "AAPL", "purpose": "Check the price"})
+    )
+    assert "AAPL" in str(output)

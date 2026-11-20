@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { ToolUIPart } from "ai";
+import { useState } from "react";
+import type { ReactNode } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import {
   Reasoning,
@@ -8,16 +8,10 @@ import {
 } from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Task, TaskContent, TaskItem, TaskTrigger } from "@/components/ai-elements/task";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
+import { ToolCall, ToolGroup, aggregateState } from "@/components/ai-elements/tool";
 import type { DisplayMessage, TodoItem, ToolPartView } from "@/lib/parts";
 import { ApprovalCard } from "./approval-card";
-import { toolTitle } from "./tool-label";
+import { groupLabel, rowLabel } from "./tool-label";
 
 /**
  * Labels a reasoning block with the actual streamed duration.
@@ -40,6 +34,35 @@ function thinkingLabel(streaming: boolean, duration?: number) {
   );
 }
 
+/**
+ * Returns whether a tool part needs the ticket approval card.
+ *
+ * @param view - Normalized tool part.
+ * @returns True for an execution call awaiting or carrying a decision.
+ */
+function needsApproval(view: ToolPartView): boolean {
+  return (
+    view.name === "execute_ticket" &&
+    (view.state === "approval-requested" ||
+      view.approval?.approved !== undefined ||
+      (view.result !== undefined && view.approval !== undefined))
+  );
+}
+
+/**
+ * Reads the model-written purpose from the call arguments.
+ *
+ * @param view - Normalized tool part.
+ * @returns The purpose, or undefined when absent or not a string.
+ */
+function purposeOf(view: ToolPartView): string | undefined {
+  if (view.input === null || typeof view.input !== "object") {
+    return undefined;
+  }
+  const purpose = (view.input as Record<string, unknown>).purpose;
+  return typeof purpose === "string" ? purpose : undefined;
+}
+
 /** Props for one assistant message body. */
 export interface AssistantPartsProps {
   /** Normalized message. */
@@ -53,53 +76,63 @@ export interface AssistantPartsProps {
 }
 
 /**
- * Renders one tool call as a collapsible card.
+ * Renders one tool call with its row label and detail panel.
  *
- * @param props - Tool view.
- * @param props.view - Normalized tool part.
- * @returns The tool card.
+ * @param view - Normalized tool part.
+ * @returns The call row.
  */
-function ToolCard({
-  view,
-  isStreaming,
-  onApproval,
-}: {
-  view: ToolPartView;
-  isStreaming?: boolean;
-  onApproval: (id: string, approved: boolean, reason?: string) => void;
-}) {
-  const partFinished =
-    view.state === "output-available" ||
-    view.state === "output-error" ||
-    view.state === "output-denied";
-  // Some middleware tool calls never get a result. Folding on turn end keeps
-  // those cards closed instead of stuck open.
-  const settled = partFinished || isStreaming !== true;
-  const [open, setOpen] = useState(!settled);
-  useEffect(() => setOpen(!settled), [settled]);
-
-  const needsApproval =
-    view.name === "execute_ticket" &&
-    (view.state === "approval-requested" ||
-      view.approval?.approved !== undefined ||
-      (view.result !== undefined && view.approval !== undefined));
-  if (needsApproval) {
-    return <ApprovalCard view={view} onRespond={onApproval} />;
-  }
-
+function ToolCallRow({ view }: { view: ToolPartView }) {
   return (
-    <Tool open={open} onOpenChange={setOpen}>
-      <ToolHeader
-        title={toolTitle(view.name)}
-        type="dynamic-tool"
-        toolName={view.name}
-        state={view.state as ToolUIPart["state"]}
+    <ToolCall
+      label={rowLabel(view.name, view.input, purposeOf(view))}
+      name={view.name}
+      state={view.state}
+      input={view.input}
+      output={view.output}
+      errorText={view.errorText}
+    />
+  );
+}
+
+/**
+ * Renders one row for a run of consecutive calls to the same tool.
+ *
+ * @param run - Tool parts in wire order, all with the same name.
+ * @returns The group row or, for a single call, a plain call row.
+ */
+function ToolRun({ run }: { run: ToolPartView[] }) {
+  // Held here, keyed by the run's first call, so a row the user opened stays
+  // open when a second call turns it into a group.
+  const [open, setOpen] = useState(false);
+  const first = run[0];
+  if (run.length === 1) {
+    return (
+      <ToolCall
+        label={rowLabel(first.name, first.input, purposeOf(first))}
+        name={first.name}
+        state={first.state}
+        input={first.input}
+        output={first.output}
+        errorText={first.errorText}
+        open={open}
+        onOpenChange={setOpen}
       />
-      <ToolContent>
-        {view.input !== undefined ? <ToolInput input={view.input} /> : null}
-        <ToolOutput output={view.output} errorText={view.errorText} />
-      </ToolContent>
-    </Tool>
+    );
+  }
+  return (
+    <ToolGroup
+      label={groupLabel(
+        first.name,
+        run.map((view) => view.input),
+      )}
+      state={aggregateState(run.map((view) => view.state))}
+      open={open}
+      onOpenChange={setOpen}
+    >
+      {run.map((view, index) => (
+        <ToolCallRow key={view.toolCallId || `call-${index}`} view={view} />
+      ))}
+    </ToolGroup>
   );
 }
 
@@ -119,6 +152,55 @@ export function AssistantParts({
   const visibleParts = message.parts.filter(
     (part) => part.kind !== "tool" || !part.hidden,
   );
+
+  const rendered: ReactNode[] = [];
+  let index = 0;
+  while (index < visibleParts.length) {
+    const part = visibleParts[index];
+    if (part.kind === "tool") {
+      if (needsApproval(part)) {
+        rendered.push(
+          <ApprovalCard
+            key={part.toolCallId || `approval-${index}`}
+            view={part}
+            onRespond={onApproval}
+          />,
+        );
+        index += 1;
+        continue;
+      }
+      let end = index + 1;
+      while (end < visibleParts.length) {
+        const next = visibleParts[end];
+        if (next.kind !== "tool" || next.name !== part.name || needsApproval(next)) {
+          break;
+        }
+        end += 1;
+      }
+      rendered.push(
+        <ToolRun
+          key={part.toolCallId || `run-${index}`}
+          run={visibleParts.slice(index, end) as ToolPartView[]}
+        />,
+      );
+      index = end;
+      continue;
+    }
+    if (part.kind === "reasoning") {
+      rendered.push(
+        <Reasoning
+          key={`reasoning-${index}`}
+          isStreaming={part.streaming && isStreaming === true}
+        >
+          <ReasoningTrigger getThinkingMessage={thinkingLabel} />
+          <ReasoningContent>{part.text}</ReasoningContent>
+        </Reasoning>,
+      );
+    } else if (part.kind === "text") {
+      rendered.push(<MessageResponse key={`text-${index}`}>{part.text}</MessageResponse>);
+    }
+    index += 1;
+  }
 
   return (
     <div className="flex w-full flex-col gap-2">
@@ -141,33 +223,7 @@ export function AssistantParts({
         </Task>
       ) : null}
 
-      {visibleParts.map((part, index) => {
-        if (part.kind === "reasoning") {
-          return (
-            <Reasoning
-              key={`reasoning-${index}`}
-              isStreaming={part.streaming && isStreaming === true}
-            >
-              <ReasoningTrigger getThinkingMessage={thinkingLabel} />
-              <ReasoningContent>{part.text}</ReasoningContent>
-            </Reasoning>
-          );
-        }
-        if (part.kind === "tool") {
-          return (
-            <ToolCard
-              key={part.toolCallId || `tool-${index}`}
-              view={part}
-              isStreaming={isStreaming}
-              onApproval={onApproval}
-            />
-          );
-        }
-        if (part.kind === "text") {
-          return <MessageResponse key={`text-${index}`}>{part.text}</MessageResponse>;
-        }
-        return null;
-      })}
+      {rendered}
     </div>
   );
 }
