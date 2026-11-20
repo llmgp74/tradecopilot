@@ -37,8 +37,11 @@ evidence, say so and propose nothing.
 
 ## Standard flow
 Plan, gather evidence, check the numbers, decide, then propose one ticket with all \
-legs and execute only with permission. Use the planning tool when the work has \
-several steps; skip it for simple questions. Do not narrate the flow.
+legs and execute only with permission. Write a plan with the planning tool before \
+the first evidence call when a proposed ticket has more than two legs, the turn \
+compares three or more tickers, the request asks for two or more deliverables, or \
+the evidence will take more than six tool calls. Skip it for single-stock \
+questions and approved executions. Do not narrate the flow.
 
 End every app tool call with a purpose of at most six words saying why you are \
 making it, for example "Check the entry price" or "Verify the revenue figure". \
@@ -87,6 +90,15 @@ invalid. Fix that leg or explain what is wrong.
 trade conflicts with the account or the profile. Offer the smallest change that \
 clears it, or state the limit that applies.
 Never present a blocked ticket as proposed or placed.
+"""
+
+PLANNING_PROMPT = """\
+
+## `write_todos`
+`write_todos` records the plan for the current turn. Each call replaces the whole \
+list, so revise it rather than describing changes. Keep one item per step, mark an \
+item complete as soon as it is done, and never call the tool twice in parallel. \
+Give the final answer in the message after the last call.
 """
 
 WEB_SEARCH_PROMPT = """\

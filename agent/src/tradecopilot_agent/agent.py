@@ -23,7 +23,7 @@ from tradecopilot_agent.middleware import (
     TradingMemoryMiddleware,
     TurnMiddleware,
 )
-from tradecopilot_agent.prompt import build_system_prompt
+from tradecopilot_agent.prompt import PLANNING_PROMPT, build_system_prompt
 from tradecopilot_agent.state import TradingState
 from tradecopilot_agent.tools import build_tools
 from tradecopilot_agent.web import WebSearch
@@ -85,7 +85,7 @@ def build_agent(
         ToolAvailabilityMiddleware(source),
         ToolResultMiddleware(as_of, config.store),
         TodoStreamMiddleware(),
-        TodoListMiddleware(),
+        TodoListMiddleware(system_prompt=PLANNING_PROMPT),
         ModelCallLimitMiddleware(run_limit=MODEL_CALL_LIMIT, exit_behavior="end"),
     ]
     return create_deep_agent(
