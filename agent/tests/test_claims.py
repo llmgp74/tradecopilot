@@ -194,6 +194,116 @@ def test_account_figures_match_the_broker_record() -> None:
     assert all(item["source"] == "alpaca" for item in verdicts)
 
 
+def _portfolio_record() -> EvidenceRecord:
+    """An account with 23 positions, the first being NVDA."""
+    positions = [
+        {"ticker": "NVDA", "qty": 112.0, "market_value": 16_198.56},
+        *[
+            {"ticker": f"T{index:02d}", "qty": 1.0, "market_value": 100.0}
+            for index in range(22)
+        ],
+    ]
+    return EvidenceRecord(
+        id="ev_portfolio",
+        tool="get_portfolio",
+        args={},
+        source="alpaca",
+        fetched_at="2026-11-05T14:03:11Z",
+        payload={
+            "kind": "account",
+            "equity": 993_172.49,
+            "cash": 10_000.0,
+            "buying_power": 20_000.0,
+            "positions": positions,
+        },
+    )
+
+
+def test_holding_quantity_matches_the_position_not_the_count() -> None:
+    """A share count is checked against the holding, never the position count."""
+    claim = Claim(
+        text="NVDA position is 112 shares.",
+        kind="numeric",
+        ticker="NVDA",
+        value=112.0,
+        unit="shares",
+    )
+
+    verdict = match_claims([claim], _ledger(_portfolio_record()), scope="answer")[0]
+
+    assert verdict["verdict"] == "supported"
+    assert verdict["matched_value"] == 112.0
+
+
+def test_holding_value_matches_the_position_not_equity() -> None:
+    """A holding's dollar value is checked against the position, never equity."""
+    claim = Claim(
+        text="The NVDA position is worth $16,198.56 of my $993,172.49 equity.",
+        kind="numeric",
+        ticker="NVDA",
+        value=16_198.56,
+    )
+
+    verdict = match_claims([claim], _ledger(_portfolio_record()), scope="answer")[0]
+
+    assert verdict["verdict"] == "supported"
+    assert verdict["matched_value"] == 16_198.56
+
+
+def test_wrong_holding_value_is_contradicted_by_the_position() -> None:
+    """A wrong holding value reports the position value, not another figure."""
+    claim = Claim(
+        text="The NVDA position is worth $15,000.",
+        kind="numeric",
+        ticker="NVDA",
+        value=15_000.0,
+    )
+
+    verdict = match_claims([claim], _ledger(_portfolio_record()), scope="answer")[0]
+
+    assert verdict["verdict"] == "contradicted"
+    assert verdict["matched_value"] == 16_198.56
+
+
+def test_position_count_still_matches_the_count() -> None:
+    """A plural positions claim is a count and keeps working."""
+    claim = Claim(
+        text="I hold 23 positions.", kind="numeric", value=23.0, unit="positions"
+    )
+
+    verdict = match_claims([claim], _ledger(_portfolio_record()), scope="answer")[0]
+
+    assert verdict["verdict"] == "supported"
+    assert verdict["matched_value"] == 23.0
+
+
+def test_plural_positions_with_a_value_is_not_a_count() -> None:
+    """A dollar figure about the positions as a group is not a count."""
+    claim = Claim(
+        text="My positions are worth $25,000 in total.", kind="numeric", value=25_000.0
+    )
+
+    verdict = match_claims([claim], _ledger(_portfolio_record()), scope="answer")[0]
+
+    assert verdict["matched_value"] != 23.0
+    assert verdict["verdict"] == "unchecked"
+
+
+def test_derived_percentage_is_unchecked_not_contradicted() -> None:
+    """A percent of equity cannot be matched to a raw dollar figure."""
+    claim = Claim(
+        text="NVDA is 1.63% of equity.",
+        kind="numeric",
+        ticker="NVDA",
+        value=1.63,
+        unit="%",
+    )
+
+    verdict = match_claims([claim], _ledger(_portfolio_record()), scope="answer")[0]
+
+    assert verdict["verdict"] == "unchecked"
+
+
 def test_wrong_account_figure_is_contradicted() -> None:
     """A wrong account number is contradicted by the broker record."""
     claim = Claim(text="Cash is $2,000,000.", kind="numeric", value=2_000_000.0)

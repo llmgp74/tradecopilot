@@ -73,8 +73,89 @@ _ACCOUNT_FIELDS = (
     ("buying power", "buying_power"),
     ("equity", "equity"),
     ("cash", "cash"),
-    ("positions?", "positions"),
 )
+
+_POSITION_COUNT = re.compile(r"\bpositions\b")
+"""A plural positions claim is a count. The singular "position" names one holding."""
+
+_HOLDING = re.compile(r"\b(?:shares?|position|holding|worth|valued?|market value)\b")
+"""Words that make a numeric claim about one holding rather than the account."""
+
+_PERCENT_UNITS = frozenset({"%", "percent", "pct"})
+
+
+def _against(
+    claim: Claim, record: dict[str, Any], actual: float, scope: str
+) -> dict[str, Any]:
+    """Return a supported or contradicted verdict for one candidate value."""
+    assert claim.value is not None
+    verdict = (
+        "supported"
+        if _relative_difference(actual, claim.value) <= NUMERIC_TOLERANCE
+        else "contradicted"
+    )
+    return _verdict(
+        claim, scope=scope, verdict=verdict, records=[record], matched_value=actual
+    )
+
+
+def _holding_verdict(
+    claim: Claim, record: dict[str, Any], payload: dict[str, Any], scope: str
+) -> dict[str, Any] | None:
+    """Match a share count or dollar value against one position.
+
+    A holding claim can carry either its quantity or its market value, and the
+    text may not say which. Both candidates are tested so an ambiguous claim is
+    supported by whichever figure agrees; a contradiction reports the quantity
+    unless the text names a value.
+    """
+    if claim.ticker is None or claim.value is None:
+        return None
+    text = claim.text.lower()
+    if _HOLDING.search(text) is None:
+        return None
+    positions = payload.get("positions")
+    if not isinstance(positions, list):
+        return None
+    wants_value = bool(re.search(r"\b(?:worth|valued?|market value)\b", text))
+    unit = (claim.unit or "").strip().lower()
+    if unit in {"share", "shares"}:
+        keys = ("qty", "market_value")
+    elif wants_value:
+        keys = ("market_value", "qty")
+    else:
+        keys = ("qty", "market_value")
+    for position in positions:
+        if not isinstance(position, dict):
+            continue
+        if str(position.get("ticker", "")).upper() != claim.ticker.upper():
+            continue
+        fallback: float | None = None
+        for key in keys:
+            raw = position.get(key)
+            if not isinstance(raw, int | float):
+                continue
+            candidate = float(raw)
+            if fallback is None:
+                fallback = candidate
+            if _relative_difference(candidate, claim.value) <= NUMERIC_TOLERANCE:
+                return _verdict(
+                    claim,
+                    scope=scope,
+                    verdict="supported",
+                    records=[record],
+                    matched_value=candidate,
+                )
+        if fallback is not None:
+            return _verdict(
+                claim,
+                scope=scope,
+                verdict="contradicted",
+                records=[record],
+                matched_value=fallback,
+            )
+        return None
+    return None
 
 
 def _account_verdict(
@@ -84,37 +165,50 @@ def _account_verdict(
     if claim.value is None:
         return None
     text = claim.text.lower()
-    field = next(
-        (name for needle, name in _ACCOUNT_FIELDS if re.search(rf"\b{needle}\b", text)),
-        None,
+    counts_positions = (claim.unit or "").strip().lower() == "positions" or (
+        _POSITION_COUNT.search(text) is not None
+        and re.search(r"\b(?:worth|valued?|market value)\b", text) is None
+    )
+    field = (
+        None
+        if counts_positions
+        else next(
+            (
+                name
+                for needle, name in _ACCOUNT_FIELDS
+                if re.search(rf"\b{needle}\b", text)
+            ),
+            None,
+        )
     )
     for record in evidence.values():
         payload = _record_payload(record)
         if payload.get("kind") != "account":
             continue
-        if field == "positions":
+        if counts_positions:
             positions = payload.get("positions")
             if not isinstance(positions, list):
                 continue
-            actual = float(len(positions))
-        elif field is not None:
+            return _against(claim, record, float(len(positions)), scope)
+        holding = _holding_verdict(claim, record, payload, scope)
+        if holding is not None:
+            return holding
+        if field is not None:
             raw = payload.get(field)
             if not isinstance(raw, int | float):
                 continue
-            actual = float(raw)
-        else:
-            scalars = [
-                float(value)
-                for key in ("equity", "cash", "buying_power")
-                if isinstance((value := payload.get(key)), int | float)
-            ]
-            matches = [
-                value
-                for value in scalars
-                if _relative_difference(value, claim.value) <= NUMERIC_TOLERANCE
-            ]
-            if not matches:
-                continue
+            return _against(claim, record, float(raw), scope)
+        scalars = [
+            float(value)
+            for key in ("equity", "cash", "buying_power")
+            if isinstance((value := payload.get(key)), int | float)
+        ]
+        matches = [
+            value
+            for value in scalars
+            if _relative_difference(value, claim.value) <= NUMERIC_TOLERANCE
+        ]
+        if matches:
             return _verdict(
                 claim,
                 scope=scope,
@@ -122,18 +216,6 @@ def _account_verdict(
                 records=[record],
                 matched_value=matches[0],
             )
-        verdict = (
-            "supported"
-            if _relative_difference(actual, claim.value) <= NUMERIC_TOLERANCE
-            else "contradicted"
-        )
-        return _verdict(
-            claim,
-            scope=scope,
-            verdict=verdict,
-            records=[record],
-            matched_value=actual,
-        )
     return None
 
 
@@ -171,6 +253,13 @@ def _quote_verdict(
 def _numeric(claim: Claim, evidence: dict[str, Any], scope: str) -> dict[str, Any]:
     if claim.value is None:
         return _verdict(claim, scope=scope, verdict="unchecked", reason="no value")
+    # A share of a total needs the total and the base to check, and the claim
+    # carries only the percentage. Comparing it to a raw dollar figure reports
+    # a contradiction that the evidence does not support.
+    if (claim.unit or "").strip().lower() in _PERCENT_UNITS:
+        return _verdict(
+            claim, scope=scope, verdict="unchecked", reason="derived percentage"
+        )
     # Account and quote figures are untagged by construction. A tagged claim is
     # a financial metric, so matching it against a balance or a price would
     # compare unrelated quantities and report a false contradiction.
