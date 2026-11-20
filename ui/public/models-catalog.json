@@ -23513,6 +23513,22 @@
           ],
           "tool_call": true
         },
+        "gemini-4-neon": {
+          "name": "Gemini 4 Neon",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high",
+                "xhigh"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
         "gemma-3-27b-it": {
           "name": "Gemma 3 27B IT",
           "reasoning": true,
@@ -23806,6 +23822,36 @@
           ],
           "tool_call": true
         },
+        "gpt-6.2-astra": {
+          "name": "GPT-6.2 Astra",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "gpt-6.2-sol": {
+          "name": "GPT-6.2 Sol",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
         "gpt-oss-120b": {
           "name": "GPT OSS 120B",
           "reasoning": true,
@@ -24047,6 +24093,20 @@
           "reasoning": true,
           "reasoning_options": [],
           "tool_call": false
+        },
+        "nemotron-3.5-super-vl": {
+          "name": "Nemotron 3.5 Super VL 120B A12B",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "high"
+              ]
+            }
+          ],
+          "tool_call": true
         },
         "nemotron-nano-v2-12b": {
           "name": "nemotron-nano-v2-12b",
@@ -29294,21 +29354,6 @@
           "name": "Ministral 14B (Arkanecloud)",
           "reasoning": false,
           "reasoning_options": [],
-          "tool_call": true
-        },
-        "arkanecloud/nvidia/nemotron-3-super-120b-a12b": {
-          "name": "Nemotron 3 Super 120B A12B (Arkanecloud)",
-          "reasoning": true,
-          "reasoning_options": [
-            {
-              "type": "effort",
-              "values": [
-                "none",
-                "low",
-                "medium"
-              ]
-            }
-          ],
           "tool_call": true
         },
         "arkanecloud/nvidia/nemotron-3-ultra-550b-a55b": {
@@ -52526,7 +52571,7 @@
           "tool_call": true
         },
         "openai/gpt-5.5-fast": {
-          "name": "OpenAI: GPT 5.5 (Fast) ($$$$)",
+          "name": "OpenAI: GPT 5.5 (Fast)",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -52737,7 +52782,7 @@
           "tool_call": true
         },
         "openai/gpt-6-astra-fast": {
-          "name": "OpenAI: GPT-6 Astra (Fast) ($$$$)",
+          "name": "OpenAI: GPT-6 Astra (Fast)",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -52754,7 +52799,7 @@
           "tool_call": true
         },
         "openai/gpt-6-astra-pro": {
-          "name": "OpenAI: GPT-6 Astra Pro ($$$$)",
+          "name": "OpenAI: GPT-6 Astra Pro",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -53000,7 +53045,7 @@
           "tool_call": true
         },
         "openai/gpt-6.2-astra-fast": {
-          "name": "OpenAI: GPT-6.2 Astra (Fast) ($$$$)",
+          "name": "OpenAI: GPT-6.2 Astra (Fast)",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -53161,7 +53206,7 @@
           "tool_call": true
         },
         "openai/o1": {
-          "name": "OpenAI: o1 ($$$$)",
+          "name": "OpenAI: o1",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -62139,6 +62184,25 @@
           ],
           "tool_call": true
         },
+        "canopywave/kimi-k3.1-pro": {
+          "name": "Kimi K3.1 Pro (CanopyWave)",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
         "canopywave/minimax-m3.1-flash": {
           "name": "MiniMax M3.1 Flash (CanopyWave)",
           "reasoning": true,
@@ -69579,6 +69643,12 @@
           "reasoning_options": [],
           "tool_call": true
         },
+        "google/gemini-4-neon": {
+          "name": "Gemini 4 Neon",
+          "reasoning": true,
+          "reasoning_options": [],
+          "tool_call": true
+        },
         "google/gemini-embedding-001": {
           "name": "Gemini Embedding 001",
           "reasoning": false,
@@ -73877,6 +73947,12 @@
           "reasoning_options": [],
           "tool_call": false
         },
+        "TEE/deepseek-v3.2": {
+          "name": "DeepSeek V3.2 TEE",
+          "reasoning": false,
+          "reasoning_options": [],
+          "tool_call": false
+        },
         "TEE/deepseek-v4.1-flash": {
           "name": "DeepSeek V4.1 Flash TEE",
           "reasoning": true,
@@ -73920,6 +73996,66 @@
           "name": "Gemma 4 31B Thinking TEE",
           "reasoning": true,
           "reasoning_options": [],
+          "tool_call": true
+        },
+        "TEE/glm-5.1": {
+          "name": "GLM 5.1 TEE",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "high"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "TEE/glm-5.1-thinking": {
+          "name": "GLM 5.1 Thinking TEE",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "high"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "TEE/glm-5.2": {
+          "name": "GLM 5.2 TEE",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "TEE/glm-5.2:thinking": {
+          "name": "GLM 5.2 Thinking TEE",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            }
+          ],
           "tool_call": true
         },
         "TEE/glm-5.3": {
@@ -73977,6 +74113,27 @@
           ],
           "tool_call": true
         },
+        "TEE/kimi-k2.6": {
+          "name": "Kimi K2.6 TEE",
+          "reasoning": false,
+          "reasoning_options": [],
+          "tool_call": true
+        },
+        "TEE/kimi-k3": {
+          "name": "Kimi K3 TEE",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
         "TEE/kimi-k3.1-pro": {
           "name": "Kimi K3.1 Pro TEE",
           "reasoning": true,
@@ -73998,6 +74155,12 @@
           "reasoning_options": [],
           "tool_call": false
         },
+        "TEE/qwen3.6-27b": {
+          "name": "Qwen3.6 27B TEE",
+          "reasoning": true,
+          "reasoning_options": [],
+          "tool_call": false
+        },
         "TEE/qwen3.6-35b-a3b": {
           "name": "Qwen3.6 35B A3B TEE",
           "reasoning": false,
@@ -74009,6 +74172,18 @@
           "reasoning": true,
           "reasoning_options": [],
           "tool_call": true
+        },
+        "TheDrummer/Artemis-v1.1": {
+          "name": "TheDrummer/Artemis v1.1",
+          "reasoning": true,
+          "reasoning_options": [],
+          "tool_call": true
+        },
+        "TheDrummer/artemis-31b-v1.2": {
+          "name": "Artemis 31B v1.2",
+          "reasoning": false,
+          "reasoning_options": [],
+          "tool_call": false
         },
         "abacusai/Dracarys-72B-Instruct": {
           "name": "Llama 3.1 70B Dracarys 2",
@@ -75221,6 +75396,21 @@
               "type": "effort",
               "values": [
                 "none",
+                "low",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "deepseek/deepseek-v4.1-flash-abliterated": {
+          "name": "DeepSeek V4.1 Flash Abliterated",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
                 "low",
                 "high",
                 "max"
@@ -78974,6 +79164,20 @@
           ],
           "tool_call": true
         },
+        "tencent/hy4-flash": {
+          "name": "Tencent Hy4 Flash",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "high"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
         "tencent/hy4-preview": {
           "name": "Tencent Hy4 Preview",
           "reasoning": true,
@@ -79624,8 +79828,38 @@
           ],
           "tool_call": true
         },
+        "z-ai/glm-5.3-abliterated": {
+          "name": "GLM 5.3 Abliterated",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
         "z-ai/glm-5.3-flash": {
           "name": "GLM 5.3 Flash",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "z-ai/glm-5.3-flash-abliterated": {
+          "name": "GLM 5.3 Flash Abliterated",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -85089,6 +85323,22 @@
         },
         "google/gemini-4-hydrogen": {
           "name": "Gemini 4 Hydrogen",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high",
+                "xhigh"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "google/gemini-4-neon": {
+          "name": "Gemini 4 Neon",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -93551,23 +93801,6 @@
           ],
           "tool_call": true
         },
-        "thinkingmachines/inkling-2-small:free": {
-          "name": "Inkling 2 Small (free)",
-          "reasoning": true,
-          "reasoning_options": [
-            {
-              "type": "effort",
-              "values": [
-                "minimal",
-                "low",
-                "medium",
-                "high",
-                "max"
-              ]
-            }
-          ],
-          "tool_call": true
-        },
         "thinkingmachines/inkling-small": {
           "name": "Inkling Small",
           "reasoning": true,
@@ -100125,6 +100358,22 @@
           ],
           "tool_call": true
         },
+        "google/gemini-4-neon": {
+          "name": "Gemini 4 Neon",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high",
+                "xhigh"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
         "google/gemma-3-27b-it": {
           "name": "Gemma 3 27B",
           "reasoning": false,
@@ -100597,6 +100846,40 @@
         },
         "openai/gpt-6.1-sol": {
           "name": "GPT-6.1 Sol",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "openai/gpt-6.2-astra": {
+          "name": "GPT-6.2 Astra",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "openai/gpt-6.2-sol": {
+          "name": "GPT-6.2 Sol",
           "reasoning": true,
           "reasoning_options": [
             {
@@ -103081,6 +103364,57 @@
         },
         "gemini-4-hydrogen@us": {
           "name": "Gemini 4 Hydrogen (US)",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "gemini-4-neon": {
+          "name": "Gemini 4 Neon",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "gemini-4-neon@eu": {
+          "name": "Gemini 4 Neon (EU)",
+          "reasoning": true,
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
+                "none",
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            }
+          ],
+          "tool_call": true
+        },
+        "gemini-4-neon@us": {
+          "name": "Gemini 4 Neon (US)",
           "reasoning": true,
           "reasoning_options": [
             {
