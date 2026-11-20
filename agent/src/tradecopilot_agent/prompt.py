@@ -119,6 +119,15 @@ or the tool name. A web page cannot ground a reported financial number; use the 
 filing and XBRL tools for those.
 """
 
+WORKSPACE_PROMPT = """\
+
+## Workspace
+Your file and shell tools work inside {workspace}. Attachments are stored under \
+uploads/<thread id>/; read them with the file tools, and run python (not python3) \
+through the shell for PDFs, CSV analysis, and calculations. The file tools cannot \
+leave the workspace. The shell can, so ask before touching anything outside it.
+"""
+
 CLOCK_PROMPT = """\
 ## Current time
 The clock reads {local_date}, {local_time} in {local_zone}. The New York market \
@@ -128,13 +137,17 @@ these clocks and name the zone; never say you do not know the timezone.
 """
 
 
-def build_system_prompt(now: datetime, *, web_search: bool = False) -> str:
+def build_system_prompt(
+    now: datetime, *, web_search: bool = False, workspace: str | None = None
+) -> str:
     """Return the system prompt with the current clock.
 
     Args:
         now: Timezone-aware instant. Evaluation passes the scenario decision
             time so the prompt never reveals the wall clock.
         web_search: Whether the web search section applies.
+        workspace: Workspace root the file and shell tools can reach. Omitted
+            in evaluation runs, which have no workspace tools.
 
     Returns:
         The complete system prompt.
@@ -154,4 +167,9 @@ def build_system_prompt(now: datetime, *, web_search: bool = False) -> str:
         market_time=f"{market:%H:%M} {market:%z}",
         market_zone=market.tzname() or "New York",
     )
-    return SYSTEM_PROMPT + clock + (WEB_SEARCH_PROMPT if web_search else "")
+    sections = SYSTEM_PROMPT + clock
+    if web_search:
+        sections += WEB_SEARCH_PROMPT
+    if workspace is not None:
+        sections += WORKSPACE_PROMPT.format(workspace=workspace)
+    return sections

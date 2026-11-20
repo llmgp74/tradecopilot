@@ -5,7 +5,12 @@ The models are the source of the OpenAPI document served at ``/docs``.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from tradecopilot_agent.permissions import (
+    DEFAULT_TOOL_PERMISSIONS,
+    normalize_tool_permissions,
+)
 
 RiskBand = Literal["conservative", "moderate", "aggressive"]
 Horizon = Literal["intraday", "days", "weeks", "months"]
@@ -120,8 +125,17 @@ class AppSettings(BaseModel):
     fred_api_key: str = ""
     edgar_user_agent: str = ""
     exa_api_key: str = ""
+    tool_permissions: dict[str, str] = Field(
+        default_factory=lambda: dict(DEFAULT_TOOL_PERMISSIONS)
+    )
     providers: list[ProviderCredential] = Field(default_factory=list)
     updated_at: str
+
+    @field_validator("tool_permissions")
+    @classmethod
+    def _check_tool_permissions(cls, value: dict[str, str]) -> dict[str, str]:
+        """Fill omitted tools and reject unknown names or policies."""
+        return normalize_tool_permissions(value)
 
 
 class AppSettingsPatch(BaseModel):
@@ -138,6 +152,15 @@ class AppSettingsPatch(BaseModel):
     fred_api_key: str | None = None
     edgar_user_agent: str | None = None
     exa_api_key: str | None = None
+    tool_permissions: dict[str, str] | None = None
+
+    @field_validator("tool_permissions")
+    @classmethod
+    def _check_tool_permissions(
+        cls, value: dict[str, str] | None
+    ) -> dict[str, str] | None:
+        """Fill omitted tools and reject unknown names or policies."""
+        return None if value is None else normalize_tool_permissions(value)
 
 
 class ThreadSummary(BaseModel):

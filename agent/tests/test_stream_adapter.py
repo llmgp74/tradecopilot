@@ -493,3 +493,26 @@ def test_checkpointed_interrupt_reuses_the_tool_call() -> None:
     assert len(tool_parts) == 1
     assert tool_parts[0]["toolCallId"] == "call_1"
     assert tool_parts[0]["state"] == "approval-requested"
+
+
+def test_to_human_message_appends_attachment_notes() -> None:
+    """Path notes join the text so later tool calls can open the file."""
+    message = to_human_message(
+        {
+            "id": "m1",
+            "role": "user",
+            "parts": [
+                {"type": "text", "text": "Analyze this"},
+                {
+                    "type": "file",
+                    "mediaType": "application/pdf",
+                    "url": "data:application/pdf;base64,AAA",
+                },
+            ],
+        },
+        ["Attached file: /uploads/t/x.pdf (application/pdf, 3 B)"],
+    )
+
+    assert message.content == (
+        "Analyze this\nAttached file: /uploads/t/x.pdf (application/pdf, 3 B)"
+    )

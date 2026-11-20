@@ -194,3 +194,40 @@ def test_upsert_provider_clears_selection_when_key_cleared(tmp_path: Path) -> No
     settings = store.get_settings()
     assert settings.model_provider == ""
     assert settings.model_id == ""
+
+
+def test_tool_permissions_roundtrip(tmp_path: Path) -> None:
+    """The permission map is stored as JSON and returned as a full map."""
+    store = Store(tmp_path / "data.db")
+
+    updated = store.patch_settings({"tool_permissions": {"execute": "auto"}})
+
+    assert updated.tool_permissions["execute"] == "auto"
+    assert updated.tool_permissions["write_file"] == "auto"
+    assert store.get_settings().tool_permissions["execute"] == "auto"
+
+
+def test_old_database_gains_tool_permissions(tmp_path: Path) -> None:
+    """A database from before the column migrates on open."""
+    path = tmp_path / "data.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE settings (id INTEGER PRIMARY KEY CHECK (id = 1), "
+            "model_provider TEXT NOT NULL DEFAULT '', "
+            "model_id TEXT NOT NULL DEFAULT '', "
+            "reasoning_effort TEXT NOT NULL DEFAULT '', "
+            "alpaca_api_key TEXT NOT NULL DEFAULT '', "
+            "alpaca_api_secret TEXT NOT NULL DEFAULT '', "
+            "alpaca_base_url TEXT NOT NULL DEFAULT '', "
+            "fmp_api_key TEXT NOT NULL DEFAULT '', "
+            "finnhub_api_key TEXT NOT NULL DEFAULT '', "
+            "fred_api_key TEXT NOT NULL DEFAULT '', "
+            "edgar_user_agent TEXT NOT NULL DEFAULT '', "
+            "exa_api_key TEXT NOT NULL DEFAULT '', "
+            "updated_at TEXT NOT NULL)"
+        )
+        connection.execute("INSERT INTO settings (id, updated_at) VALUES (1, 'now')")
+
+    store = Store(path)
+
+    assert store.get_settings().tool_permissions["execute"] == "ask"

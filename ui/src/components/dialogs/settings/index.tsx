@@ -23,18 +23,24 @@ import { useResource } from "@/lib/use-resource";
 import type { SettingsSection } from "@/lib/settings";
 import type { DialogProps } from "../portfolio";
 import { ModelProvidersSection } from "./model-providers";
-import { GeneralSection, SettingsFieldSection, type SettingField } from "./sections";
+import {
+  GeneralSection,
+  PermissionsSection,
+  SettingsFieldSection,
+  type SettingField,
+} from "./sections";
 
 const SECTIONS: { value: SettingsSection; label: string }[] = [
   { value: "general", label: "General" },
   { value: "models", label: "Model Providers" },
+  { value: "permissions", label: "Permissions" },
   { value: "broker", label: "Broker" },
   { value: "search", label: "Web Search" },
   { value: "data", label: "Data Providers" },
 ];
 
 const SECTION_FIELDS: Record<
-  Exclude<SettingsSection, "general" | "models">,
+  Exclude<SettingsSection, "general" | "models" | "permissions">,
   SettingField[]
 > = {
   broker: [
@@ -190,6 +196,8 @@ export function SettingsDialog({
                     onSaved={saved}
                     onDirtyChange={setDirty}
                   />
+                ) : section === "permissions" ? (
+                  <PermissionsSection settings={settings} onSaved={saved} />
                 ) : (
                   <SettingsFieldSection
                     key={section}

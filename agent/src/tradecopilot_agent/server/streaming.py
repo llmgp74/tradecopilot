@@ -77,6 +77,7 @@ async def stream_chat(
     thread_id: str,
     config: RunnableConfig,
     approval_descriptor: ApprovalDescriptor | None = None,
+    attachment_notes: list[str] | None = None,
 ) -> AsyncIterator[UIMessageChunk]:
     """Run one graph turn and stream its UI message parts.
 
@@ -86,6 +87,7 @@ async def stream_chat(
         thread_id: Conversation thread id.
         config: Runnable config carrying the thread id.
         approval_descriptor: Builds the descriptor for approval requests.
+        attachment_notes: Workspace paths of the files copied for this turn.
 
     Yields:
         UI message stream parts.
@@ -104,7 +106,7 @@ async def stream_chat(
                 Command(resume=resume), config, stream_mode=["values"]
             ):
                 pass
-        turn = await _resolve_input(graph, messages, config, snapshot)
+        turn = await _resolve_input(graph, messages, config, snapshot, attachment_notes)
     except ValueError as exc:
         yield {"type": "start", "messageId": assistant_id}
         yield thread_part
@@ -159,6 +161,7 @@ async def _resolve_input(
     messages: list[UIMessage],
     config: RunnableConfig,
     snapshot: Any,
+    attachment_notes: list[str] | None = None,
 ) -> GraphTurn:
     values = getattr(snapshot, "values", {})
     history_ids = _message_ids(values)
@@ -170,7 +173,7 @@ async def _resolve_input(
             history_ids=history_ids,
             unfinished_tool_calls=_unfinished_tool_calls(values),
         )
-    human = to_human_message(last_user_message(messages))
+    human = to_human_message(last_user_message(messages), attachment_notes)
     return GraphTurn(
         graph_input={"messages": [human]},
         history_ids=history_ids,

@@ -1,7 +1,8 @@
 import type { AppSettings, AppSettingsPatch } from "./api";
 
 /** Settings sections shown in the dialog navigation. */
-export type SettingsSection = "general" | "models" | "broker" | "search" | "data";
+export type SettingsSection =
+  "general" | "models" | "permissions" | "broker" | "search" | "data";
 
 /** Fields rendered as password inputs. */
 export const SECRET_FIELDS: ReadonlySet<keyof AppSettings> = new Set<keyof AppSettings>([

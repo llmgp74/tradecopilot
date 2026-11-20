@@ -46,3 +46,103 @@ def test_build_agent_uses_the_decision_clock(tmp_path: Path) -> None:
     assert "Friday, November 20, 2026" in prompt
     assert f"{now.astimezone():%H:%M}" in prompt
     assert "09:00 -0500" in prompt
+
+
+def test_workspace_section_names_the_root_and_python() -> None:
+    """The prompt points the model at the workspace and the app interpreter."""
+    prompt = build_system_prompt(
+        datetime(2026, 11, 20, tzinfo=UTC),
+        workspace="/home/u/.tradecopilot/workspace",
+    )
+
+    assert "/home/u/.tradecopilot/workspace" in prompt
+    assert "uploads/" in prompt
+    assert "python" in prompt
+
+
+def test_no_workspace_section_without_a_root() -> None:
+    """Evaluation runs keep the prompt they had before."""
+    prompt = build_system_prompt(datetime(2026, 11, 20, tzinfo=UTC))
+
+    assert "Attachments are stored" not in prompt
+
+
+def test_build_agent_maps_permissions_to_interrupts(tmp_path: Path) -> None:
+    """Ask tools become interrupts; auto tools stay silent."""
+    captured: dict[str, object] = {}
+
+    def fake_create(**kwargs: object) -> MagicMock:
+        captured.update(kwargs)
+        return MagicMock()
+
+    with (
+        patch.object(agent_module, "create_deep_agent", side_effect=fake_create),
+        patch.object(agent_module, "build_chat_model", return_value=MagicMock()),
+    ):
+        agent_module.build_agent(
+            MemoryConfig(condition="full", store=Store(tmp_path / "data.db")),
+            MagicMock(capabilities=lambda: set()),
+            model="deepseek:deepseek-chat",
+            tool_permissions={
+                "execute": "ask",
+                "write_file": "auto",
+                "edit_file": "auto",
+                "delete": "auto",
+            },
+            backend=MagicMock(),
+            workspace="/w",
+        )
+
+    assert captured["backend"] is not None
+    assert captured["interrupt_on"] == {"execute": True}
+
+
+def test_build_agent_defaults_keep_the_state_backend(tmp_path: Path) -> None:
+    """Callers that pass nothing, such as the evaluation harness, are unchanged."""
+    captured: dict[str, object] = {}
+
+    def fake_create(**kwargs: object) -> MagicMock:
+        captured.update(kwargs)
+        return MagicMock()
+
+    with (
+        patch.object(agent_module, "create_deep_agent", side_effect=fake_create),
+        patch.object(agent_module, "build_chat_model", return_value=MagicMock()),
+    ):
+        agent_module.build_agent(
+            MemoryConfig(condition="full", store=Store(tmp_path / "data.db")),
+            MagicMock(capabilities=lambda: set()),
+            model="deepseek:deepseek-chat",
+        )
+
+    assert captured["backend"] is None
+    assert captured["interrupt_on"] is None
+
+
+def test_build_agent_with_every_tool_auto_adds_no_interrupts(tmp_path: Path) -> None:
+    """Auto for every tool means no human-in-the-loop middleware."""
+    captured: dict[str, object] = {}
+
+    def fake_create(**kwargs: object) -> MagicMock:
+        captured.update(kwargs)
+        return MagicMock()
+
+    with (
+        patch.object(agent_module, "create_deep_agent", side_effect=fake_create),
+        patch.object(agent_module, "build_chat_model", return_value=MagicMock()),
+    ):
+        agent_module.build_agent(
+            MemoryConfig(condition="full", store=Store(tmp_path / "data.db")),
+            MagicMock(capabilities=lambda: set()),
+            model="deepseek:deepseek-chat",
+            tool_permissions={
+                "execute": "auto",
+                "write_file": "auto",
+                "edit_file": "auto",
+                "delete": "auto",
+            },
+            backend=MagicMock(),
+            workspace="/w",
+        )
+
+    assert captured["interrupt_on"] is None

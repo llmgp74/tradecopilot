@@ -26,6 +26,12 @@ export const baseSettings: AppSettings = {
   fred_api_key: "fred-key",
   edgar_user_agent: "TradeCopilot test@example.com",
   exa_api_key: "exa-key",
+  tool_permissions: {
+    execute: "ask",
+    write_file: "auto",
+    edit_file: "auto",
+    delete: "auto",
+  },
   providers: [
     {
       provider_id: "deepseek",

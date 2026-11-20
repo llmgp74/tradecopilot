@@ -15,7 +15,7 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { CodeBlock } from "./code-block";
 
@@ -41,6 +41,8 @@ export interface ToolCallProps {
   output?: unknown;
   /** Failure text, when the call errored. */
   errorText?: string;
+  /** Extra controls rendered under the parameters and result panel. */
+  actions?: ReactNode;
 }
 
 /** Row status presentation. */
@@ -235,8 +237,9 @@ function ToolPanel({
 /**
  * Renders one tool call as a compact row that opens on demand.
  *
- * The row starts closed and only the user changes it; streaming state changes
- * never reopen or close it.
+ * The row starts closed. It opens itself once when the call starts waiting
+ * for approval; after that the user controls it, and later state changes never
+ * reopen or close it.
  *
  * @param props - Call props.
  * @returns The row and its panel.
@@ -248,15 +251,26 @@ export function ToolCall({
   input,
   output,
   errorText,
+  actions,
   open: controlledOpen,
   onOpenChange,
 }: ToolCallProps & OpenControl) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
+
+  // A call waiting for a decision opens itself so the command is visible.
+  // The user can collapse it afterwards; the state does not change again.
+  useEffect(() => {
+    if (state === "approval-requested" && controlledOpen === undefined) {
+      setInternalOpen(true);
+    }
+  }, [state, controlledOpen]);
+
   return (
     <ToolRow label={label} state={state} open={open} onOpenChange={setOpen}>
       <ToolPanel name={name} input={input} output={output} errorText={errorText} />
+      {actions}
     </ToolRow>
   );
 }

@@ -1,5 +1,6 @@
 """Contract tests for the chat endpoint and approval resume."""
 
+import base64
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -41,7 +42,10 @@ class StubGraph:
 
 
 def _client(tmp_path: Path, graph: StubGraph) -> TestClient:
-    settings = Settings(db_path=tmp_path / "data.db")
+    settings = Settings(
+        db_path=tmp_path / "data.db",
+        workspace_path=tmp_path / "workspace",
+    )
     app = create_app(settings, graph_factory=lambda _app, _reasoning: graph)
     return TestClient(app)
 
@@ -410,3 +414,83 @@ def test_approval_resumes_when_the_args_gained_a_purpose(tmp_path: Path) -> None
     assert response.status_code == 200
     assert isinstance(graph.received, Command)
     assert graph.received.resume == {"decisions": [{"type": "approve"}]}
+
+
+def test_settings_change_clears_cached_graphs(tmp_path: Path) -> None:
+    """A permission change rebuilds the graph on the next turn."""
+    graph = StubGraph()
+    with _client(tmp_path, graph) as client:
+        client.app.state.graphs["x"] = object()
+        response = client.patch(
+            "/api/settings",
+            json={"tool_permissions": {"execute": "auto"}},
+        )
+
+    assert response.status_code == 200
+    assert client.app.state.graphs == {}
+
+
+def test_non_ticket_interrupt_has_no_ticket_error() -> None:
+    """The in-row approval does not use the ticket descriptor."""
+    from tradecopilot_agent.server.app import _approval_descriptor
+
+    assert (
+        _approval_descriptor({}, {"name": "execute", "args": {"command": "ls"}}) == {}
+    )
+
+
+def test_chat_copies_attachments_into_the_workspace(tmp_path: Path) -> None:
+    """A file part is stored under the thread and named in the message."""
+    graph = StubGraph()
+    payload = base64.b64encode(b"a,b\n1,2\n").decode()
+    with _client(tmp_path, graph) as client:
+        response = client.post(
+            "/api/chat",
+            json={
+                "thread_id": "t1",
+                "messages": [
+                    {
+                        "id": "u1",
+                        "role": "user",
+                        "parts": [
+                            {"type": "text", "text": "Analyze this"},
+                            {
+                                "type": "file",
+                                "filename": "pnl.csv",
+                                "mediaType": "text/csv",
+                                "url": f"data:text/csv;base64,{payload}",
+                            },
+                        ],
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    copies = list((tmp_path / "workspace" / "uploads" / "t1").glob("*-pnl.csv"))
+    assert len(copies) == 1
+    message = graph.received["messages"][0]
+    assert isinstance(message, HumanMessage)
+    assert "Attached file: /uploads/t1/" in message.content
+
+
+def test_chat_rejects_a_traversal_thread_id(tmp_path: Path) -> None:
+    """The thread id becomes a directory name, so it is validated."""
+    graph = StubGraph()
+    with _client(tmp_path, graph) as client:
+        response = client.post(
+            "/api/chat",
+            json={
+                "thread_id": "../escape",
+                "messages": [
+                    {
+                        "id": "u1",
+                        "role": "user",
+                        "parts": [{"type": "text", "text": "hi"}],
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 422
+    assert graph.received is None

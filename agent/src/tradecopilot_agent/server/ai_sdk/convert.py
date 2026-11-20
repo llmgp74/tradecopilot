@@ -12,6 +12,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
+from tradecopilot_agent.attach import is_image_part
 from tradecopilot_agent.server.ai_sdk.types import ApprovalDescriptor, UIMessage, UIPart
 from tradecopilot_agent.server.ai_sdk.utils import (
     message_reasoning,
@@ -26,14 +27,18 @@ from tradecopilot_agent.server.ai_sdk.utils import (
 _TOOL_PREFIX = "tool-"
 
 
-def to_human_message(message: UIMessage) -> HumanMessage:
+def to_human_message(
+    message: UIMessage, attachment_notes: list[str] | None = None
+) -> HumanMessage:
     """Convert one UI user message to a human message.
 
     Image file parts become ``image_url`` content blocks so a vision model
-    receives the attachment alongside the text.
+    receives the attachment alongside the text. Attachment notes name the
+    workspace path of every copied file so the tools can open it.
 
     Args:
         message: An AI SDK UI message with role `user`.
+        attachment_notes: One line per copied attachment, in part order.
 
     Returns:
         A `HumanMessage` with the user's text, images, and the UI message id.
@@ -41,6 +46,12 @@ def to_human_message(message: UIMessage) -> HumanMessage:
     parts = message.get("parts")
     part_list = parts if isinstance(parts, list) else []
     text = _text_from_parts(part_list)
+    if attachment_notes:
+        text = (
+            "\n".join([text, *attachment_notes])
+            if text
+            else "\n".join(attachment_notes)
+        )
     images = _image_urls(part_list)
     content: str | list[str | dict[Any, Any]]
     if images:
@@ -162,12 +173,10 @@ def _image_urls(parts: list[UIPart]) -> list[str]:
         if part.get("type") != "file":
             continue
         url = part.get("url")
-        media_type = part.get("mediaType")
         if (
             isinstance(url, str)
             and url.startswith(("data:", "http"))
-            and isinstance(media_type, str)
-            and media_type.startswith("image/")
+            and is_image_part(part)
         ):
             urls.append(url)
     return urls

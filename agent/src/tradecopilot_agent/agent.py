@@ -1,11 +1,13 @@
 """Build the agent graph shared by the live app and the evaluation harness."""
 
 from datetime import UTC, date, datetime, time
-from typing import Any
+from typing import Any, cast
 
 from deepagents import create_deep_agent
+from deepagents.backends.protocol import BackendProtocol
 from langchain.agents.middleware import (
     AgentMiddleware,
+    InterruptOnConfig,
     ModelCallLimitMiddleware,
     TodoListMiddleware,
 )
@@ -23,6 +25,7 @@ from tradecopilot_agent.middleware import (
     TradingMemoryMiddleware,
     TurnMiddleware,
 )
+from tradecopilot_agent.permissions import interrupt_on_for
 from tradecopilot_agent.prompt import PLANNING_PROMPT, build_system_prompt
 from tradecopilot_agent.state import TradingState
 from tradecopilot_agent.tools import build_tools
@@ -40,6 +43,9 @@ def build_agent(
     model: str | BaseChatModel | None = None,
     decision_time: datetime | None = None,
     web_search: WebSearch | None = None,
+    backend: BackendProtocol | None = None,
+    tool_permissions: dict[str, str] | None = None,
+    workspace: str | None = None,
 ) -> CompiledStateGraph[Any, Any, Any, Any]:
     """Build one agent graph for a memory condition and a data source.
 
@@ -57,6 +63,12 @@ def build_agent(
         decision_time: Timezone-aware cutoff for journal retrieval. If omitted,
             ``as_of`` uses that UTC day's end; live runs use the current time.
         web_search: Web search provider. The tool is hidden when omitted.
+        backend: File and shell backend. Omitted means deepagents' in-memory
+            state backend, which is what evaluation runs use.
+        tool_permissions: Per-tool ask or auto policies. Omitted means no
+            human-in-the-loop middleware.
+        workspace: Workspace root added to the system prompt. Omitted in
+            evaluation runs.
 
     Returns:
         The compiled agent graph.
@@ -94,8 +106,18 @@ def build_agent(
         system_prompt=build_system_prompt(
             memory_time or datetime.now().astimezone(),
             web_search=web_search is not None,
+            workspace=workspace,
         ),
         middleware=middleware,
         state_schema=TradingState,
         checkpointer=checkpointer,
+        backend=backend,
+        interrupt_on=(
+            cast(
+                "dict[str, bool | InterruptOnConfig]",
+                interrupt_on_for(tool_permissions),
+            )
+            if tool_permissions is not None
+            else None
+        ),
     )

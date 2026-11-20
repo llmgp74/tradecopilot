@@ -10,6 +10,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { ToolCall, ToolGroup, aggregateState } from "@/components/ai-elements/tool";
 import type { DisplayMessage, ToolPartView } from "@/lib/parts";
 import { ApprovalCard } from "./approval-card";
+import { ToolApprovalActions } from "./tool-approval";
 import { groupLabel, rowLabel } from "./tool-label";
 
 /**
@@ -45,6 +46,22 @@ function needsApproval(view: ToolPartView): boolean {
     (view.state === "approval-requested" ||
       view.approval?.approved !== undefined ||
       (view.result !== undefined && view.approval !== undefined))
+  );
+}
+
+/**
+ * Returns whether a gated tool is waiting for an in-row decision.
+ *
+ * Order tickets keep their own card, so they are excluded here.
+ *
+ * @param view - Normalized tool part.
+ * @returns True for a pending non-ticket approval.
+ */
+function pendingToolApproval(view: ToolPartView): boolean {
+  return (
+    view.name !== "execute_ticket" &&
+    view.state === "approval-requested" &&
+    view.approval !== undefined
   );
 }
 
@@ -176,10 +193,31 @@ export function AssistantParts({
         index += 1;
         continue;
       }
+      if (pendingToolApproval(part)) {
+        rendered.push(
+          <ToolCall
+            key={part.toolCallId || `gated-${index}`}
+            label={rowLabel(part.name, part.input, purposeOf(part))}
+            name={part.name}
+            state={part.state}
+            input={part.input}
+            output={part.output}
+            errorText={part.errorText}
+            actions={<ToolApprovalActions view={part} onRespond={onApproval} />}
+          />,
+        );
+        index += 1;
+        continue;
+      }
       let end = index + 1;
       while (end < visibleParts.length) {
         const next = visibleParts[end];
-        if (next.kind !== "tool" || next.name !== part.name || needsApproval(next)) {
+        if (
+          next.kind !== "tool" ||
+          next.name !== part.name ||
+          needsApproval(next) ||
+          pendingToolApproval(next)
+        ) {
           break;
         }
         end += 1;

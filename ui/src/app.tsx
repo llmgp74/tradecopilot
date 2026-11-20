@@ -32,6 +32,12 @@ const EMPTY_SETTINGS: AppSettings = {
   fred_api_key: "",
   edgar_user_agent: "",
   exa_api_key: "",
+  tool_permissions: {
+    execute: "ask",
+    write_file: "auto",
+    edit_file: "auto",
+    delete: "auto",
+  },
   providers: [],
   updated_at: "",
 };

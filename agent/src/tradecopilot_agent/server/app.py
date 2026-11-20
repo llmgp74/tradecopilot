@@ -1,6 +1,7 @@
 """FastAPI application exposing the HTTP API."""
 
 import logging
+import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
@@ -14,10 +15,11 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from tradecopilot_agent import __version__
 from tradecopilot_agent.agent import build_agent
+from tradecopilot_agent.attach import save_attachments
 from tradecopilot_agent.config import Settings, get_settings
 from tradecopilot_agent.llm import build_provider_model
 from tradecopilot_agent.memory import MemoryConfig
@@ -53,6 +55,7 @@ from tradecopilot_agent.server.streaming import (
     sse,
     stream_chat,
 )
+from tradecopilot_agent.shell_backend import build_shell_backend
 from tradecopilot_agent.sources import LiveSource
 from tradecopilot_agent.store import Store, ThreadRecord
 from tradecopilot_agent.web import build_web_search
@@ -79,6 +82,14 @@ class ChatRequest(BaseModel):
     reasoning: str | None = None
     trigger: str | None = None
     messageId: str | None = None
+
+    @field_validator("thread_id")
+    @classmethod
+    def _check_thread_id(cls, value: str | None) -> str | None:
+        """Keep the thread id safe to use as a directory name."""
+        if value is not None and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value) is None:
+            raise ValueError("Invalid thread id.")
+        return value
 
 
 @asynccontextmanager
@@ -197,6 +208,7 @@ def create_app(
 
         thread_id = body.thread_id or uuid4().hex
         app.state.store.upsert_thread(thread_id, _thread_title(body.messages))
+        attachment_notes = _save_last_message_attachments(app, body.messages, thread_id)
         config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
         parts = stream_chat(
             graph,
@@ -204,6 +216,7 @@ def create_app(
             thread_id,
             config,
             approval_descriptor=_approval_descriptor,
+            attachment_notes=attachment_notes,
         )
         return StreamingResponse(
             sse(parts),
@@ -343,6 +356,7 @@ def create_app(
             "model_id",
             "reasoning_effort",
             "exa_api_key",
+            "tool_permissions",
         } & changes.keys():
             app.state.graphs.clear()
         response.headers["Cache-Control"] = "no-store"
@@ -580,6 +594,8 @@ def _default_graph(app: FastAPI, reasoning: str) -> Any:
         effective.model_provider, model.id, credential, reasoning
     )
     config = MemoryConfig(condition="full", store=app.state.store)
+    workspace = app.state.settings.workspace_path
+    workspace.mkdir(parents=True, exist_ok=True)
     return build_agent(
         config,
         LiveSource(lambda: _effective_settings(app)),
@@ -590,6 +606,9 @@ def _default_graph(app: FastAPI, reasoning: str) -> Any:
             credential.api_key,
             effective.exa_api_key,
         ),
+        backend=build_shell_backend(workspace),
+        tool_permissions=effective.tool_permissions,
+        workspace=str(workspace),
     )
 
 
@@ -636,6 +655,29 @@ async def _refresh_execution_status(app: FastAPI, rows: list[dict[str, Any]]) ->
     reconcile(rows, app.state.store, orders)
 
 
+def _save_last_message_attachments(
+    app: FastAPI, messages: list[dict[str, Any]], thread_id: str
+) -> list[str]:
+    """Copy the attachments of the new user message into the workspace.
+
+    Earlier turns are already on disk, so only the last message is processed.
+
+    Args:
+        app: Application holding the configuration.
+        messages: Full UI message history from the request.
+        thread_id: Thread the files belong to.
+
+    Returns:
+        Note lines naming the copied files, empty when there are none.
+    """
+    if not messages or messages[-1].get("role") != "user":
+        return []
+    parts = messages[-1].get("parts")
+    if not isinstance(parts, list):
+        return []
+    return save_attachments(parts, app.state.settings.workspace_path, thread_id)
+
+
 def _approval_descriptor(
     state: dict[str, Any], request: dict[str, Any]
 ) -> dict[str, Any]:
@@ -648,6 +690,8 @@ def _approval_descriptor(
     Returns:
         The ticket and the decision context.
     """
+    if request.get("name") != "execute_ticket":
+        return {}
     raw_args = request.get("args")
     ticket_id = raw_args.get("ticket_id") if isinstance(raw_args, dict) else None
     pending = (state.get("pending_tickets") or {}).get(ticket_id)

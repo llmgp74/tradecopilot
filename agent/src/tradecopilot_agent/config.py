@@ -19,6 +19,8 @@ class Settings(BaseSettings):
         db_path: SQLite file for settings, threads, and checkpoints. Its
             parent directory is created on server startup.
         ui_dist: Directory containing the built frontend.
+        workspace_path: Root the agent's file and shell tools see. Attachments
+            are copied under ``uploads/<thread_id>/`` inside it.
         host: Interface the server binds to. Loopback only by default.
         port: Port the server listens on.
     """
@@ -31,11 +33,12 @@ class Settings(BaseSettings):
     )
 
     db_path: Path = Path.home() / ".tradecopilot" / "data.db"
+    workspace_path: Path = Path.home() / ".tradecopilot" / "workspace"
     ui_dist: Path = _REPOSITORY_ROOT / "ui" / "dist"
     host: str = "127.0.0.1"
     port: int = 8000
 
-    @field_validator("db_path", "ui_dist")
+    @field_validator("db_path", "ui_dist", "workspace_path")
     @classmethod
     def _expand_home(cls, value: Path) -> Path:
         """Expand a leading ``~`` supplied through the environment."""

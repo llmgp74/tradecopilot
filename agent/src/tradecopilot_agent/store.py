@@ -19,6 +19,7 @@ from typing import Any
 from uuid import uuid4
 
 from tradecopilot_agent.models import AppSettings, ProviderCredential, ProviderModel
+from tradecopilot_agent.permissions import normalize_tool_permissions
 from tradecopilot_agent.secrets import SecretBox
 
 _SCHEMA = """
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS settings (
   fred_api_key      TEXT NOT NULL DEFAULT '',
   edgar_user_agent  TEXT NOT NULL DEFAULT '',
   exa_api_key       TEXT NOT NULL DEFAULT '',
+  tool_permissions  TEXT NOT NULL DEFAULT '{}',
   updated_at        TEXT NOT NULL
 );
 
@@ -107,11 +109,12 @@ _SETTINGS_COLUMNS = (
     "fred_api_key",
     "edgar_user_agent",
     "exa_api_key",
+    "tool_permissions",
 )
 _SETTINGS_SELECT = (
     "model_provider, model_id, reasoning_effort, alpaca_api_key, "
     "alpaca_api_secret, alpaca_base_url, fmp_api_key, finnhub_api_key, "
-    "fred_api_key, edgar_user_agent, exa_api_key, updated_at"
+    "fred_api_key, edgar_user_agent, exa_api_key, tool_permissions, updated_at"
 )
 _PROVIDER_COLUMNS = (
     "provider_id",
@@ -122,6 +125,21 @@ _PROVIDER_COLUMNS = (
     "updated_at",
 )
 _PROVIDER_SELECT = ", ".join(_PROVIDER_COLUMNS)
+
+
+def _stored_value(value: Any) -> str:
+    """Serialize one settings value for the text column that holds it.
+
+    Args:
+        value: New value from a validated patch.
+
+    Returns:
+        JSON for mappings and lists, plain text for scalars.
+    """
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+    return str(value)
+
 
 DEFAULT_PROFILE: dict[str, Any] = {
     "risk_band": "moderate",
@@ -166,6 +184,7 @@ class Store:
         with self._connection() as connection:
             connection.executescript(_SCHEMA)
         self._check_schema()
+        self._add_missing_columns()
         os.chmod(path, 0o600)
         self._secrets = SecretBox(path.parent / "settings.key")
         self._seed_profile()
@@ -187,6 +206,19 @@ class Store:
                 f"The database at {self.path} uses the old settings schema. "
                 "delete the file and start the server again."
             )
+
+    def _add_missing_columns(self) -> None:
+        """Add settings columns introduced after the database was created."""
+        with self._connection() as connection:
+            columns = {
+                str(row[1])
+                for row in connection.execute("PRAGMA table_info(settings)").fetchall()
+            }
+            if "tool_permissions" not in columns:
+                connection.execute(
+                    "ALTER TABLE settings "
+                    "ADD COLUMN tool_permissions TEXT NOT NULL DEFAULT '{}'"
+                )
 
     def _seed_settings(self) -> None:
         with self._connection() as connection:
@@ -260,8 +292,11 @@ class Store:
                 fred_api_key=self._secrets.decrypt(str(row[8])),
                 edgar_user_agent=str(row[9]),
                 exa_api_key=self._secrets.decrypt(str(row[10])),
+                tool_permissions=normalize_tool_permissions(
+                    json.loads(str(row[11]) or "{}")
+                ),
                 providers=self.list_providers(),
-                updated_at=str(row[11]),
+                updated_at=str(row[12]),
             )
         )
 
@@ -306,7 +341,9 @@ class Store:
         ]
         assignments = ", ".join(f"{name} = ?" for name, _ in updates)
         params = [
-            self._secrets.encrypt(str(value)) if name in _SECRET_FIELDS else str(value)
+            self._secrets.encrypt(_stored_value(value))
+            if name in _SECRET_FIELDS
+            else _stored_value(value)
             for name, value in updates
         ]
         with self._connection() as connection:

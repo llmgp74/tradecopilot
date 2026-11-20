@@ -351,11 +351,35 @@ it("opens the file picker from the plus menu", async () => {
     />,
   );
 
-  await userEvent.click(screen.getByRole("button", { name: "Add image" }));
-  const item = await screen.findByRole("menuitem", { name: /add image/i });
+  await userEvent.click(screen.getByRole("button", { name: "Add files" }));
+  const item = await screen.findByRole("menuitem", { name: /add files/i });
   await userEvent.click(item);
 
   expect(click).toHaveBeenCalled();
+});
+
+it("shows a pasted CSV as a filename chip", async () => {
+  render(
+    <Chat
+      epoch={0}
+      initialThreadId={null}
+      initialMessages={[]}
+      onThreadStarted={() => {}}
+      onTurnFinished={() => {}}
+      settings={baseSettings}
+      onOpenSettings={() => {}}
+    />,
+  );
+
+  const file = new File([new Uint8Array([1, 2, 3])], "pnl.csv", {
+    type: "text/csv",
+  });
+  fireEvent.paste(screen.getByPlaceholderText(/ask tradecopilot/i), {
+    clipboardData: { items: [{ kind: "file", getAsFile: () => file }] },
+  });
+
+  expect(await screen.findByText("pnl.csv")).toBeInTheDocument();
+  expect(screen.queryByAltText("pnl.csv")).toBeNull();
 });
 
 it("switches the model through settings", async () => {

@@ -230,6 +230,7 @@ export interface AppSettings {
   fred_api_key: string;
   edgar_user_agent: string;
   exa_api_key: string;
+  tool_permissions: Record<string, string>;
   providers: ProviderCredential[];
   updated_at: string;
 }

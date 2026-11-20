@@ -71,9 +71,9 @@ const STARTER_PROMPTS = [
 ];
 
 /**
- * Shows the images waiting to be sent, each removable before submit.
+ * Shows the files waiting to be sent, each removable before submit.
  *
- * @returns The preview row, or nothing when no image is attached.
+ * @returns The preview row, or nothing when no file is attached.
  */
 function ComposerAttachments() {
   const attachments = usePromptInputAttachments();
@@ -82,23 +82,32 @@ function ComposerAttachments() {
   }
   return (
     <PromptInputHeader className="flex flex-wrap gap-2 px-3 pt-3">
-      {attachments.files.map((file) => (
-        <div key={file.id} className="relative size-16 overflow-hidden rounded-md border">
-          <img
-            src={file.url}
-            alt={file.filename ?? "Attached image"}
-            className="size-full object-cover"
-          />
-          <button
-            type="button"
-            aria-label={`Remove ${file.filename ?? "image"}`}
-            className="absolute right-1 top-1 rounded-full bg-background/80 p-0.5"
-            onClick={() => attachments.remove(file.id)}
-          >
-            <XIcon className="size-3" />
-          </button>
-        </div>
-      ))}
+      {attachments.files.map((file) => {
+        const name = file.filename ?? "file";
+        return (
+          <div key={file.id} className="relative">
+            {file.mediaType?.startsWith("image/") ? (
+              <img
+                src={file.url}
+                alt={name}
+                className="size-16 rounded-md border object-cover"
+              />
+            ) : (
+              <div className="flex h-16 max-w-40 items-center rounded-md border px-2 pr-6 text-xs">
+                <span className="truncate">{name}</span>
+              </div>
+            )}
+            <button
+              type="button"
+              aria-label={`Remove ${name}`}
+              className="absolute right-1 top-1 rounded-full bg-background/80 p-0.5"
+              onClick={() => attachments.remove(file.id)}
+            >
+              <XIcon className="size-3" />
+            </button>
+          </div>
+        );
+      })}
     </PromptInputHeader>
   );
 }
@@ -239,9 +248,9 @@ export function Chat({
       return;
     }
     // A blob URL means the browser could not read the file; sending it would
-    // drop the image without telling anyone.
+    // drop the attachment without telling anyone.
     if (message.files.some((file) => file.url?.startsWith("blob:"))) {
-      toast.error("Could not read the attached image. Try again.");
+      toast.error("Could not read the attached file. Try again.");
       return;
     }
     setLiveTodos(null);
@@ -343,10 +352,10 @@ export function Chat({
       <div className="mx-auto w-full max-w-[min(720px,100%-3rem)] px-0 pt-4 pb-4">
         {currentTodos ? <Plan todos={currentTodos} className="mb-3 bg-card" /> : null}
         <PromptInput
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept="image/*,application/pdf,text/csv,text/tab-separated-values,text/plain,text/markdown,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.csv,.tsv,.txt,.md,.json,.xlsx"
           multiple
           maxFiles={4}
-          maxFileSize={5 * 1024 * 1024}
+          maxFileSize={10 * 1024 * 1024}
           onError={(error) => toast.error(error.message)}
           onSubmit={handleSubmit}
         >
@@ -357,9 +366,9 @@ export function Chat({
           <PromptInputFooter>
             <PromptInputTools>
               <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger aria-label="Add image" />
+                <PromptInputActionMenuTrigger aria-label="Add files" />
                 <PromptInputActionMenuContent>
-                  <PromptInputActionAddAttachments label="Add image" />
+                  <PromptInputActionAddAttachments label="Add files" />
                 </PromptInputActionMenuContent>
               </PromptInputActionMenu>
               <ModelSelector

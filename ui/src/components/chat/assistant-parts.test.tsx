@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { AssistantParts } from "./assistant-parts";
 import type { DisplayMessage } from "@/lib/parts";
 
@@ -384,4 +384,53 @@ it("reveals the reasoning text when the trigger is clicked", async () => {
   await userEvent.click(screen.getByText(/thought for a few seconds/i));
 
   expect(await screen.findByText("Checking the price first")).toBeInTheDocument();
+});
+
+function pendingTool(name: string, input: Record<string, unknown>) {
+  return {
+    kind: "tool" as const,
+    toolCallId: "a1",
+    name,
+    state: "approval-requested",
+    input,
+    approval: { id: "a1", descriptor: null },
+  };
+}
+
+it("opens a gated tool and shows approve and reject inside it", () => {
+  render(
+    <AssistantParts
+      onApproval={() => {}}
+      message={toolMessage([pendingTool("execute", { command: "python analyze.py" })])}
+    />,
+  );
+
+  expect(screen.getByText("Run python analyze.py")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+});
+
+it("sends the approval by tool call id", async () => {
+  const onApproval = vi.fn();
+  render(
+    <AssistantParts
+      onApproval={onApproval}
+      message={toolMessage([pendingTool("execute", { command: "ls" })])}
+    />,
+  );
+
+  await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+  expect(onApproval).toHaveBeenCalledWith("a1", true);
+});
+
+it("keeps the ticket card for order approvals", () => {
+  render(
+    <AssistantParts
+      onApproval={() => {}}
+      message={toolMessage([pendingTool("execute_ticket", { ticket_id: "t1" })])}
+    />,
+  );
+
+  expect(screen.getByText("Ticket requires your approval")).toBeInTheDocument();
 });

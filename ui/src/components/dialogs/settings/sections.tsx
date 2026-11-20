@@ -14,9 +14,15 @@ import { patchSettings, type AppSettings } from "@/lib/api";
 import { SECRET_FIELDS, settingsChanges } from "@/lib/settings";
 import { useTheme, type ThemePreference } from "@/theme-provider";
 
+/** Scalar settings rendered by the field section. */
+type SettingFieldKey = keyof Omit<
+  AppSettings,
+  "updated_at" | "providers" | "tool_permissions"
+>;
+
 /** One editable field in a non-model section. */
 export interface SettingField {
-  key: keyof Omit<AppSettings, "updated_at" | "providers">;
+  key: SettingFieldKey;
   label: string;
   placeholder?: string;
   /** Shown when the stored value is empty, so the field is never blank. */
@@ -184,6 +190,108 @@ export function SettingsFieldSection({
           Save section
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** One tool with its policy control. */
+const TOOL_ROWS = [
+  {
+    tool: "execute",
+    label: "Shell commands",
+    description: "Run commands in the workspace. Commands are not sandboxed.",
+  },
+  {
+    tool: "write_file",
+    label: "Write files",
+    description: "Create files. Confined to the workspace.",
+  },
+  {
+    tool: "edit_file",
+    label: "Edit files",
+    description: "Modify files. Confined to the workspace.",
+  },
+  {
+    tool: "delete",
+    label: "Delete files",
+    description: "Delete files. Confined to the workspace.",
+  },
+] as const;
+
+/** Policies shown for each tool. */
+const POLICY_OPTIONS = [
+  { value: "ask", label: "Ask" },
+  { value: "auto", label: "Auto" },
+];
+
+/** Props for the permissions section. */
+export interface PermissionsSectionProps {
+  /** Effective settings. */
+  settings: AppSettings;
+  /** Receives the settings after a save. */
+  onSaved: (settings: AppSettings) => void;
+}
+
+/**
+ * Renders one approval policy per tool. A change applies immediately.
+ *
+ * @param props - Settings and the save callback.
+ * @returns The section body.
+ */
+export function PermissionsSection({ settings, onSaved }: PermissionsSectionProps) {
+  const [saving, setSaving] = useState(false);
+
+  const change = async (tool: string, policy: string) => {
+    setSaving(true);
+    try {
+      const updated = await patchSettings({
+        tool_permissions: { ...settings.tool_permissions, [tool]: policy },
+      });
+      onSaved(updated);
+      toast.success("Permission saved.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {TOOL_ROWS.map((row) => (
+        <div
+          key={row.tool}
+          className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+        >
+          <div className="min-w-0">
+            <p className="text-xs font-medium">
+              <code className="font-mono text-[11px]">{row.tool}</code>{" "}
+              <span className="text-muted-foreground">{row.label}</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground">{row.description}</p>
+          </div>
+          <Select
+            items={POLICY_OPTIONS}
+            value={settings.tool_permissions[row.tool] ?? "ask"}
+            onValueChange={(value) => void change(row.tool, String(value))}
+          >
+            <SelectTrigger
+              aria-label={`${row.tool} approval`}
+              className="w-24"
+              disabled={saving}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {POLICY_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ))}
     </div>
   );
 }
