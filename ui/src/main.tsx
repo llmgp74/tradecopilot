@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/error-boundary";
 import { ThemeProvider } from "./theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import "katex/dist/katex.min.css";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

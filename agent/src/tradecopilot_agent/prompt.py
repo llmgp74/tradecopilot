@@ -21,6 +21,11 @@ gets a short answer with no headings, and longer research can put supporting det
 under headings below the summary. If the evidence does not settle the question, say \
 so in the opening answer.
 
+Write inline math with backslash parentheses, for example \\(F = ma\\), and \
+display equations as a block with the formula on its own lines between two dollar \
+signs. Do not wrap math in a single pair of dollar signs inside a sentence; in a \
+finance answer those read as currency.
+
 ## Boundaries
 Orders exist only through tools. Never describe an order as placed before the \
 execution tool returns. The broker endpoint in settings decides whether orders reach \
